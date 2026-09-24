@@ -73,3 +73,59 @@ export function effectiveRangesForDate(
     .filter((r) => r.dayOfWeek === model)
     .map((r) => ({ startTime: r.startTime, endTime: r.endTime }));
 }
+
+/**
+ * Créneaux réservables pour une date donnée, à partir des plages effectives, des réglages
+ * de réservation et des rendez-vous déjà pris. `now` est injecté (jamais `new Date()` en
+ * interne) pour que la fonction reste pure et testable.
+ */
+export function generateSlots(
+  date: Date,
+  ranges: TimeRange[],
+  settings: SchedulingSettings,
+  bookedRanges: BookedRange[],
+  now: Date,
+): Slot[] {
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  if (dayStart < todayStart) return [];
+
+  const horizonEnd = new Date(todayStart);
+  horizonEnd.setDate(horizonEnd.getDate() + settings.bookingHorizonDays);
+  if (dayStart > horizonEnd) return [];
+
+  const minStart = new Date(now.getTime() + settings.minimumNoticeMinutes * 60000);
+
+  const slots: Slot[] = [];
+  for (const range of ranges) {
+    const rangeStartMin = toMinutes(range.startTime);
+    const rangeEndMin = toMinutes(range.endTime);
+    for (
+      let m = rangeStartMin;
+      m + settings.appointmentDurationMinutes <= rangeEndMin;
+      m += settings.slotIntervalMinutes
+    ) {
+      const start = new Date(dayStart);
+      start.setMinutes(m);
+      const end = new Date(start.getTime() + settings.appointmentDurationMinutes * 60000);
+
+      if (start < minStart) continue;
+
+      const bufferedStart = new Date(start.getTime() - settings.bufferBeforeMinutes * 60000);
+      const bufferedEnd = new Date(end.getTime() + settings.bufferAfterMinutes * 60000);
+      const conflicts = bookedRanges.some((b) => bufferedStart < b.end && bufferedEnd > b.start);
+
+      slots.push({ start, end, available: !conflicts });
+    }
+  }
+  return slots.sort((a, b) => a.start.getTime() - b.start.getTime());
+}
+
+/** 'available' si au moins un créneau libre, 'full' si tout est pris, 'unavailable' si aucun créneau. */
+export function computeDayStatus(slots: Slot[]): DayStatus {
+  if (slots.length === 0) return 'unavailable';
+  return slots.some((s) => s.available) ? 'available' : 'full';
+}
