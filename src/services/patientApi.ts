@@ -126,6 +126,19 @@ export async function getPastConsultations(patientId: string): Promise<Consultat
   return fetchConsultations(patientId, ['completed', 'cancelled']);
 }
 
+export class SlotUnavailableError extends Error {
+  reason: 'overlap' | 'daily-limit';
+  constructor(reason: 'overlap' | 'daily-limit') {
+    super(
+      reason === 'overlap'
+        ? "Ce créneau vient d'être réservé, choisissez-en un autre."
+        : 'Vous avez déjà un rendez-vous ce jour-là avec ce professionnel.',
+    );
+    this.name = 'SlotUnavailableError';
+    this.reason = reason;
+  }
+}
+
 export async function bookConsultation(input: {
   patientId: string;
   doctorId: string;
@@ -147,7 +160,11 @@ export async function bookConsultation(input: {
     })
     .select('id')
     .single();
-  if (error) throw error;
+  if (error) {
+    if (error.code === '23P01') throw new SlotUnavailableError('overlap');
+    if (error.code === '23505') throw new SlotUnavailableError('daily-limit');
+    throw error;
+  }
   // Paiement : Edge Function payment-initiate
   await supabase!.functions.invoke('payment-initiate', {
     body: { consultationId: data.id, amount: input.fee },
