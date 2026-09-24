@@ -26,6 +26,7 @@ collé dans la conversation.
 | Table des horaires + exceptions | Réutiliser `doctor_availability` (pas de nouvelle table) |
 | Réglages de réservation | Nouvelle table `provider_scheduling_settings` (1 ligne/prestataire) |
 | Sécurité anti double-réservation | Contrainte Postgres `EXCLUDE` (gist) sur `consultations` |
+| Un seul rendez-vous par jour | Un patient ne peut pas prendre 2 rendez-vous le même jour avec le **même** prestataire (index unique partiel) ; plusieurs prestataires différents le même jour restent autorisés |
 | Fuseau horaire | Un seul fuseau app (`Africa/Kinshasa`, UTC+1, pas de DST) — pas de conversion IANA pour l'instant |
 | Lecture disponibilité (mois/jour) | Requêtes Supabase directes dans un nouveau service, pas de nouvelle edge function |
 | Calendrier mensuel | Grille faite maison (pas de `react-native-calendars`) |
@@ -87,6 +88,16 @@ alter table consultations
 Deux réservations concurrentes sur le même créneau : la seconde `INSERT` échoue avec le code
 Postgres `23P01`. C'est le mécanisme qui garantit l'absence de double réservation, indépendamment
 de tout bug côté client.
+
+```sql
+create unique index one_booking_per_provider_per_day
+  on consultations (patient_id, doctor_id, ((scheduled_at at time zone 'Africa/Kinshasa')::date))
+  where (status not in ('cancelled', 'no_show'));
+```
+Un même patient ne peut avoir qu'un seul rendez-vous actif par jour avec un même prestataire
+(un second `INSERT` échoue avec le code Postgres `23505`, mappé sur le même
+`SlotUnavailableError` côté client, message « Vous avez déjà un rendez-vous ce jour-là avec ce
+professionnel »). Rien n'empêche de réserver le même jour avec un prestataire différent.
 
 ## Moteur de disponibilité — `src/services/availabilityEngine.ts` (nouveau)
 
@@ -157,8 +168,9 @@ segments.
 1. Revalide côté client que le créneau choisi est toujours dans `getDaySlots` (best-effort,
    pas la garantie réelle).
 2. `INSERT` dans `consultations` comme aujourd'hui.
-3. Si l'insert échoue avec le code Postgres `23P01` (violation de la contrainte
-   `no_overlapping_bookings`) → erreur typée `SlotUnavailableError`, remontée à l'UI.
+3. Si l'insert échoue avec le code Postgres `23P01` (chevauchement, contrainte
+   `no_overlapping_bookings`) ou `23505` (index `one_booking_per_provider_per_day`) → erreur
+   typée `SlotUnavailableError` (message adapté au code), remontée à l'UI.
 4. L'écran patient attrape `SlotUnavailableError` : message « Ce créneau vient d'être réservé »,
    refetch automatique de `getDaySlots` pour la date choisie, retour à l'étape de sélection.
 
