@@ -1,89 +1,101 @@
-# Schéma Supabase réel — projet `lgcvcxicywyguqjrxvma` ("visiodoc")
+# Schéma Supabase réel — projet `cftqxuxhsellvquidpxr` ("bolt-native-database-68425593")
 
-Nouveau projet Supabase (2026-09-23), reconstruit à partir des migrations et
-Edge Functions versionnées dans `../supabase/` (65 migrations + 25 Edge
-Functions, rejouées avec `supabase db push` / `supabase functions deploy`).
-Remplace l'ancien projet `cftqxuxhsellvquidpxr`, lui-même remplacé une
-première fois par `nbepralqoohlwcuwjxoe` (projet vide, schéma incompatible —
-abandonné). `.env` pointe sur `lgcvcxicywyguqjrxvma`.
+## ⚠️ Correction majeure (2026-09-24)
 
-## ⚠️ Écarts trouvés entre les migrations versionnées et la prod réelle
+Le vrai projet de production est **`cftqxuxhsellvquidpxr`**, sous l'organisation
+Supabase **"Visiodoc project"** (Pro Plan, org id `wkvhqrfdalotscciqrpm`) — pas
+sous "Creative African Designers" où j'avais travaillé jusque-là. Il est vivant,
+en bonne santé, avec de vraies données (17 patients, 15 prestataires, 3
+country_admin, 2 provider_validator, 1 super_admin au 2026-09-24) et une
+activité normale (~500 requêtes/24h). `.env` pointe maintenant dessus.
 
-Le dépôt `supabase/migrations` ne capture pas fidèlement l'historique complet
-de l'ancien projet — plusieurs changements ont visiblement été faits à la main
-dans le Studio sans migration correspondante. Rejouer les migrations sur un
-projet vide a fait échouer ces trous ; ils ont été corrigés par 4 migrations
-ajoutées dans cette session (numérotées `2026032222xxx`) :
+**Le dossier local `../supabase/` (migrations + functions) n'est PAS la source
+de vérité.** C'est un ancien fork/snapshot qui a divergé de la vraie prod :
+- La vraie prod a **43 Edge Functions** déployées ; le dossier local n'en liste
+  que 25 (18 manquantes : `admin-reset-user-password`, `ai-symptom-checker`,
+  `ai-symptom-fct`, `auth-send-sms-hook`, `confirm-phone-merge`,
+  `get-jitsi-token`, `get-video-token`, `merge-phone-account`,
+  `payment-config-manager`, `payment-encrypt-decrypt`,
+  `payment-resolve-config`, `presta-submit-documents`,
+  `send-consultation-reminders`, `send-sms`, `send-welcome-email`,
+  `setup-superadmin`, `specialty-change-notify`, `specialty-notification`).
+- `is_admin()` en vraie prod vérifie
+  `role IN ('country_admin_global','super_admin','country_admin','provider_validator'`
+  + variantes MAJUSCULES) — **pas** `'admin'` littéral, contrairement à ce que
+  montre `20251005172519_fix_rls_recursion_with_function.sql`. Patché à la
+  main sur la vraie prod, jamais committé.
+- `users` a une policy INSERT self-registration déjà présente
+  ("Users can insert own profile during registration") — le dossier local la
+  montrait manquante (à tort, seulement vrai pour un projet rejoué depuis les
+  migrations).
+- `doctor_status` a un vocabulaire bien plus riche en vraie prod :
+  `EN_ATTENTE_VALIDATION`, `VALIDE_SANS_ABO`, `VALIDE_ABO_ACTIF`,
+  `profil_incomplet`, `en_attente_de_validation`, `profil_valide`,
+  `profil_rejete` — deux nomenclatures (ancienne MAJUSCULE, nouvelle
+  snake_case) coexistent.
 
-1. **Table `ai_call_usage_logs` manquante** — référencée par 3 migrations et
-   par les Edge Functions `apimedic-symptom-checker`/`isabel-symptom-checker`,
-   mais jamais créée par aucune migration. Reconstruite à partir des colonnes
-   effectivement utilisées (`20260218000000_create_ai_call_usage_logs.sql`).
-2. **`countries.id` désaligné avec le mobile** — le seed EPIC1 génère un UUID
-   aléatoire pour CD et ne seed pas NE (Niger), alors que
-   `visiodoc-app/src/config/countries.ts` insère `users.country_id` avec des
-   UUID **fixes** codés en dur côté client. Réaligné + NE ajouté
-   (`20260322222532_align_countries_with_mobile_app.sql`).
-3. **Récursion RLS infinie sur `users`** — la policy SELECT
-   "Patients can view active providers" (ajoutée par
-   `20260322215504_fix_rls_provider_role_patient_view.sql`) fait une
-   sous-requête brute sur `users` dans son propre `USING`, au lieu de passer
-   par une fonction `SECURITY DEFINER` comme les autres policies
-   (`is_admin()`, `is_doctor_patient()`) → boucle infinie sur tout SELECT.
-   Supprimée : elle faisait doublon avec "Public can view active provider
-   profiles", qui couvre déjà le même accès plus largement
-   (`20260322222533_fix_users_select_recursion.sql`).
-4. **INSERT self-registration manquant sur `users`** —
-   `20251005172519_fix_rls_recursion_with_function.sql` (oct. 2025) a
-   supprimé la policy d'auto-inscription en reconstruisant tout autour de
-   `is_admin()`, et aucune migration ultérieure ne l'a recréée. Pourtant le
-   comportement de prod vérifié en direct (voir plus bas) montrait bien un
-   insert de sa propre ligne fonctionnel → policy restaurée
-   (`20260322222534_restore_users_self_insert_policy.sql`).
-5. **Edge Function `register-presta` désynchronisée** — la source versionnée
-   n'utilisait ni `phone` ni `countryId` du body, alors que
-   `AuthContext.registerProvider` (mobile) les envoie et que
-   `users.country_id`/`phone` sont requis (`chk_country_required`). Corrigée
-   dans `../supabase/functions/register-presta/index.ts` puis redéployée.
-6. **Confirmation email activée par défaut** — un projet Supabase neuf a
-   "Confirm email" actif, ce qui casse `AuthContext.registerPatient` (attend
-   une session immédiate après `signUp`, sans étape de confirmation). Désactivé
-   dans Authentication → Sign In / Providers.
+**Ne pas rejouer les migrations locales ni redéployer les functions locales
+sur `cftqxuxhsellvquidpxr` sans vérifier d'abord l'état réel** (SQL Editor /
+dashboard) — le risque d'écraser une évolution organique non versionnée est
+réel. Deux projets orphelins existent sous "Creative African Designers"
+(`lgcvcxicywyguqjrxvma`, `nbepralqoohlwcuwjxoe`) issus d'une tentative de
+reconstruction depuis le dossier local avant la découverte du vrai projet —
+ce sont des clones de test vides, pas la prod, à garder ou supprimer selon le
+choix de l'utilisateur.
 
-Tout le reste (65 migrations, 25 Edge Functions) a été rejoué **sans
-modification** et correspond à l'historique réel du projet web.
+## 🔴 Bug confirmé en vraie prod : incohérence RLS sur la validation prestataire
 
-## ✅ Vérifié en direct sur le nouveau projet (smoke tests, 2026-09-23)
+Point de départ : l'utilisateur avait signalé que sur l'ancien projet,
+`register-presta` mettait `is_active: true` immédiatement, sans gate. Confirmé
+en lisant le code déployé réel de `register-presta` :
+```
+doctor_status: 'profil_incomplet',
+is_active: true,
+```
+Donc oui, `is_active` est vrai dès l'inscription — ce n'est pas lui qui gate
+l'accès. Le vrai gate est censé être `doctor_status`, via la policy RLS
+**"Public can view active provider profiles"** (rôle anon) :
+`is_active = true AND doctor_status IN ('VALIDE_ABO_ACTIF','VALIDE_SANS_ABO')`.
 
-- Inscription patient complète : `auth.signUp` → session immédiate → insert
-  `public.users` (RLS self-insert) → lecture du profil avec embed
-  `countries(code, currency_code, locale)` → update de son propre profil.
-- Catalogue médecins en anon (`role=eq.provider&is_active=eq.true`) : lisible,
-  aucune erreur RLS (table vide pour l'instant, pas de médecin actif seedé).
-- Edge Function `register-presta` : crée le compte (email confirmé,
-  `is_active=false`, `doctor_status=EN_ATTENTE_VALIDATION`), en attente de
-  validation admin — conforme au flux documenté.
+Mais il existe une **deuxième** policy SELECT sur `users`, **"Patients can
+view active providers"** (rôle authenticated, condition JWT
+`app_metadata.role IN ('patient','PATIENT')`), qui ne vérifie que
+`is_active = true` — **sans condition sur `doctor_status`**. Les policies RLS
+étant OR-ées, un patient connecté voit donc n'importe quel prestataire actif,
+**y compris `profil_incomplet`, jamais validé**.
 
-## Structure (inchangée par rapport à l'ancien projet)
+**Pas exploité par l'app mobile actuelle** : `getDoctors()` et `getDoctor()`
+dans [src/services/patientApi.ts](src/services/patientApi.ts:43) utilisent
+délibérément `supabasePublic` (client anon, pas la session du patient connecté)
+pour justement retomber sur la policy anon plus stricte — un commentaire dans
+le code l'explique explicitement. Donc le catalogue mobile est protégé
+aujourd'hui. Mais la policy "Patients can view active providers" reste une
+faille latente en base : toute requête directe authentifiée-patient sur
+`users` (autre client, évolution future du code, admin backoffice mal
+configuré) contournerait le gate de validation. À corriger idéalement en
+alignant cette policy sur la même condition `doctor_status`, mais c'est un
+changement RLS sur la vraie prod — à faire seulement avec confirmation
+explicite de l'utilisateur.
 
-### `users`
-`id` · `email` · `first_name` · `last_name` · `phone` · `role` (`patient` /
-`provider` / `admin` / `super_admin` / `country_admin` / `provider_validator`)
-· `is_active` · `avatar_url` · `bio` · `specialization` (text[]) ·
-`license_number` · `date_of_birth` · `gender` · `address` ·
-`emergency_contact_name` · `emergency_contact_phone` · `blood_type` ·
-`allergies` · `years_of_experience` · `consultation_fee` · `doctor_status` ·
-`preferred_currency` (défaut `'USD'` dans le schéma — **valeur de donnée**
-`CDF` était peut-être un défaut ajusté à la main sur l'ancien prod, non
-reproduit ici faute de confirmation) · `public_id` · `country_id` (FK →
-`countries`) · `created_at` · `updated_at`.
+Le backoffice admin (`src/components/nexus/pages/NexusProvidersPage.tsx` dans
+ce même repo, à la racine) semble être une version différente/plus ancienne
+que ce qui tourne réellement en prod (vu le vocabulaire `doctor_status` plus
+riche en prod que ce que ce fichier référence) — je n'ai pas pu vérifier son
+code réellement déployé (pas dans ce repo).
 
-### `healthcare_professionals` (1:1 avec `users` via `user_id`)
-`specialization` (text[]) · `city` · `consultation_fee` · `rating` ·
-`average_rating` · `review_count` · `total_consultations` ·
-`years_of_experience` · `availability_status` · `license_number` · `bio` ·
-`qualifications` · `languages` · `service_type_id`.
+## Vérifié en direct sur la vraie prod (2026-09-24)
+- Connectivité anon confirmée avec la vraie clé (`EXPO_PUBLIC_SUPABASE_ANON_KEY`
+  legacy JWT, récupérée manuellement par l'utilisateur — les clés `sb_publishable_*`
+  affichées dans Settings → API Keys sont rejetées par la gateway avec
+  `UNAUTHORIZED_INVALID_API_KEY`, ce projet n'a apparemment pas encore migré
+  vers le nouveau système de clés au niveau data-plane malgré leur présence
+  dans le dashboard).
+- `countries` : CD = `5845fc2a-0579-4604-a4cd-adcc1dabab6c`, NE =
+  `602311ca-5958-4877-af57-65c44d7a3031` — identiques à ce qui est codé en dur
+  dans `src/config/countries.ts`. Pas de bug ici en vraie prod.
+- `ai_call_usage_logs` existe bel et bien en vraie prod.
 
+<<<<<<< HEAD
 ### `countries`
 `id` · `code` · `name` · `currency_code` · `currency_iso` · `locale` ·
 `is_active` · `created_at`.
@@ -148,3 +160,12 @@ Les fonctions liées aux paiements (`payment-*`, `webhook-*`) et à l'IA
 gateway de paiement, fournisseurs IA) qui n'ont pas été configurés dans cette
 session — à faire via `supabase secrets set` si ces fonctionnalités sont
 utilisées.
+
+## Structure de `users` (inchangée dans ses grandes lignes)
+`id` · `email` · `first_name` · `last_name` · `phone` · `role` · `is_active` ·
+`doctor_status` (vocabulaire étendu, voir plus haut) · `specialization` ·
+`license_number` · `country_id` (FK → `countries`) · `preferred_currency` ·
+`public_id` · etc. Voir aussi `provider_specialties` et
+`provider_onboarding_audit_logs`, deux tables utilisées par `register-presta`
+et absentes du dossier de migrations local — schéma non audité en détail,
+seulement leur usage par cette fonction.

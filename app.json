@@ -15,14 +15,17 @@
       "bundleIdentifier": "com.visiodoc.app",
       "infoPlist": {
         "NSCameraUsageDescription": "VisioDoc utilise la caméra pour les consultations vidéo.",
-        "NSMicrophoneUsageDescription": "VisioDoc utilise le micro pour les consultations vidéo."
+        "NSMicrophoneUsageDescription": "VisioDoc utilise le micro pour les consultations vidéo.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.visiodoc.app",
       "permissions": [
         "CAMERA",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "plugins": [
@@ -48,6 +51,19 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a67496a9-353a-4daf-88a9-e21c458266e1"
+      }
+    },
+    "owner": "creaafde",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/a67496a9-353a-4daf-88a9-e21c458266e1"
     }
   }
 }

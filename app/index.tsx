@@ -1,8 +1,8 @@
-import React from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
-import { Link, Redirect, router } from 'expo-router';
+import React, { useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
+import { Redirect, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stethoscope, FolderHeart, Wallet, Brain, ArrowRight } from 'lucide-react-native';
+import { Stethoscope, FolderHeart, Wallet, Brain, ArrowRight, User, X, ChevronRight } from 'lucide-react-native';
 import { Eyebrow } from '@/components/ui';
 import { DoctorCard } from '@/components/DoctorCard';
 import { colors } from '@/theme/colors';
@@ -18,6 +18,12 @@ const services = [
 
 export default function PublicHome() {
   const { user, initializing } = useAuth();
+  const [roleModalVisible, setRoleModalVisible] = useState(false);
+
+  const chooseRole = (href: '/(auth)/login' | '/(auth)/login-provider') => {
+    setRoleModalVisible(false);
+    router.push(href);
+  };
 
   // Restauration de la session persistée : on attend avant de décider où aller.
   if (initializing) {
@@ -40,9 +46,9 @@ export default function PublicHome() {
         {/* Header */}
         <View className="flex-row items-center justify-between px-5 pt-3 pb-5">
           <Text className="font-serif-bold text-2xl text-primary">visiodoc</Text>
-          <Link href="/(auth)/login" className="font-sans-bold text-primary">
-            Connexion
-          </Link>
+          <Pressable onPress={() => setRoleModalVisible(true)}>
+            <Text className="font-sans-bold text-primary">Connexion</Text>
+          </Pressable>
         </View>
 
         {/* Hero */}
@@ -94,15 +100,61 @@ export default function PublicHome() {
             <DoctorCard key={d.id} doctor={d} onPress={() => router.push('/(auth)/login')} />
           ))}
         </View>
-
-        {/* Accès médecin */}
-        <Link
-          href="/(auth)/login-provider"
-          className="text-center font-sans-bold text-accent mt-5"
-        >
-          Vous êtes médecin ? Espace prestataire →
-        </Link>
       </ScrollView>
+
+      <Modal
+        visible={roleModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRoleModalVisible(false)}
+      >
+        <Pressable
+          className="flex-1 items-center justify-center px-8"
+          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+          onPress={() => setRoleModalVisible(false)}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            className="w-full bg-surface rounded-[28px] p-6"
+          >
+            <View className="flex-row items-center justify-between mb-1">
+              <Text className="font-serif-bold text-xl text-ink">Connexion</Text>
+              <Pressable onPress={() => setRoleModalVisible(false)} hitSlop={10} className="p-1">
+                <X color={colors.muted} size={22} />
+              </Pressable>
+            </View>
+            <Text className="font-sans text-sm text-muted mb-5">Choisissez votre profil</Text>
+
+            <Pressable
+              onPress={() => chooseRole('/(auth)/login')}
+              className="flex-row items-center bg-bg border border-line rounded-3xl p-4 mb-3"
+            >
+              <View className="w-12 h-12 rounded-2xl items-center justify-center mr-3.5 bg-sage">
+                <User color={colors.ink} size={22} />
+              </View>
+              <View className="flex-1">
+                <Text className="font-sans-bold text-ink text-base">Patient</Text>
+                <Text className="font-sans text-sm text-muted mt-0.5">Consulter un médecin</Text>
+              </View>
+              <ChevronRight color={colors.muted} size={20} />
+            </Pressable>
+
+            <Pressable
+              onPress={() => chooseRole('/(auth)/login-provider')}
+              className="flex-row items-center bg-bg border border-line rounded-3xl p-4"
+            >
+              <View className="w-12 h-12 rounded-2xl items-center justify-center mr-3.5 bg-accent-50">
+                <Stethoscope color={colors.accent} size={22} />
+              </View>
+              <View className="flex-1">
+                <Text className="font-sans-bold text-ink text-base">Médecin / Prestataire</Text>
+                <Text className="font-sans text-sm text-muted mt-0.5">Espace professionnel</Text>
+              </View>
+              <ChevronRight color={colors.muted} size={20} />
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }

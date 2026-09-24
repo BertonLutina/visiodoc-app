@@ -8,6 +8,7 @@ import { COUNTRIES } from '@/config/countries';
 import { currentPatient } from '@/data/mock';
 import { currentProvider } from '@/data/mockProvider';
 import * as biometrics from '@/services/biometrics';
+import { logAuthEvent, type AuthEventMethod } from '@/services/auditLog';
 
 // Termine proprement une session OAuth ouverte dans le navigateur système.
 WebBrowser.maybeCompleteAuthSession();
@@ -226,9 +227,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Connexion active (mot de passe, OTP, OAuth, inscription) → jamais verrouillée,
   // et déclenche la proposition d'activer la biométrie.
-  const signedIn = (profile: User) => {
+  const signedIn = (profile: User, method?: AuthEventMethod) => {
     setUser(profile);
     setJustSignedIn(true);
+    logAuthEvent('auth:login', { id: profile.id, role: profile.role, countryId: countryIdForCode(profile.countryCode) }, method);
   };
 
   const signIn = async (email: string, password: string, mockUser: User) => {
@@ -239,10 +241,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) throw error;
         const profile = (data.user && (await loadProfile(data.user.id))) || mockUser;
         await guardProvider(profile);
-        signedIn(profile);
+        signedIn(profile, 'password');
       } else {
         await new Promise((r) => setTimeout(r, 400));
-        signedIn(mockUser);
+        signedIn(mockUser, 'password');
       }
     } finally {
       setLoading(false);
@@ -274,10 +276,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     phone: u?.phone ?? undefined,
   });
 
-  const finishOtp = async (authUser: any, fallbackEmail?: string): Promise<User> => {
+  const finishOtp = async (authUser: any, fallbackEmail?: string, method?: AuthEventMethod): Promise<User> => {
     const profile = (authUser?.id && (await loadProfile(authUser.id))) || minimalUser(authUser, fallbackEmail);
     await guardProvider(profile);
-    signedIn(profile);
+    signedIn(profile, method);
     return profile;
   };
 
@@ -300,7 +302,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       if (!supabaseConfigured || !supabase) {
         const u = { ...currentPatient, email: email.trim().toLowerCase() };
-        signedIn(u);
+        signedIn(u, 'email_otp');
         return u;
       }
       const { data, error } = await supabase.auth.verifyOtp({
@@ -309,7 +311,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         type: 'email',
       });
       if (error) throw error;
-      return await finishOtp(data.user, email);
+      return await finishOtp(data.user, email, 'email_otp');
     } finally {
       setLoading(false);
     }
@@ -330,7 +332,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       if (!supabaseConfigured || !supabase) {
         const u = { ...currentPatient, phone };
-        signedIn(u);
+        signedIn(u, 'phone_otp');
         return u;
       }
       const { data, error } = await supabase.auth.verifyOtp({
@@ -339,7 +341,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         type: 'sms',
       });
       if (error) throw error;
-      return await finishOtp(data.user);
+      return await finishOtp(data.user, undefined, 'phone_otp');
     } finally {
       setLoading(false);
     }
@@ -351,6 +353,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Backend non configuré.');
     }
     setLoading(true);
+    const oauthMethod: AuthEventMethod = provider === 'google' ? 'oauth_google' : 'oauth_azure';
     try {
       const redirectTo = Linking.createURL('/');
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -369,7 +372,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (code) {
         const { data: sess, error: exErr } = await supabase.auth.exchangeCodeForSession(code);
         if (exErr) throw exErr;
-        return await finishOtp(sess.user);
+        return await finishOtp(sess.user, undefined, oauthMethod);
       }
       // Flux implicite : #access_token=…&refresh_token=…
       const hash = result.url.split('#')[1];
@@ -383,7 +386,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             refresh_token,
           });
           if (sErr) throw sErr;
-          return await finishOtp(sess.user);
+          return await finishOtp(sess.user, undefined, oauthMethod);
         }
       }
       return null;
@@ -443,10 +446,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           phone: input.phone,
           countryCode: input.countryCode,
         };
-        signedIn(profile);
+        signedIn(profile, 'registration');
       } else {
         await new Promise((r) => setTimeout(r, 400));
-        signedIn({ ...currentPatient, firstName: input.firstName, lastName: input.lastName, email: input.email });
+        signedIn({ ...currentPatient, firstName: input.firstName, lastName: input.lastName, email: input.email }, 'registration');
       }
     } finally {
       setLoading(false);
@@ -525,6 +528,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Un médecin dont le compte n'est plus validé est déconnecté (lève PROVIDER_NOT_VALIDATED).
     await guardProvider(profile);
     setUser(profile);
+    logAuthEvent(
+      'auth:biometric_unlock',
+      { id: profile.id, role: profile.role, countryId: countryIdForCode(profile.countryCode) },
+      'biometric',
+    );
     return true;
   };
 
@@ -537,25 +545,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     await biometrics.setEnabled(user.id, enabled);
     setBiometricEnabledState(enabled);
+    if (enabled) {
+      logAuthEvent(
+        'auth:biometric_enroll',
+        { id: user.id, role: user.role, countryId: countryIdForCode(user.countryCode) },
+        'biometric',
+      );
+    }
     return true;
   };
 
   const consumeJustSignedIn = () => setJustSignedIn(false);
 
   const logout = async () => {
+    if (user) {
+      logAuthEvent('auth:logout', { id: user.id, role: user.role, countryId: countryIdForCode(user.countryCode) });
+    }
     // On vide l'état local D'ABORD → la déconnexion est instantanée et fiable,
     // même si l'appel réseau à Supabase échoue (session expirée, hors-ligne…).
     setUser(null);
     setPendingUser(null);
     setLocked(false);
     setJustSignedIn(false);
-    try {
-      // `scope: 'local'` supprime la session persistée (AsyncStorage) sans
-      // dépendre du serveur → pas de blocage possible.
-      await supabase?.auth.signOut({ scope: 'local' });
-    } catch {
+    // `scope: 'local'` supprime la session persistée (AsyncStorage) sans dépendre du
+    // serveur. Volontairement NON awaité : le SDK Supabase peut rester bloqué en
+    // attente de son verrou interne (lock d'auth) si un getSession()/refreshSession()
+    // est déjà en cours, ce qui gèlerait `logout()` et empêcherait tout appelant
+    // (ex. `router.replace('/')` juste après) de jamais s'exécuter.
+    supabase?.auth.signOut({ scope: 'local' }).catch(() => {
       /* ignore : l'état local est déjà nettoyé */
-    }
+    });
   };
 
   const value = useMemo(
