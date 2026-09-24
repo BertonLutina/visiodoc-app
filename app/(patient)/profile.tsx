@@ -17,6 +17,7 @@ import { Avatar } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { getCountry } from '@/config/countries';
 import { useAuth } from '@/contexts/AuthContext';
+import { BiometricToggleRow } from '@/components/BiometricToggleRow';
 
 const initialsOf = (a?: string, b?: string) =>
   `${(a ?? '').charAt(0)}${(b ?? '').charAt(0)}`.toUpperCase() || 'VD';
@@ -102,6 +103,8 @@ export default function PatientProfile() {
             </View>
           ))}
         </View>
+
+        <BiometricToggleRow />
 
         <Pressable
           onPress={onLogout}

@@ -18,6 +18,7 @@ import { formatMoney } from '@/utils/format';
 import { colors } from '@/theme/colors';
 import { activeCountry } from '@/config/countries';
 import { useAuth } from '@/contexts/AuthContext';
+import { BiometricToggleRow } from '@/components/BiometricToggleRow';
 import { currentProvider } from '@/data/mockProvider';
 
 export default function ProviderProfile() {
@@ -78,6 +79,8 @@ export default function ProviderProfile() {
             </Pressable>
           ))}
         </View>
+
+        <BiometricToggleRow tone="accent" />
 
         <Pressable
           onPress={onLogout}
