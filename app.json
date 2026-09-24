@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "VisioDoc",
+    "slug": "visiodoc-app",
+    "version": "1.0.0",
+    "scheme": "visiodoc",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.visiodoc.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "VisioDoc utilise la caméra pour les consultations vidéo.",
+        "NSMicrophoneUsageDescription": "VisioDoc utilise le micro pour les consultations vidéo."
+      }
+    },
+    "android": {
+      "package": "com.visiodoc.app",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0F6E56"
+        }
+      ],
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

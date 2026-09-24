@@ -1,0 +1,196 @@
+import { supabase, supabasePublic, supabaseConfigured } from '@/lib/supabase';
+import * as mock from '@/data/mock';
+import type {
+  Consultation,
+  ConsultationType,
+  Doctor,
+  MedicalRecord,
+  MedicalRecordKind,
+  Wallet,
+} from '@/types';
+
+const useMock = () => !supabaseConfigured || !supabase;
+
+const initials = (a?: string, b?: string) =>
+  `${(a ?? '').charAt(0)}${(b ?? '').charAt(0)}`.toUpperCase();
+
+// La colonne `specialization` peut être un tableau (text[]) ou une chaîne côté DB.
+const specLabel = (s: any): string =>
+  Array.isArray(s) ? s.filter(Boolean).join(' · ') : (s ?? '');
+
+/* ---------- Médecins ---------- */
+function mapDoctor(row: any): Doctor {
+  // La fiche `healthcare_professionals` peut être absente (profil incomplet) :
+  // on retombe alors sur les champs de `users`, puis sur des valeurs par défaut.
+  const hp = row.healthcare_professionals ?? {};
+  const specialty = specLabel(hp.specialization) || specLabel(row.specialization) || 'Médecin';
+  return {
+    id: row.id,
+    firstName: row.first_name ?? '',
+    lastName: row.last_name ?? '',
+    specialty,
+    city: hp.city ?? '',
+    fee: hp.consultation_fee ?? row.consultation_fee ?? 0,
+    rating: hp.rating ?? 0,
+    reviewsCount: hp.total_consultations ?? 0,
+    yearsOfExperience: hp.years_of_experience ?? row.years_of_experience ?? 0,
+    patientsCount: hp.total_consultations ?? 0,
+    availabilityLabel: hp.availability_status === 'available' ? 'Dispo auj.' : 'Sur RDV',
+    initials: initials(row.first_name, row.last_name),
+  };
+}
+
+export async function getDoctors(): Promise<Doctor[]> {
+  if (useMock()) return mock.doctors;
+  // Client PUBLIC (anon) : le catalogue des médecins est visible de tous,
+  // alors qu'un patient connecté ne verrait que sa propre ligne `users` (RLS).
+  const { data, error } = await supabasePublic!
+    .from('users')
+    .select(
+      `id, first_name, last_name, specialization, consultation_fee, years_of_experience,
+       healthcare_professionals ( specialization, city, consultation_fee, rating,
+         years_of_experience, total_consultations, availability_status )`,
+    )
+    .eq('role', 'provider')
+    .eq('is_active', true)
+    .limit(50);
+  if (error) throw error;
+  return (data ?? []).map(mapDoctor);
+}
+
+export async function getDoctor(id: string): Promise<Doctor | null> {
+  if (useMock()) return mock.doctors.find((d) => d.id === id) ?? null;
+  const { data, error } = await supabasePublic!
+    .from('users')
+    .select(
+      `id, first_name, last_name, specialization, consultation_fee, years_of_experience,
+       healthcare_professionals ( specialization, city, consultation_fee, rating,
+         years_of_experience, total_consultations, availability_status )`,
+    )
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data ? mapDoctor(data) : null;
+}
+
+/* ---------- Consultations ---------- */
+function mapConsultation(row: any): Consultation {
+  const d = row.doctor ?? {};
+  return {
+    id: row.id,
+    doctor: {
+      id: d.id ?? row.doctor_id,
+      firstName: d.first_name ?? '',
+      lastName: d.last_name ?? '',
+      specialty: specLabel(d.healthcare_professionals?.specialization),
+      initials: initials(d.first_name, d.last_name),
+    },
+    date: row.scheduled_at,
+    dateLabel: new Date(row.scheduled_at).toLocaleString('fr-FR', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+    type: (row.consultation_type as ConsultationType) ?? 'video',
+    durationMin: row.duration ?? 30,
+    fee: row.payment_amount ?? 0,
+    status: row.status,
+    roomId: row.video_room_id ?? undefined,
+  };
+}
+
+async function fetchConsultations(patientId: string, statuses: string[]): Promise<Consultation[]> {
+  const { data, error } = await supabase!
+    .from('consultations')
+    .select(
+      `*, doctor:users!consultations_doctor_id_fkey (
+         id, first_name, last_name, healthcare_professionals ( specialization )
+       )`,
+    )
+    .eq('patient_id', patientId)
+    .in('status', statuses)
+    .order('scheduled_at', { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map(mapConsultation);
+}
+
+export async function getUpcomingConsultations(patientId: string): Promise<Consultation[]> {
+  if (useMock()) return mock.consultations;
+  return fetchConsultations(patientId, ['pending', 'confirmed', 'in_progress']);
+}
+
+export async function getPastConsultations(patientId: string): Promise<Consultation[]> {
+  if (useMock()) return mock.pastConsultations;
+  return fetchConsultations(patientId, ['completed', 'cancelled']);
+}
+
+export async function bookConsultation(input: {
+  patientId: string;
+  doctorId: string;
+  scheduledAt: string;
+  type: ConsultationType;
+  fee: number;
+}): Promise<{ id: string }> {
+  if (useMock()) return { id: 'mock-booking' };
+  const { data, error } = await supabase!
+    .from('consultations')
+    .insert({
+      patient_id: input.patientId,
+      doctor_id: input.doctorId,
+      scheduled_at: input.scheduledAt,
+      consultation_type: input.type,
+      payment_amount: input.fee,
+      status: 'pending',
+      payment_status: 'pending',
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  // Paiement : Edge Function payment-initiate
+  await supabase!.functions.invoke('payment-initiate', {
+    body: { consultationId: data.id, amount: input.fee },
+  });
+  return { id: data.id };
+}
+
+/* ---------- Dossier médical ---------- */
+const recordKindMap: Record<string, MedicalRecordKind> = {
+  prescription: 'ordonnance',
+  ordonnance: 'ordonnance',
+  diagnosis: 'diagnostic',
+  diagnostic: 'diagnostic',
+  analysis: 'analyse',
+  lab: 'analyse',
+  vaccine: 'vaccin',
+  vaccin: 'vaccin',
+  allergy: 'allergie',
+  allergie: 'allergie',
+};
+
+export async function getMedicalRecords(patientId: string): Promise<MedicalRecord[]> {
+  if (useMock()) return mock.medicalRecords;
+  const { data, error } = await supabase!
+    .from('medical_records')
+    .select('id, record_type, title, status, created_at')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    kind: recordKindMap[String(r.record_type).toLowerCase()] ?? 'diagnostic',
+    title: r.title ?? '',
+    detail: r.record_type ?? '',
+    author: '',
+    date: new Date(r.created_at).toLocaleDateString('fr-FR'),
+  }));
+}
+
+/* ---------- Portefeuille ----------
+ * Note : pas de table de solde patient confirmée dans le backend web
+ * (les paiements passent par payment_transactions / escrows).
+ * On garde le mock ; à câbler en Phase 2+ quand la table sera définie. */
+export async function getWallet(_patientId: string): Promise<Wallet> {
+  return mock.wallet;
+}
