@@ -28,6 +28,12 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "VisioDoc utilise Face ID pour sécuriser l'accès à votre dossier médical."
+        }
+      ],
       "expo-font",
       "expo-status-bar",
       [
