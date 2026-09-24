@@ -20,11 +20,13 @@ import {
 } from '@expo-google-fonts/mulish';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { BiometricLock } from '@/components/BiometricLock';
+import { useBiometricOffer } from '@/hooks/useBiometricOffer';
 import { colors } from '@/theme/colors';
 
 /** Contenu de l'app, sous AuthProvider : écran de verrou tant que la biométrie n'est pas validée. */
 function AppShell() {
   const { locked } = useAuth();
+  useBiometricOffer();
 
   if (locked) return <BiometricLock />;
 
