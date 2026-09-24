@@ -40,12 +40,14 @@ export default function DoctorProfile() {
   const {
     data: monthStatus,
     loading: monthLoading,
+    error: monthError,
     reload: reloadMonth,
   } = useAsync(() => getMonthAvailability(doctor.id, year, month), [doctor.id, year, month]);
 
   const {
     data: daySlots,
     loading: dayLoading,
+    error: dayError,
     reload: reloadDay,
   } = useAsync(
     () => (selectedDate ? getDaySlots(doctor.id, new Date(selectedDate + 'T00:00:00')) : Promise.resolve([])),
@@ -122,6 +124,21 @@ export default function DoctorProfile() {
         </View>
 
         <SectionTitle>Choisir un créneau</SectionTitle>
+        {monthError ? (
+          <View className="bg-sand rounded-2xl px-4 py-4 items-center mb-4">
+            <Text className="font-sans-medium text-sm text-clay text-center mb-3">
+              Impossible de charger le calendrier. {monthError}
+            </Text>
+            <Button label="Réessayer" variant="outline" onPress={reloadMonth} />
+          </View>
+        ) : !monthLoading && Object.keys(monthStatus ?? {}).length > 0 && Object.values(monthStatus ?? {}).every((s) => s === 'unavailable') ? (
+          <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-4">
+            <View className="w-12 h-12 rounded-2xl bg-sand items-center justify-center mb-3">
+              <CalendarX color={colors.clay} size={22} />
+            </View>
+            <Text className="font-sans-semibold text-ink text-center">Aucune disponibilité ce mois-ci</Text>
+          </View>
+        ) : null}
         <MonthCalendar
           year={year}
           month={month}
@@ -153,6 +170,13 @@ export default function DoctorProfile() {
             </Text>
             {dayLoading ? (
               <Text className="font-sans text-muted">Chargement des créneaux…</Text>
+            ) : dayError ? (
+              <View className="bg-sand rounded-2xl px-4 py-4 items-center">
+                <Text className="font-sans-medium text-sm text-clay text-center mb-3">
+                  Impossible de charger les créneaux. {dayError}
+                </Text>
+                <Button label="Réessayer" variant="outline" onPress={reloadDay} />
+              </View>
             ) : (daySlots ?? []).length === 0 ? (
               <View className="bg-surface border border-line rounded-3xl p-6 items-center">
                 <View className="w-12 h-12 rounded-2xl bg-sand items-center justify-center mb-3">

@@ -151,6 +151,12 @@ export async function bookConsultation(input: {
   duration: number;
 }): Promise<{ id: string }> {
   if (useMock()) return { id: 'mock-booking' };
+  // ⚠️ status:'pending' n'est pas dans le CHECK de la migration locale de `consultations`
+  // (scheduled|in_progress|completed|cancelled|no_show) — bug pré-existant, hors périmètre
+  // de cette fonctionnalité (voir spec). Si ce CHECK existe tel quel en prod, CET INSERT
+  // échoue avant même d'atteindre les contraintes anti-double-réservation ci-dessous
+  // (no_overlapping_bookings / one_booking_per_provider_per_day), qui ne sont alors jamais
+  // exercées en réalité.
   const { data, error } = await supabase!
     .from('consultations')
     .insert({

@@ -26,3 +26,12 @@ export const toMinutes = (t: string) => {
   const [h, m] = t.split(':').map(Number);
   return h * 60 + m;
 };
+
+/** Vrai si au moins deux plages du même jour se chevauchent (bornes adjacentes exclues). */
+export function hasOverlappingRanges(ranges: { start: string; end: string }[]): boolean {
+  const sorted = [...ranges].sort((a, b) => toMinutes(a.start) - toMinutes(b.start));
+  for (let i = 1; i < sorted.length; i++) {
+    if (toMinutes(sorted[i].start) < toMinutes(sorted[i - 1].end)) return true;
+  }
+  return false;
+}

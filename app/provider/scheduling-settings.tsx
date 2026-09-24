@@ -34,17 +34,22 @@ export default function SchedulingSettingsScreen() {
 
   const [settings, setSettings] = useState<SchedulingSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setLoadError(null);
     getSchedulingSettings(uid)
       .then((s) => active && setSettings(s))
+      .catch((e: any) => active && setLoadError(e?.message ?? 'Impossible de charger les réglages.'))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [uid]);
+  }, [uid, retryNonce]);
 
   const onSave = async () => {
     setSaving(true);
@@ -72,6 +77,11 @@ export default function SchedulingSettingsScreen() {
 
         {loading ? (
           <Text className="font-sans text-muted text-center mt-6">Chargement…</Text>
+        ) : loadError ? (
+          <View className="bg-sand rounded-2xl px-4 py-4 mt-2 items-center">
+            <Text className="font-sans-medium text-sm text-clay text-center mb-3">{loadError}</Text>
+            <Button label="Réessayer" variant="outline" onPress={() => setRetryNonce((n) => n + 1)} />
+          </View>
         ) : (
           <>
             {FIELDS.map((f) => (

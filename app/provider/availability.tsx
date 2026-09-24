@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, Switch, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -10,7 +10,7 @@ import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAvailability, saveAvailability, type AvailabilityInput } from '@/services/providerApi';
 import { currentProvider } from '@/data/mockProvider';
-import { DAY_LABELS_LONG, TIME_OPTIONS, toMinutes } from '@/utils/availability';
+import { DAY_LABELS_LONG, TIME_OPTIONS, hasOverlappingRanges, toMinutes } from '@/utils/availability';
 
 type Range = { start: string; end: string };
 type DayCfg = { enabled: boolean; ranges: Range[] };
@@ -32,7 +32,7 @@ export default function Availability() {
 
   const [days, setDays] = useState<DayCfg[]>(DEFAULT_DAYS);
   const [picking, setPicking] = useState<{ day: number; range: number; which: 'start' | 'end' } | null>(null);
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'local'>('idle');
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     let active = true;
@@ -100,6 +100,15 @@ export default function Availability() {
   };
 
   const onSave = async () => {
+    const dayWithOverlap = days.findIndex((d) => d.enabled && hasOverlappingRanges(d.ranges));
+    if (dayWithOverlap !== -1) {
+      Alert.alert(
+        'Plages qui se chevauchent',
+        `${DAY_LABELS_LONG[dayWithOverlap]} : corrigez les horaires avant d'enregistrer, deux plages ne peuvent pas se chevaucher.`,
+      );
+      return;
+    }
+
     setStatus('saving');
     const ranges: AvailabilityInput[] = days.flatMap((d, i) =>
       d.enabled ? d.ranges.map((r) => ({ dayOfWeek: i, startTime: r.start, endTime: r.end })) : [],
@@ -108,8 +117,14 @@ export default function Availability() {
     try {
       await saveAvailability(uid, ranges);
       setStatus('saved');
-    } catch {
-      setStatus('local');
+    } catch (e: any) {
+      // Le serveur peut avoir déjà supprimé l'ancien planning avant l'échec de l'insertion
+      // (saveAvailability n'est pas transactionnel) : ne jamais présenter ça comme un succès.
+      Alert.alert(
+        'Échec de la synchronisation',
+        `Vos disponibilités affichées aux patients n'ont peut-être pas été mises à jour. ${e?.message ?? 'Réessayez.'}`,
+      );
+      setStatus('error');
     }
     setTimeout(() => setStatus('idle'), 3500);
   };
@@ -185,11 +200,11 @@ export default function Availability() {
               ✓ Disponibilités enregistrées
             </Text>
           </View>
-        ) : status === 'local' ? (
+        ) : status === 'error' ? (
           <View className="bg-sand rounded-2xl px-4 py-3 mt-2 mb-3">
             <Text className="font-sans-medium text-sm text-clay text-center">
-              Enregistré sur cet appareil. La synchronisation serveur nécessite l'activation de la
-              policy d'écriture (voir admin).
+              Échec de l'enregistrement en ligne. Vos patients voient peut-être encore l'ancien
+              planning — réessayez.
             </Text>
           </View>
         ) : null}

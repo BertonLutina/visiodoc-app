@@ -17,7 +17,7 @@ import {
   deleteOverride,
   type OverrideInput,
 } from '@/services/providerApi';
-import { TIME_OPTIONS, toMinutes } from '@/utils/availability';
+import { TIME_OPTIONS, hasOverlappingRanges, toMinutes } from '@/utils/availability';
 import type { DayStatus } from '@/services/availabilityEngine';
 
 type Range = { start: string; end: string };
@@ -27,7 +27,7 @@ export default function AvailabilityOverrides() {
   const uid = user?.id ?? currentProvider.id;
   const today = new Date();
 
-  const { data: overrides, loading, reload } = useAsync(() => getOverrides(uid), [uid]);
+  const { data: overrides, loading, error: loadError, reload } = useAsync(() => getOverrides(uid), [uid]);
 
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -82,6 +82,10 @@ export default function AvailabilityOverrides() {
 
   const onSave = async () => {
     if (!selectedDate) return;
+    if (!unavailableAllDay && hasOverlappingRanges(ranges)) {
+      Alert.alert('Plages qui se chevauchent', "Corrigez les horaires : deux plages ne peuvent pas se chevaucher.");
+      return;
+    }
     setSaving(true);
     const input: OverrideInput = {
       date: selectedDate,
@@ -131,6 +135,15 @@ export default function AvailabilityOverrides() {
           Choisissez une date pour la marquer indisponible ou lui donner des horaires différents
           de votre planning habituel.
         </Text>
+
+        {loadError ? (
+          <View className="bg-sand rounded-2xl px-4 py-4 items-center mb-4">
+            <Text className="font-sans-medium text-sm text-clay text-center mb-3">
+              Impossible de charger vos dates spécifiques. {loadError}
+            </Text>
+            <Button label="Réessayer" variant="outline" onPress={reload} />
+          </View>
+        ) : null}
 
         <MonthCalendar
           year={year}
