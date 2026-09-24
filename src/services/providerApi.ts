@@ -141,13 +141,14 @@ export async function getPatients(doctorId: string): Promise<ProviderPatient[]> 
   return [...seen.values()];
 }
 
-/* ---------- Disponibilités ---------- */
+/* ---------- Disponibilités hebdomadaires ---------- */
 export async function getAvailability(doctorId: string): Promise<AvailabilitySlot[]> {
   if (useMock()) return mock.providerAvailability;
   const { data, error } = await supabase!
     .from('doctor_availability')
-    .select('id, day_of_week, start_time, end_time, slot_duration')
+    .select('id, day_of_week, start_time, end_time')
     .eq('doctor_id', doctorId)
+    .eq('recurrence_type', 'weekly')
     .eq('is_available', true)
     .order('day_of_week', { ascending: true });
   if (error) throw error;
@@ -156,7 +157,7 @@ export async function getAvailability(doctorId: string): Promise<AvailabilitySlo
     dayOfWeek: a.day_of_week ?? 0,
     startTime: a.start_time,
     endTime: a.end_time,
-    slotDuration: a.slot_duration ?? 30,
+    slotDuration: 30, // vestige non lu par le nouveau moteur (voir provider_scheduling_settings)
     count: 0,
   }));
 }
@@ -165,10 +166,9 @@ export type AvailabilityInput = {
   dayOfWeek: number;
   startTime: string;
   endTime: string;
-  slotDuration: number;
 };
 
-/** Remplace l'ensemble des disponibilités hebdomadaires du médecin. */
+/** Remplace les disponibilités hebdomadaires du médecin (ne touche jamais aux overrides). */
 export async function saveAvailability(
   doctorId: string,
   ranges: AvailabilityInput[],
@@ -177,20 +177,121 @@ export async function saveAvailability(
   const { error: delErr } = await supabase!
     .from('doctor_availability')
     .delete()
-    .eq('doctor_id', doctorId);
+    .eq('doctor_id', doctorId)
+    .eq('recurrence_type', 'weekly');
   if (delErr) throw delErr;
   if (ranges.length === 0) return;
   const rows = ranges.map((r) => ({
     doctor_id: doctorId,
+    recurrence_type: 'weekly',
     day_of_week: r.dayOfWeek,
     start_time: r.startTime,
     end_time: r.endTime,
-    slot_duration: r.slotDuration,
     is_available: true,
   }));
   const { error } = await supabase!.from('doctor_availability').insert(rows);
   if (error) throw error;
 }
+
+/* ---------- Dates spécifiques (overrides) ---------- */
+export type OverrideInput = {
+  date: string; // 'YYYY-MM-DD'
+  isAvailable: boolean;
+  ranges: { startTime: string; endTime: string }[]; // vide si isAvailable=false
+};
+
+type OverrideRow = {
+  specific_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  is_available: boolean;
+};
+
+/** Pure : regroupe les lignes DB (une par plage) en une entrée par date. */
+export function groupOverrideRows(rows: OverrideRow[]): OverrideInput[] {
+  const byDate = new Map<string, OverrideInput>();
+  for (const r of rows) {
+    if (!r.is_available) {
+      byDate.set(r.specific_date, { date: r.specific_date, isAvailable: false, ranges: [] });
+      continue;
+    }
+    const range = { startTime: (r.start_time ?? '').slice(0, 5), endTime: (r.end_time ?? '').slice(0, 5) };
+    const existing = byDate.get(r.specific_date);
+    if (existing && existing.isAvailable) existing.ranges.push(range);
+    else byDate.set(r.specific_date, { date: r.specific_date, isAvailable: true, ranges: [range] });
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function getOverrides(doctorId: string): Promise<OverrideInput[]> {
+  if (useMock()) return [];
+  const { data, error } = await supabase!
+    .from('doctor_availability')
+    .select('specific_date, start_time, end_time, is_available')
+    .eq('doctor_id', doctorId)
+    .eq('recurrence_type', 'specific_date')
+    .order('specific_date', { ascending: true });
+  if (error) throw error;
+  return groupOverrideRows((data ?? []) as OverrideRow[]);
+}
+
+export async function saveOverride(doctorId: string, input: OverrideInput): Promise<void> {
+  if (useMock()) return;
+  const { error: delErr } = await supabase!
+    .from('doctor_availability')
+    .delete()
+    .eq('doctor_id', doctorId)
+    .eq('recurrence_type', 'specific_date')
+    .eq('specific_date', input.date);
+  if (delErr) throw delErr;
+
+  type OverrideDbRow = {
+    doctor_id: string;
+    recurrence_type: string;
+    specific_date: string;
+    day_of_week: null;
+    start_time: string | null;
+    end_time: string | null;
+    is_available: boolean;
+  };
+  const rows: OverrideDbRow[] = input.isAvailable
+    ? input.ranges.map((r) => ({
+        doctor_id: doctorId,
+        recurrence_type: 'specific_date',
+        specific_date: input.date,
+        day_of_week: null,
+        start_time: r.startTime,
+        end_time: r.endTime,
+        is_available: true,
+      }))
+    : [
+        {
+          doctor_id: doctorId,
+          recurrence_type: 'specific_date',
+          specific_date: input.date,
+          day_of_week: null,
+          start_time: null,
+          end_time: null,
+          is_available: false,
+        },
+      ];
+  const { error } = await supabase!.from('doctor_availability').insert(rows);
+  if (error) throw error;
+}
+
+export async function deleteOverride(doctorId: string, date: string): Promise<void> {
+  if (useMock()) return;
+  const { error } = await supabase!
+    .from('doctor_availability')
+    .delete()
+    .eq('doctor_id', doctorId)
+    .eq('recurrence_type', 'specific_date')
+    .eq('specific_date', date);
+  if (error) throw error;
+}
+
+/* ---------- Réglages de réservation ---------- */
+export { getSchedulingSettings, saveSchedulingSettings } from './availabilityApi';
 
 /* ---------- Tarif (payment_fee_config) ---------- */
 export async function getFeeConfig(): Promise<{ currentFee: number; platformFeeRate: number }> {
