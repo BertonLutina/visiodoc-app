@@ -7,6 +7,7 @@ import { PROVIDER_NOT_VALIDATED } from '@/utils/authError';
 import { COUNTRIES } from '@/config/countries';
 import { currentPatient } from '@/data/mock';
 import { currentProvider } from '@/data/mockProvider';
+import * as biometrics from '@/services/biometrics';
 
 // Termine proprement une session OAuth ouverte dans le navigateur système.
 WebBrowser.maybeCompleteAuthSession();
@@ -70,6 +71,23 @@ interface AuthContextType {
   updateProfile: (
     partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode'>>,
   ) => Promise<void>;
+  /** Vrai au lancement si la session restaurée attend la biométrie. */
+  locked: boolean;
+  /** Prénom du compte verrouillé (écran de verrou). */
+  lockedFirstName: string;
+  /** Demande la biométrie et ouvre la session en attente. */
+  unlock: () => Promise<boolean>;
+  /** Biométrie utilisable sur ce téléphone (et backend configuré). */
+  biometricAvailable: boolean;
+  /** « Face ID », « Touch ID », « Empreinte digitale »… */
+  biometricLabel: string;
+  /** Préférence du compte connecté. */
+  biometricEnabled: boolean;
+  /** Active (après vérification biométrique) ou désactive. Renvoie vrai si changé. */
+  setBiometricEnabled: (enabled: boolean) => Promise<boolean>;
+  /** Vrai juste après une connexion active (pas une restauration de session). */
+  justSignedIn: boolean;
+  consumeJustSignedIn: () => void;
   logout: () => Promise<void>;
 }
 
@@ -139,6 +157,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Vrai tant que la session persistée n'a pas été restaurée au démarrage.
   const [initializing, setInitializing] = useState<boolean>(!!supabase);
 
+  // Déverrouillage biométrique au lancement : le profil restauré attend dans pendingUser.
+  const [locked, setLocked] = useState(false);
+  const [pendingUser, setPendingUser] = useState<User | null>(null);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricLabel, setBiometricLabel] = useState('Biométrie');
+  const [biometricEnabled, setBiometricEnabledState] = useState(false);
+  const [justSignedIn, setJustSignedIn] = useState(false);
+
+  useEffect(() => {
+    if (!supabaseConfigured) return;
+    biometrics.isAvailable().then(setBiometricAvailable);
+    biometrics.getLabel().then(setBiometricLabel);
+  }, []);
+
+  // Préférence du compte connecté.
+  useEffect(() => {
+    if (!user) {
+      setBiometricEnabledState(false);
+      return;
+    }
+    let active = true;
+    biometrics.isEnabled(user.id).then((v) => active && setBiometricEnabledState(v));
+    return () => {
+      active = false;
+    };
+  }, [user?.id]);
+
   // Restaure la session persistée (AsyncStorage) au démarrage → reste connecté
   // après un reload / crash, sans avoir à se reconnecter.
   useEffect(() => {
@@ -152,20 +197,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then(async ({ data }) => {
         if (active && data.session?.user) {
           const profile = await loadProfile(data.session.user.id);
-          if (active && profile) setUser(profile);
+          if (active && profile) {
+            if (await biometrics.shouldLockAtLaunch(profile.id)) {
+              // Le profil reste en attente : aucun écran ne se charge avant la biométrie.
+              setPendingUser(profile);
+              setLocked(true);
+            } else {
+              setUser(profile);
+            }
+          }
         }
       })
       .finally(() => active && setInitializing(false));
 
     // Se déconnecte proprement si Supabase invalide la session (token expiré non renouvelable…)
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (active && event === 'SIGNED_OUT') setUser(null);
+      if (active && event === 'SIGNED_OUT') {
+        setUser(null);
+        setPendingUser(null);
+        setLocked(false);
+      }
     });
     return () => {
       active = false;
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  // Connexion active (mot de passe, OTP, OAuth, inscription) → jamais verrouillée,
+  // et déclenche la proposition d'activer la biométrie.
+  const signedIn = (profile: User) => {
+    setUser(profile);
+    setJustSignedIn(true);
+  };
 
   const signIn = async (email: string, password: string, mockUser: User) => {
     setLoading(true);
@@ -175,10 +239,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error) throw error;
         const profile = (data.user && (await loadProfile(data.user.id))) || mockUser;
         await guardProvider(profile);
-        setUser(profile);
+        signedIn(profile);
       } else {
         await new Promise((r) => setTimeout(r, 400));
-        setUser(mockUser);
+        signedIn(mockUser);
       }
     } finally {
       setLoading(false);
@@ -213,7 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const finishOtp = async (authUser: any, fallbackEmail?: string): Promise<User> => {
     const profile = (authUser?.id && (await loadProfile(authUser.id))) || minimalUser(authUser, fallbackEmail);
     await guardProvider(profile);
-    setUser(profile);
+    signedIn(profile);
     return profile;
   };
 
@@ -236,7 +300,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       if (!supabaseConfigured || !supabase) {
         const u = { ...currentPatient, email: email.trim().toLowerCase() };
-        setUser(u);
+        signedIn(u);
         return u;
       }
       const { data, error } = await supabase.auth.verifyOtp({
@@ -266,7 +330,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       if (!supabaseConfigured || !supabase) {
         const u = { ...currentPatient, phone };
-        setUser(u);
+        signedIn(u);
         return u;
       }
       const { data, error } = await supabase.auth.verifyOtp({
@@ -379,10 +443,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           phone: input.phone,
           countryCode: input.countryCode,
         };
-        setUser(profile);
+        signedIn(profile);
       } else {
         await new Promise((r) => setTimeout(r, 400));
-        setUser({ ...currentPatient, firstName: input.firstName, lastName: input.lastName, email: input.email });
+        signedIn({ ...currentPatient, firstName: input.firstName, lastName: input.lastName, email: input.email });
       }
     } finally {
       setLoading(false);
@@ -450,10 +514,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  /* ---------- Biométrie ---------- */
+  const unlock = async (): Promise<boolean> => {
+    if (!pendingUser) return false;
+    const ok = await biometrics.authenticate('Déverrouiller VisioDoc');
+    if (!ok) return false;
+    const profile = pendingUser;
+    setPendingUser(null);
+    setLocked(false);
+    // Un médecin dont le compte n'est plus validé est déconnecté (lève PROVIDER_NOT_VALIDATED).
+    await guardProvider(profile);
+    setUser(profile);
+    return true;
+  };
+
+  const setBiometricEnabled = async (enabled: boolean): Promise<boolean> => {
+    if (!user) return false;
+    if (enabled) {
+      if (!(await biometrics.isAvailable())) return false;
+      const ok = await biometrics.authenticate(`Activer ${biometricLabel}`);
+      if (!ok) return false;
+    }
+    await biometrics.setEnabled(user.id, enabled);
+    setBiometricEnabledState(enabled);
+    return true;
+  };
+
+  const consumeJustSignedIn = () => setJustSignedIn(false);
+
   const logout = async () => {
     // On vide l'état local D'ABORD → la déconnexion est instantanée et fiable,
     // même si l'appel réseau à Supabase échoue (session expirée, hors-ligne…).
     setUser(null);
+    setPendingUser(null);
+    setLocked(false);
+    setJustSignedIn(false);
     try {
       // `scope: 'local'` supprime la session persistée (AsyncStorage) sans
       // dépendre du serveur → pas de blocage possible.
@@ -468,7 +563,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       isAuthenticated: !!user,
       loading,
-      initializing,
+      // Tant que le verrou est actif, on considère la session comme non restaurée.
+      initializing: initializing || locked,
       loginPatient,
       loginProvider,
       sendEmailOtp,
@@ -480,9 +576,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       registerPatient,
       registerProvider,
       updateProfile,
+      locked,
+      lockedFirstName: pendingUser?.firstName ?? '',
+      unlock,
+      biometricAvailable,
+      biometricLabel,
+      biometricEnabled,
+      setBiometricEnabled,
+      justSignedIn,
+      consumeJustSignedIn,
       logout,
     }),
-    [user, loading, initializing],
+    [user, loading, initializing, locked, pendingUser, biometricAvailable, biometricLabel, biometricEnabled, justSignedIn],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
