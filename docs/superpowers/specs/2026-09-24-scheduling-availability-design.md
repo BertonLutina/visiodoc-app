@@ -212,6 +212,35 @@ existante ; ajouté seulement si une régression UI le justifie).
 
 1. **Schéma live à confirmer** (voir requête SQL demandée en conversation) — colonnes réelles
    de `doctor_availability`, `consultations`, `users`/`provider_profiles` sur le projet prod
-   `cftqxuxhsellvquidpxr`. Les migrations ci-dessus seront ajustées en conséquence.
+   `cftqxuxhsellvquidpxr`. Les migrations ci-dessus seront ajustées en conséquence. Non
+   fourni au moment du plan → migrations écrites contre les fichiers locaux, à vérifier avant
+   application réelle.
 2. Les bugs pré-existants de vocabulaire `status`/`consultation_type` (CHECK vs valeurs
    réellement écrites par l'app) restent non corrigés par ce travail.
+
+## Addendum — corrections découvertes en écrivant le plan
+
+1. **`start_time`/`end_time` sont `NOT NULL`** dans la migration locale de `doctor_availability`.
+   Un override « indisponible toute la journée » n'a pas d'horaires → migration ajoutée pour
+   passer ces deux colonnes en nullable (la contrainte `check_time_range CHECK (end_time >
+   start_time)` reste valide : une comparaison avec `NULL` vaut `UNKNOWN`, jamais `FALSE`, donc
+   ne bloque pas l'insertion).
+2. **RLS de `doctor_availability` trop restrictive pour les overrides** : la policy actuelle
+   `"Patients can view available doctor slots"` exige `is_available = true`, donc un override
+   « indisponible » (qui doit justement avoir `is_available = false`) serait invisible côté
+   patient — le moteur ne verrait alors que la règle hebdomadaire et l'afficherait à tort comme
+   disponible. Policies SELECT (authenticated + anon) élargies à toutes les lignes du planning
+   (la forme d'un planning n'est pas une donnée sensible).
+3. **Fuite d'identité patient via la disponibilité** : pour que `getMonthAvailability`/
+   `getDaySlots` (exécutés côté patient, souvent avec la clé anon) sachent qu'un créneau est
+   pris, ils doivent lire des rendez-vous d'AUTRES patients — bloqué par la RLS actuelle de
+   `consultations` (`patient_id = auth.uid()`), à raison. Ajout d'une vue publique
+   `consultation_busy_times (doctor_id, scheduled_at, duration)` — sans `patient_id` ni aucune
+   donnée médicale — lisible par `anon`/`authenticated`, qui sert de source pour le calcul de
+   créneaux occupés sans jamais exposer qui a réservé.
+4. **`saveAvailability` existant supprime TOUTES les lignes du médecin avant réinsertion**,
+   overrides compris. Le nouveau `saveAvailability` ne doit supprimer/réinsérer que les lignes
+   `recurrence_type = 'weekly'`.
+5. `doctor_availability.slot_duration` devient obsolète (la durée/l'intervalle viennent
+   désormais de `provider_scheduling_settings`) — colonne laissée en place avec sa valeur par
+   défaut (30) mais plus lue par le nouveau moteur, pour éviter une migration destructive.
