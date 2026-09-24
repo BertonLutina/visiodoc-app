@@ -95,7 +95,6 @@ code réellement déployé (pas dans ce repo).
   dans `src/config/countries.ts`. Pas de bug ici en vraie prod.
 - `ai_call_usage_logs` existe bel et bien en vraie prod.
 
-<<<<<<< HEAD
 ### `countries`
 `id` · `code` · `name` · `currency_code` · `currency_iso` · `locale` ·
 `is_active` · `created_at`.
