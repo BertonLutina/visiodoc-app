@@ -18,8 +18,31 @@ import {
   Mulish_700Bold,
   Mulish_800ExtraBold,
 } from '@expo-google-fonts/mulish';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { BiometricLock } from '@/components/BiometricLock';
 import { colors } from '@/theme/colors';
+
+/** Contenu de l'app, sous AuthProvider : écran de verrou tant que la biométrie n'est pas validée. */
+function AppShell() {
+  const { locked } = useAuth();
+
+  if (locked) return <BiometricLock />;
+
+  return (
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(auth)" />
+      <Stack.Screen name="(patient)" />
+      <Stack.Screen name="(provider)" />
+      <Stack.Screen name="doctor/[id]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="records" />
+      <Stack.Screen name="provider/availability" />
+      <Stack.Screen name="provider/fee" />
+      <Stack.Screen name="provider/subscription" />
+      <Stack.Screen name="call/[room]" options={{ presentation: 'fullScreenModal' }} />
+    </Stack>
+  );
+}
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -42,18 +65,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(patient)" />
-            <Stack.Screen name="(provider)" />
-            <Stack.Screen name="doctor/[id]" options={{ presentation: 'card' }} />
-            <Stack.Screen name="records" />
-            <Stack.Screen name="provider/availability" />
-            <Stack.Screen name="provider/fee" />
-            <Stack.Screen name="provider/subscription" />
-            <Stack.Screen name="call/[room]" options={{ presentation: 'fullScreenModal' }} />
-          </Stack>
+          <AppShell />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
