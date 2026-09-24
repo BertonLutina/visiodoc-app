@@ -145,6 +145,7 @@ export default function AvailabilityOverrides() {
           minDate={today}
           maxDate={maxDate}
           loading={loading}
+          alwaysSelectable
         />
 
         {selectedDate ? (

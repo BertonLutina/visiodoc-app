@@ -27,6 +27,7 @@ export function MonthCalendar({
   minDate,
   maxDate,
   loading = false,
+  alwaysSelectable = false,
 }: {
   year: number;
   month: number;
@@ -37,6 +38,13 @@ export function MonthCalendar({
   minDate: Date;
   maxDate: Date;
   loading?: boolean;
+  /**
+   * Quand vrai, une date sans statut (aucune donnée) ou 'unavailable' reste sélectionnable
+   * (hors plage min/max) — nécessaire pour l'écran provider "Dates spécifiques", où choisir
+   * une date sans override existant est justement l'action normale. Par défaut (patient),
+   * seules les dates 'available'/'full' sont sélectionnables.
+   */
+  alwaysSelectable?: boolean;
 }) {
   const cells = useMemo(() => {
     const first = new Date(year, month - 1, 1);
@@ -99,7 +107,7 @@ export function MonthCalendar({
           const dateOnly = new Date(date);
           dateOnly.setHours(0, 0, 0, 0);
           const outOfRange = dateOnly < minDateOnly || dateOnly > maxDateOnly;
-          const disabled = outOfRange || !status || status === 'unavailable';
+          const disabled = outOfRange || (!alwaysSelectable && (!status || status === 'unavailable'));
           const isSelected = key === selectedDate;
           const isToday = key === todayKey;
 

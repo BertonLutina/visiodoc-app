@@ -1,5 +1,36 @@
 import { groupOverrideRows } from './providerApi';
 
+describe('saveAvailability', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.dontMock('@/lib/supabase');
+  });
+
+  it('only deletes recurrence_type=weekly rows, never touches date overrides', async () => {
+    const eq2 = jest.fn().mockResolvedValue({ error: null });
+    const eq1 = jest.fn(() => ({ eq: eq2 }));
+    const deleteMock = jest.fn(() => ({ eq: eq1 }));
+    const insertMock = jest.fn().mockResolvedValue({ error: null });
+    const fromMock = jest.fn(() => ({ delete: deleteMock, insert: insertMock }));
+
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: fromMock },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+
+    const { saveAvailability: saveAvailabilityFresh } = require('./providerApi');
+    await saveAvailabilityFresh('doc-1', [{ dayOfWeek: 0, startTime: '09:00', endTime: '12:00' }]);
+
+    expect(eq1).toHaveBeenCalledWith('doctor_id', 'doc-1');
+    expect(eq2).toHaveBeenCalledWith('recurrence_type', 'weekly');
+  });
+});
+
 describe('groupOverrideRows', () => {
   it('groups multiple available rows for the same date into one override with several ranges', () => {
     const rows = [

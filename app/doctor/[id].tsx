@@ -65,6 +65,7 @@ export default function DoctorProfile() {
         patientId: user?.id ?? 'patient-1',
         doctorId: doctor.id,
         scheduledAt: activeSlot.start.toISOString(),
+        duration: Math.round((activeSlot.end.getTime() - activeSlot.start.getTime()) / 60000),
         type,
         fee: doctor.fee,
       });

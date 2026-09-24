@@ -145,6 +145,10 @@ export async function bookConsultation(input: {
   scheduledAt: string;
   type: ConsultationType;
   fee: number;
+  /** Durée réelle du créneau réservé (minutes) — doit venir du Slot affiché, jamais d'une
+   * valeur fixe : la contrainte anti-chevauchement côté DB se base sur cette colonne, donc
+   * une valeur fausse réserve la mauvaise plage horaire. */
+  duration: number;
 }): Promise<{ id: string }> {
   if (useMock()) return { id: 'mock-booking' };
   const { data, error } = await supabase!
@@ -153,6 +157,7 @@ export async function bookConsultation(input: {
       patient_id: input.patientId,
       doctor_id: input.doctorId,
       scheduled_at: input.scheduledAt,
+      duration: input.duration,
       consultation_type: input.type,
       payment_amount: input.fee,
       status: 'pending',
@@ -162,7 +167,9 @@ export async function bookConsultation(input: {
     .single();
   if (error) {
     if (error.code === '23P01') throw new SlotUnavailableError('overlap');
-    if (error.code === '23505') throw new SlotUnavailableError('daily-limit');
+    if (error.code === '23505' && error.message?.includes('one_booking_per_provider_per_day')) {
+      throw new SlotUnavailableError('daily-limit');
+    }
     throw error;
   }
   // Paiement : Edge Function payment-initiate
