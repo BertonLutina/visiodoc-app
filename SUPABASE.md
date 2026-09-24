@@ -107,6 +107,35 @@ utilisés tels quels dans les embeds `users!consultations_doctor_id_fkey`),
 `scheduled_at`, `consultation_type`, `duration`, `payment_amount`, `status`,
 `payment_status`, `video_room_id`, `started_at`.
 
+## ⚠️ Bug live confirmé : RLS de `doctor_availability` bloque tous les prestataires
+
+Trouvé en testant l'écran `app/provider/availability.tsx` sur l'app réelle (message
+"Enregistré sur cet appareil ...") — les policies SELECT/INSERT de `doctor_availability`
+(`20251212165243_fix_rls_performance_and_security.sql`) vérifient encore
+`users.role = 'doctor'`, une valeur d'avant le renommage EPIC1
+(`20260321094717_..._epic1_rename_doctor_to_provider.sql`, qui a fait
+`UPDATE users SET role = 'provider' WHERE role = 'doctor'` sans recréer les policies qui
+en dépendaient). Le rôle réel d'un prestataire est `'provider'` (confirmé ci-dessus) : la
+condition `role = 'doctor'` n'est donc plus jamais vraie, toute lecture/écriture provider
+échoue silencieusement la RLS. Corrigé pour `doctor_availability` par
+`20260924000003_fix_doctor_availability_role_check.sql` (branche
+`feat/scheduling-availability`).
+
+**Le même pattern existe ailleurs et n'a PAS été corrigé** (hors périmètre de cette
+branche — repéré par `grep -rn "role = 'doctor'" supabase/migrations/` après le
+renommage) : `medical_records`, `patients`, `ai_questionnaire_sessions`,
+`healthcare_professionals` ont des policies écrites contre l'ancienne valeur `'doctor'`.
+`consultations` et `provider_scheduling_settings` (nouvelle table de cette branche) n'en
+sont PAS affectés — leurs policies filtrent uniquement sur la propriété
+(`doctor_id`/`patient_id`/`provider_id` = `auth.uid()`), pas sur le rôle.
+
+## Correction : projet live réel
+
+Le projet mentionné plus haut (`lgcvcxicywyguqjrxvma`) est la source de vérité au
+2026-09-24. Les migrations `20260924000000` à `20260924000003` (branche
+`feat/scheduling-availability`) référençaient encore `cftqxuxhsellvquidpxr` dans leurs
+commentaires d'avertissement — corrigé.
+
 ## Edge Functions déployées (25)
 Toutes les fonctions de `../supabase/functions/` sont déployées sur
 `lgcvcxicywyguqjrxvma`. Celles utilisées par le mobile :
