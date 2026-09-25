@@ -3,6 +3,7 @@ import * as mock from '@/data/mockProvider';
 import type { ConsultationType } from '@/types';
 import type {
   AvailabilitySlot,
+  PatientDetail,
   ProviderConsultation,
   ProviderPatient,
   ProviderStats,
@@ -139,6 +140,57 @@ export async function getPatients(doctorId: string): Promise<ProviderPatient[]> 
     }
   }
   return [...seen.values()];
+}
+
+export function calculateAge(dateOfBirth: string | null | undefined): number | null {
+  if (!dateOfBirth) return null;
+  const dob = new Date(dateOfBirth);
+  if (Number.isNaN(dob.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const monthDiff = now.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) age--;
+  return age;
+}
+
+export async function getPatient(patientId: string): Promise<PatientDetail> {
+  if (useMock()) {
+    const p = mock.providerPatients.find((x) => x.id === patientId);
+    return {
+      id: patientId,
+      firstName: p?.firstName ?? '',
+      lastName: p?.lastName ?? '',
+      initials: p?.initials ?? '?',
+      age: p?.age ?? null,
+      gender: (p?.gender as 'M' | 'F' | undefined) ?? null,
+      bloodType: null,
+      allergiesSummary: null,
+      address: null,
+      emergencyContactName: null,
+      emergencyContactPhone: null,
+    };
+  }
+  const { data, error } = await supabase!
+    .from('users')
+    .select(
+      'id, first_name, last_name, date_of_birth, gender, blood_type, allergies, address, emergency_contact_name, emergency_contact_phone',
+    )
+    .eq('id', patientId)
+    .single();
+  if (error) throw error;
+  return {
+    id: data.id,
+    firstName: data.first_name ?? '',
+    lastName: data.last_name ?? '',
+    initials: initials(data.first_name, data.last_name),
+    age: calculateAge(data.date_of_birth),
+    gender: data.gender ?? null,
+    bloodType: data.blood_type ?? null,
+    allergiesSummary: data.allergies ?? null,
+    address: data.address ?? null,
+    emergencyContactName: data.emergency_contact_name ?? null,
+    emergencyContactPhone: data.emergency_contact_phone ?? null,
+  };
 }
 
 /* ---------- Disponibilités hebdomadaires ---------- */
