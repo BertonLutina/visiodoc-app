@@ -154,9 +154,9 @@ export const wallet: Wallet = {
 };
 
 export const medicalRecords: MedicalRecord[] = [
-  { id: 'r1', kind: 'ordonnance', title: 'Paracétamol 1g — 3x/jour · 7 jours', detail: 'Ordonnance', author: 'Dr. Amara Diallo', date: '10 juin 2026' },
-  { id: 'r2', kind: 'diagnostic', title: 'Rhinopharyngite aiguë', detail: 'Diagnostic', author: 'Dr. Amara Diallo', date: '10 juin 2026' },
-  { id: 'r3', kind: 'analyse', title: 'NFS complète — résultats normaux', detail: 'Analyse', author: 'Labo Pasteur', date: '5 mai 2026' },
-  { id: 'r4', kind: 'vaccin', title: 'Fièvre jaune — à jour', detail: 'Vaccin', author: 'HGR Kinshasa', date: '12 jan. 2026' },
-  { id: 'r5', kind: 'allergie', title: 'Allergie connue : Pénicilline', detail: 'Allergie', author: 'Dr. Ndiaye', date: '3 mars 2025' },
+  { id: 'r1', patientId: 'pat-1', doctorId: 'doc-1', kind: 'prescription', title: 'Paracétamol 1g — 3x/jour · 7 jours', status: 'active', author: 'Dr. Amara Diallo', date: '10 juin 2026', attachments: [], metadata: { medication_name: 'Paracétamol', dosage: '1g', frequency: '3x/jour' } },
+  { id: 'r2', patientId: 'pat-1', doctorId: 'doc-1', kind: 'condition', title: 'Rhinopharyngite aiguë', status: 'active', author: 'Dr. Amara Diallo', date: '10 juin 2026', attachments: [], metadata: {} },
+  { id: 'r3', patientId: 'pat-2', doctorId: 'doc-1', kind: 'lab_result', title: 'NFS complète — résultats normaux', status: 'active', author: 'Labo Pasteur', date: '5 mai 2026', attachments: [], metadata: {} },
+  { id: 'r4', patientId: 'pat-3', doctorId: 'doc-1', kind: 'vaccination', title: 'Fièvre jaune — à jour', status: 'active', author: 'HGR Kinshasa', date: '12 jan. 2026', attachments: [], metadata: {} },
+  { id: 'r5', patientId: 'pat-4', doctorId: 'doc-1', kind: 'allergy', title: 'Allergie connue : Pénicilline', status: 'inactive', author: 'Dr. Ndiaye', date: '3 mars 2025', attachments: [], metadata: {} },
 ];

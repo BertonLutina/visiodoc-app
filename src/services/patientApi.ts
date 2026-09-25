@@ -5,9 +5,9 @@ import type {
   ConsultationType,
   Doctor,
   MedicalRecord,
-  MedicalRecordKind,
   Wallet,
 } from '@/types';
+import { isMedicalRecordKind } from './medicalRecordTaxonomy';
 
 const useMock = () => !supabaseConfigured || !supabase;
 
@@ -186,35 +186,38 @@ export async function bookConsultation(input: {
 }
 
 /* ---------- Dossier médical ---------- */
-const recordKindMap: Record<string, MedicalRecordKind> = {
-  prescription: 'ordonnance',
-  ordonnance: 'ordonnance',
-  diagnosis: 'diagnostic',
-  diagnostic: 'diagnostic',
-  analysis: 'analyse',
-  lab: 'analyse',
-  vaccine: 'vaccin',
-  vaccin: 'vaccin',
-  allergy: 'allergie',
-  allergie: 'allergie',
-};
+export function mapMedicalRecordRow(row: any): MedicalRecord {
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    doctorId: row.doctor_id,
+    consultationId: row.consultation_id ?? undefined,
+    kind: isMedicalRecordKind(row.record_type) ? row.record_type : 'note',
+    title: row.title ?? '',
+    description: row.description ?? undefined,
+    category: row.category ?? undefined,
+    severity: row.severity ?? undefined,
+    status: row.status ?? 'active',
+    author: '',
+    date: new Date(row.date_recorded ?? row.created_at).toLocaleDateString('fr-FR'),
+    startDate: row.start_date ?? undefined,
+    endDate: row.end_date ?? undefined,
+    attachments: Array.isArray(row.attachments) ? row.attachments : [],
+    metadata: row.metadata ?? {},
+  };
+}
 
 export async function getMedicalRecords(patientId: string): Promise<MedicalRecord[]> {
   if (useMock()) return mock.medicalRecords;
   const { data, error } = await supabase!
     .from('medical_records')
-    .select('id, record_type, title, status, created_at')
+    .select(
+      'id, patient_id, doctor_id, consultation_id, record_type, title, description, category, severity, status, date_recorded, start_date, end_date, attachments, metadata, created_at',
+    )
     .eq('patient_id', patientId)
     .order('created_at', { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    kind: recordKindMap[String(r.record_type).toLowerCase()] ?? 'diagnostic',
-    title: r.title ?? '',
-    detail: r.record_type ?? '',
-    author: '',
-    date: new Date(r.created_at).toLocaleDateString('fr-FR'),
-  }));
+  return (data ?? []).map(mapMedicalRecordRow);
 }
 
 /* ---------- Portefeuille ----------

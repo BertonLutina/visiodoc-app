@@ -32,10 +32,26 @@ export interface ProviderPatient {
   id: string;
   firstName: string;
   lastName: string;
-  age: number;
-  gender: 'M' | 'F';
+  /** `null` quand `users.date_of_birth` est absente — jamais un 0 trompeur. */
+  age: number | null;
+  /** `null` quand `users.gender` est absent ou hors de l'énumération attendue. */
+  gender: 'M' | 'F' | null;
   mainCondition: string;
   initials: string;
+}
+
+export interface PatientDetail {
+  id: string;
+  firstName: string;
+  lastName: string;
+  initials: string;
+  age: number | null;
+  gender: 'M' | 'F' | null;
+  bloodType: string | null;
+  allergiesSummary: string | null;
+  address: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
 }
 
 export interface ProviderConsultation {
@@ -47,14 +63,6 @@ export interface ProviderConsultation {
   durationMin: number;
   status: ConsultationStatus;
   roomId?: string;
-}
-
-export interface PatientFile {
-  patientId: string;
-  firstName: string;
-  lastName: string;
-  initials: string;
-  lastActLabel: string; // ex: "Ordonnance · 10 juin"
 }
 
 export interface AvailabilitySlot {

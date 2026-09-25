@@ -1,12 +1,23 @@
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 import * as mock from '@/data/mockProvider';
+import * as patientMock from '@/data/mock';
+import { logMedicalRecordEvent } from './auditLog';
+import { mapMedicalRecordRow } from './patientApi';
 import type { ConsultationType } from '@/types';
 import type {
   AvailabilitySlot,
+  PatientDetail,
   ProviderConsultation,
   ProviderPatient,
   ProviderStats,
 } from '@/types/provider';
+import type {
+  MedicalRecord,
+  MedicalRecordAttachment,
+  MedicalRecordInput,
+  MedicalRecordKind,
+  MedicalRecordSeverity,
+} from '@/types';
 
 const useMock = () => !supabaseConfigured || !supabase;
 const initials = (a?: string, b?: string) =>
@@ -117,11 +128,18 @@ export async function startConsultation(id: string): Promise<void> {
 /* ---------- Patients ---------- */
 export async function getPatients(doctorId: string): Promise<ProviderPatient[]> {
   if (useMock()) return mock.providerPatients;
-  // Patients distincts ayant eu une consultation avec ce médecin
+  // Patients distincts ayant eu une consultation avec ce médecin.
+  // Les consultations annulées / no-show sont exclues : elles n'établissent pas de relation
+  // de soin, et la RLS de `medical_records` les exclut de la même façon (voir le plan, Task 4 :
+  // `consultations.status NOT IN ('cancelled', 'no_show')`). Sans ce filtre, un patient dont la
+  // seule consultation a été annulée apparaîtrait dans la liste mais son dossier serait vide/refusé.
   const { data, error } = await supabase!
     .from('consultations')
-    .select(`patient:users!consultations_patient_id_fkey ( id, first_name, last_name ), reason`)
-    .eq('doctor_id', doctorId);
+    .select(
+      `patient:users!consultations_patient_id_fkey ( id, first_name, last_name, date_of_birth, gender ), reason`,
+    )
+    .eq('doctor_id', doctorId)
+    .not('status', 'in', '("cancelled","no_show")');
   if (error) throw error;
   const seen = new Map<string, ProviderPatient>();
   for (const row of data ?? []) {
@@ -131,14 +149,172 @@ export async function getPatients(doctorId: string): Promise<ProviderPatient[]> 
         id: p.id,
         firstName: p.first_name ?? '',
         lastName: p.last_name ?? '',
-        age: 0,
-        gender: 'F',
+        age: calculateAge(p.date_of_birth),
+        gender: p.gender === 'M' || p.gender === 'F' ? p.gender : null,
         mainCondition: (row as any).reason ?? '',
         initials: initials(p.first_name, p.last_name),
       });
     }
   }
   return [...seen.values()];
+}
+
+export async function getLatestRecordByPatient(doctorId: string): Promise<Map<string, MedicalRecord>> {
+  const map = new Map<string, MedicalRecord>();
+  if (useMock()) {
+    for (const r of patientMock.medicalRecords) if (!map.has(r.patientId)) map.set(r.patientId, r);
+    return map;
+  }
+  const { data, error } = await supabase!
+    .from('medical_records')
+    .select(
+      'id, patient_id, doctor_id, consultation_id, record_type, title, description, category, severity, status, date_recorded, start_date, end_date, attachments, metadata, created_at',
+    )
+    .eq('doctor_id', doctorId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  for (const row of data ?? []) {
+    if (!map.has(row.patient_id)) map.set(row.patient_id, mapMedicalRecordRow(row));
+  }
+  return map;
+}
+
+export async function getPatientConsultationHistory(
+  doctorId: string,
+  patientId: string,
+): Promise<ProviderConsultation[]> {
+  if (useMock()) return mock.providerUpcomingConsultations.filter((c) => c.patient.id === patientId);
+  const { data, error } = await supabase!
+    .from('consultations')
+    .select(`*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name )`)
+    .eq('doctor_id', doctorId)
+    .eq('patient_id', patientId)
+    .order('scheduled_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapConsultation);
+}
+
+export function calculateAge(dateOfBirth: string | null | undefined): number | null {
+  if (!dateOfBirth) return null;
+  const dob = new Date(dateOfBirth);
+  if (Number.isNaN(dob.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const monthDiff = now.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < dob.getDate())) age--;
+  return age;
+}
+
+export async function getPatient(patientId: string): Promise<PatientDetail> {
+  if (useMock()) {
+    const p = mock.providerPatients.find((x) => x.id === patientId);
+    return {
+      id: patientId,
+      firstName: p?.firstName ?? '',
+      lastName: p?.lastName ?? '',
+      initials: p?.initials ?? '?',
+      age: p?.age ?? null,
+      gender: (p?.gender as 'M' | 'F' | undefined) ?? null,
+      bloodType: null,
+      allergiesSummary: null,
+      address: null,
+      emergencyContactName: null,
+      emergencyContactPhone: null,
+    };
+  }
+  const { data, error } = await supabase!
+    .from('users')
+    .select(
+      'id, first_name, last_name, date_of_birth, gender, blood_type, allergies, address, emergency_contact_name, emergency_contact_phone',
+    )
+    .eq('id', patientId)
+    .single();
+  if (error) throw error;
+  return {
+    id: data.id,
+    firstName: data.first_name ?? '',
+    lastName: data.last_name ?? '',
+    initials: initials(data.first_name, data.last_name),
+    age: calculateAge(data.date_of_birth),
+    gender: data.gender ?? null,
+    bloodType: data.blood_type ?? null,
+    allergiesSummary: data.allergies ?? null,
+    address: data.address ?? null,
+    emergencyContactName: data.emergency_contact_name ?? null,
+    emergencyContactPhone: data.emergency_contact_phone ?? null,
+  };
+}
+
+export async function createMedicalRecord(input: MedicalRecordInput): Promise<{ id: string }> {
+  if (useMock()) return { id: `mock-${Date.now()}` };
+  const { data, error } = await supabase!
+    .from('medical_records')
+    .insert({
+      patient_id: input.patientId,
+      doctor_id: input.doctorId,
+      consultation_id: input.consultationId ?? null,
+      record_type: input.kind,
+      title: input.title,
+      description: input.description ?? null,
+      category: input.category ?? null,
+      severity: input.severity ?? null,
+      status: 'active',
+      start_date: input.startDate ?? null,
+      end_date: input.endDate ?? null,
+      metadata: input.metadata ?? {},
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  await logMedicalRecordEvent('medical_record:create', input.doctorId, input.patientId, data.id, input.kind);
+  return { id: data.id };
+}
+
+export type MedicalRecordContext = { doctorId: string; patientId: string; kind: MedicalRecordKind };
+
+/**
+ * Patch d'une entrée de dossier. Pour chaque champ optionnel :
+ * - `undefined` = champ non touché (absent du `UPDATE`),
+ * - `null`      = champ explicitement vidé (envoyé comme `NULL` à la base).
+ * Sans cette distinction, effacer une description était impossible : l'ancienne valeur
+ * persistait silencieusement.
+ */
+export type MedicalRecordPatch = {
+  kind?: MedicalRecordKind;
+  title?: string;
+  description?: string | null;
+  category?: string | null;
+  severity?: MedicalRecordSeverity | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  metadata?: Record<string, string> | null;
+};
+
+export async function updateMedicalRecord(
+  id: string,
+  context: MedicalRecordContext,
+  patch: MedicalRecordPatch,
+): Promise<void> {
+  if (useMock()) return;
+  const dbPatch: Record<string, any> = {};
+  if (patch.kind !== undefined) dbPatch.record_type = patch.kind;
+  if (patch.title !== undefined) dbPatch.title = patch.title;
+  if (patch.description !== undefined) dbPatch.description = patch.description;
+  if (patch.category !== undefined) dbPatch.category = patch.category;
+  if (patch.severity !== undefined) dbPatch.severity = patch.severity;
+  if (patch.startDate !== undefined) dbPatch.start_date = patch.startDate;
+  if (patch.endDate !== undefined) dbPatch.end_date = patch.endDate;
+  if (patch.metadata !== undefined) dbPatch.metadata = patch.metadata;
+  const { error } = await supabase!.from('medical_records').update(dbPatch).eq('id', id);
+  if (error) throw error;
+  await logMedicalRecordEvent('medical_record:update', context.doctorId, context.patientId, id, context.kind);
+}
+
+export async function archiveMedicalRecord(id: string, context: MedicalRecordContext): Promise<void> {
+  if (useMock()) return;
+  const { error } = await supabase!.from('medical_records').update({ status: 'inactive' }).eq('id', id);
+  if (error) throw error;
+  await logMedicalRecordEvent('medical_record:archive', context.doctorId, context.patientId, id, context.kind);
 }
 
 /* ---------- Disponibilités hebdomadaires ---------- */
@@ -301,4 +477,14 @@ export async function getFeeConfig(): Promise<{ currentFee: number; platformFeeR
     currentFee: mock.feeConfig.currentFee,
     platformFeeRate: (data?.platform_fee_percentage ?? 4) / 100,
   };
+}
+
+export async function appendMedicalRecordAttachment(
+  id: string,
+  existing: MedicalRecordAttachment[],
+  attachment: MedicalRecordAttachment,
+): Promise<void> {
+  if (useMock()) return;
+  const { error } = await supabase!.from('medical_records').update({ attachments: [...existing, attachment] }).eq('id', id);
+  if (error) throw error;
 }

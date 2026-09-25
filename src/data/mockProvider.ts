@@ -1,7 +1,6 @@
 import type {
   AvailabilityException,
   AvailabilitySlot,
-  PatientFile,
   ProviderConsultation,
   ProviderPatient,
   ProviderProfile,
@@ -77,13 +76,6 @@ export const providerPatients: ProviderPatient[] = [
   { id: 'pat-2', firstName: 'Bamba', lastName: 'Sow', age: 45, gender: 'M', mainCondition: 'Hypertension artérielle', initials: 'BS' },
   { id: 'pat-3', firstName: 'Aïcha', lastName: 'Ndiaye', age: 29, gender: 'F', mainCondition: 'Suivi prénatal', initials: 'AN' },
   { id: 'pat-4', firstName: 'Oumar', lastName: 'Camara', age: 52, gender: 'M', mainCondition: 'Diabète type 2', initials: 'OC' },
-];
-
-export const providerPatientFiles: PatientFile[] = [
-  { patientId: 'pat-1', firstName: 'Marie', lastName: 'Konaté', initials: 'MK', lastActLabel: '💊 Ordonnance · 10 juin' },
-  { patientId: 'pat-2', firstName: 'Bamba', lastName: 'Sow', initials: 'BS', lastActLabel: '🩺 Diagnostic · 5 juin' },
-  { patientId: 'pat-3', firstName: 'Aïcha', lastName: 'Ndiaye', initials: 'AN', lastActLabel: '📋 Suivi prénatal · 2 juin' },
-  { patientId: 'pat-4', firstName: 'Oumar', lastName: 'Camara', initials: 'OC', lastActLabel: '📊 Plan traitement · 28 mai' },
 ];
 
 export const providerAvailability: AvailabilitySlot[] = [

@@ -102,7 +102,7 @@ Expected: no new type errors (these are config-only changes).
 - [ ] **Step 4: Commit**
 
 ```bash
-git add package.json app.json
+git add package.json package-lock.json app.json
 git commit -m "chore: add expo-image-picker and expo-document-picker for record attachments"
 ```
 
@@ -207,9 +207,10 @@ export interface PatientDetail {
 
 Run: `npx tsc --noEmit`
 Expected: errors in `src/services/patientApi.ts`, `src/data/mock.ts`, `app/records.tsx`,
-`app/patient/[id].tsx` — these are exactly the files fixed in Tasks 5, 10, 11. Confirm no error
-appears anywhere else (if one does, note it — it means something else depended on the old shape
-that this plan didn't anticipate).
+`app/patient/[id].tsx` — these are exactly the files fixed in Task 5 (the first three) and Task 11
+(the last one). `app/(provider)/records.tsx` (rewritten in Task 10) does not use `MedicalRecordKind`
+directly today, so it is not expected to error here. Confirm no error appears anywhere else (if one
+does, note it — it means something else depended on the old shape that this plan didn't anticipate).
 
 - [ ] **Step 4: Commit**
 
@@ -385,6 +386,7 @@ create policy "Circle of care can read attachments"
         select 1 from medical_records mr
         join consultations c on c.doctor_id = auth.uid() and c.patient_id = mr.patient_id
         where mr.id::text = (storage.foldername(name))[2]
+          and (storage.foldername(name))[1] = mr.patient_id::text
           and c.status not in ('cancelled', 'no_show')
       )
       or (storage.foldername(name))[1] = auth.uid()::text
@@ -399,11 +401,20 @@ create policy "Circle of care can upload attachments"
       select 1 from medical_records mr
       join consultations c on c.doctor_id = auth.uid() and c.patient_id = mr.patient_id
       where mr.id::text = (storage.foldername(name))[2]
+        and (storage.foldername(name))[1] = mr.patient_id::text
         and mr.doctor_id = auth.uid()
         and c.status not in ('cancelled', 'no_show')
     )
   );
 ```
+
+Le segment `(storage.foldername(name))[1]` doit être lié à `mr.patient_id` : sans cette
+condition, le chemin (`{patient_id}/{record_id}/{filename}`) n'est vérifié que sur son segment
+`record_id`. Un prestataire pourrait alors déposer un fichier sous le dossier d'un patient
+arbitraire tout en référençant l'id d'une de ses propres entrées ; la clause
+`or (storage.foldername(name))[1] = auth.uid()::text` de la policy SELECT donnerait ensuite
+l'accès en lecture à ce patient étranger. Le chemin doit donc toujours décrire le patient
+réellement propriétaire de l'entrée.
 
 - [ ] **Step 3: Verify live**
 
@@ -451,10 +462,13 @@ git commit -m "docs: record the medical_records RLS fix and new attachments buck
 **Files:**
 - Modify: `src/services/patientApi.ts:188-218`
 - Modify: `src/data/mock.ts:156-162`
+- Modify: `app/records.tsx` (patient-facing dossier screen — full rewrite; do not confuse with
+  `app/(provider)/records.tsx`, a different file rewritten in Task 10)
 - Test: `src/services/patientApi.test.ts`
 
 **Interfaces:**
-- Consumes: `MedicalRecord`, `isMedicalRecordKind` (Tasks 2, 3).
+- Consumes: `MedicalRecord`, `isMedicalRecordKind` (Tasks 2, 3); `RECORD_KIND_META`, `RECORD_KINDS`
+  (Task 3, for `app/records.tsx`).
 - Produces: `mapMedicalRecordRow(row: any): MedicalRecord` (exported, pure — reused by `providerApi.ts`
   in Task 8), updated `getMedicalRecords(patientId: string): Promise<MedicalRecord[]>`.
 
@@ -587,22 +601,121 @@ export const medicalRecords: MedicalRecord[] = [
 (`r5`'s status is set to `'inactive'` deliberately, so the demo/mock app has one archived entry to
 exercise the "show archived" toggle built in Task 11.)
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [ ] **Step 5: Replace the full contents of `app/records.tsx`**
+
+This is the patient's own read-only dossier screen. Its `kindMeta`/`filters` currently hardcode the
+old 5-value taxonomy — after Task 2, that object no longer matches `MedicalRecordKind` and stops
+compiling. Replace it with the shared taxonomy module from Task 3 (the module was built exactly so
+both this screen and the provider screens share one source of truth — this is the one place that
+was missed when the module was designed):
+
+```tsx
+import React, { useMemo, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ChevronLeft } from 'lucide-react-native';
+import { Card } from '@/components/ui';
+import { colors } from '@/theme/colors';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAsync } from '@/hooks/useAsync';
+import { getMedicalRecords } from '@/services/patientApi';
+import { RECORD_KIND_META, RECORD_KINDS } from '@/services/medicalRecordTaxonomy';
+import type { MedicalRecordKind } from '@/types';
+
+export default function MedicalRecords() {
+  const { user } = useAuth();
+  const uid = user?.id ?? 'patient-1';
+  const [active, setActive] = useState('Tout');
+  const { data: records } = useAsync(() => getMedicalRecords(uid), [uid]);
+
+  const filters = useMemo(
+    () => [
+      { key: 'Tout', match: undefined as MedicalRecordKind | undefined },
+      ...RECORD_KINDS.map((k) => ({ key: RECORD_KIND_META[k].label, match: k })),
+    ],
+    [],
+  );
+
+  const list = useMemo(() => {
+    const all = records ?? [];
+    const f = filters.find((x) => x.key === active);
+    if (!f?.match) return all;
+    return all.filter((r) => r.kind === f.match);
+  }, [active, records, filters]);
+
+  return (
+    <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
+      <View className="flex-row items-center px-5 pt-2 pb-2">
+        <Pressable onPress={() => router.back()} className="p-1 mr-2">
+          <ChevronLeft color={colors.ink} size={26} />
+        </Pressable>
+        <Text className="font-sans-bold text-lg text-ink">Dossier médical</Text>
+      </View>
+
+      <View className="px-5 pb-2">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {filters.map((f) => {
+            const on = f.key === active;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() => setActive(f.key)}
+                className={`px-4 py-2 rounded-full mr-2 ${on ? 'bg-primary' : 'bg-surface border border-line'}`}
+              >
+                <Text className={`text-sm font-sans-semibold ${on ? 'text-white' : 'text-muted'}`}>{f.key}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 12 }}>
+        {list.map((r) => {
+          const meta = RECORD_KIND_META[r.kind];
+          return (
+            <Card key={r.id} className="mb-3 flex-row">
+              <View
+                className="w-11 h-11 rounded-2xl items-center justify-center mr-3"
+                style={{ backgroundColor: meta.color + '22' }}
+              >
+                <meta.icon color={meta.color} size={20} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs font-sans-bold" style={{ color: meta.color }}>
+                  {meta.label}
+                </Text>
+                <Text className="font-sans-bold text-ink mt-0.5">{r.title}</Text>
+                <Text className="font-sans text-xs text-muted mt-0.5">{r.date}</Text>
+              </View>
+            </Card>
+          );
+        })}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+```
+
+(The old `{r.author} · {r.date}` line is replaced with just `{r.date}` — `author` is always `''` in
+`mapMedicalRecordRow`, so the old text rendered as a stray leading " · ".)
+
+- [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `npx jest src/services/patientApi.test.ts`
 Expected: PASS (all tests, including the pre-existing `bookConsultation`/`SlotUnavailableError` ones).
 
-- [ ] **Step 6: Typecheck**
+- [ ] **Step 7: Typecheck**
 
 Run: `npx tsc --noEmit`
-Expected: the `src/services/patientApi.ts` and `src/data/mock.ts` errors from Task 2 Step 3 are
-gone. Remaining errors should only be in `app/records.tsx` and `app/patient/[id].tsx` (fixed in
-Tasks 10-11).
+Expected: the `src/services/patientApi.ts`, `src/data/mock.ts`, and `app/records.tsx` errors from
+Task 2 Step 3 are gone (the pre-existing, unrelated `global.css` error is expected to remain — see
+ledger). Remaining errors should only be in `app/patient/[id].tsx` (fixed in Task 11).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/services/patientApi.ts src/services/patientApi.test.ts src/data/mock.ts
+git add src/services/patientApi.ts src/services/patientApi.test.ts src/data/mock.ts app/records.tsx
 git commit -m "feat: read the full medical_records schema, drop the stale kind-mapping table"
 ```
 
@@ -1205,7 +1318,7 @@ describe('uploadRecordAttachment', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
-    global.fetch = jest.fn().mockResolvedValue({ blob: () => Promise.resolve('fake-blob') });
+    globalThis.fetch = jest.fn().mockResolvedValue({ blob: () => Promise.resolve('fake-blob') }) as any;
   });
   afterEach(() => {
     jest.dontMock('@/lib/supabase');
@@ -1370,6 +1483,7 @@ git commit -m "feat: add medical record attachment upload via Supabase Storage"
 
 **Files:**
 - Modify: `app/(provider)/records.tsx` (full rewrite)
+- Modify: `app/(provider)/patients.tsx` (one line — see Step 2)
 
 **Interfaces:**
 - Consumes: `getPatients`, `getLatestRecordByPatient` (Tasks: existing, 8); `RECORD_KIND_META`
@@ -1452,23 +1566,47 @@ export default function ProviderRecords() {
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [ ] **Step 2: Wire the "Patients" tab's dead "Voir" button to the same screen**
+
+`app/(provider)/patients.tsx`'s "Voir" button currently has no `onPress` at all — tapping it does
+nothing (verified directly: the committed file has `<Pressable className="bg-accent-50 px-4 py-2.5
+rounded-2xl">` with no handler). The unified-screen decision requires both tabs to reach the same
+patient detail screen, so add the navigation. Change:
+
+```tsx
+<Pressable className="bg-accent-50 px-4 py-2.5 rounded-2xl">
+  <Text className="text-accent font-sans-bold">Voir</Text>
+</Pressable>
+```
+
+to:
+
+```tsx
+<Pressable onPress={() => router.push(`/patient/${p.id}`)} className="bg-accent-50 px-4 py-2.5 rounded-2xl">
+  <Text className="text-accent font-sans-bold">Voir</Text>
+</Pressable>
+```
+
+Add `import { router } from 'expo-router';` to that file's imports (it currently has none).
+
+- [ ] **Step 3: Typecheck**
 
 Run: `npx tsc --noEmit`
-Expected: no errors in `app/(provider)/records.tsx`. `app/patient/[id].tsx` errors remain expected
-until Task 11.
+Expected: no errors in `app/(provider)/records.tsx` or `app/(provider)/patients.tsx`.
+`app/patient/[id].tsx` errors remain expected until Task 11.
 
-- [ ] **Step 3: Manual QA in the dev client (mock mode, no Supabase env needed)**
+- [ ] **Step 4: Manual QA in the dev client (mock mode, no Supabase env needed)**
 
 Run: `npx expo start`, open the app as a provider, go to the "Dossiers" tab.
 Expected: 4 patients listed (from `mock.providerPatients`), each showing a real last-record label
 (e.g. "Ordonnance · 10/06/2026") derived from the updated `mock.medicalRecords` fixture — not the
-old hardcoded emoji strings. Tapping a row navigates to the patient detail screen.
+old hardcoded emoji strings. Tapping a row navigates to the patient detail screen. Also check the
+"Patients" tab: tapping "Voir" on a patient now navigates to the same screen.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add app/\(provider\)/records.tsx
+git add app/\(provider\)/records.tsx app/\(provider\)/patients.tsx
 git commit -m "feat: replace mock Dossiers list with real patients + latest record"
 ```
 
@@ -1478,10 +1616,32 @@ git commit -m "feat: replace mock Dossiers list with real patients + latest reco
 
 **Files:**
 - Modify: `app/patient/[id].tsx` (full rewrite)
+- Modify: `src/hooks/useAsync.ts:55` (one line — see Step 0; required for this screen's
+  `useFocusEffect` to work correctly, not optional)
 
 **Interfaces:**
 - Consumes: `getPatient`, `getPatientConsultationHistory` (Tasks 6, 8); `getMedicalRecords`
   (Task 5); `RECORD_KIND_META`, `RECORD_KINDS` (Task 3).
+
+- [ ] **Step 0: Memoize `useAsync`'s `reload` (prerequisite, found during Task 11's review)**
+
+`useAsync.ts:55` currently returns `reload: () => setNonce((n) => n + 1)` — a fresh function on
+every render, unlike `refresh` a few lines above it which IS wrapped in `useCallback(..., [])`.
+This screen's `useFocusEffect(useCallback(() => { reloadPatient(); reloadRecords(); }, [reloadPatient,
+reloadRecords]))` depends on `reloadPatient`/`reloadRecords` for its own memoization — with an
+unstable `reload` reference, the outer `useCallback` never stabilizes either, so expo-router's
+`useFocusEffect` internal effect re-runs on every render, and re-runs the reload on every visit to
+this screen: an infinite reload loop on the single most common path through this feature (opening
+any patient's dossier). Fix `useAsync.ts` to match `refresh`'s existing pattern:
+
+```typescript
+const reload = useCallback(() => setNonce((n) => n + 1), []);
+```
+
+(replacing the inline `reload: () => setNonce((n) => n + 1)` in the returned object with a plain
+`reload,` referencing this memoized version). This is a pure, backward-compatible change — `reload`'s
+behavior is identical, only its identity is now stable — and benefits every other screen using
+`useAsync().reload()` today, not just this one.
 
 - [ ] **Step 1: Replace the full contents of `app/patient/[id].tsx`**
 
@@ -1650,8 +1810,8 @@ export default function PatientProfile() {
 - [ ] **Step 2: Typecheck**
 
 Run: `npx tsc --noEmit`
-Expected: zero errors anywhere in the project — this was the last file with a pending error from
-Task 2.
+Expected: only the pre-existing, unrelated `global.css` error remains (see ledger baseline) — every
+error introduced by Task 2's type changes is now gone; this was the last file with a pending one.
 
 - [ ] **Step 3: Manual QA in the dev client**
 
@@ -1982,6 +2142,7 @@ npx jest
 npx tsc --noEmit
 ```
 
-Expected: all tests pass, zero type errors. Then do one full manual pass through the "Dossiers" tab
+Expected: all tests pass, no type errors beyond the pre-existing `global.css` one (see ledger
+baseline). Then do one full manual pass through the "Dossiers" tab
 → patient → add/edit/archive → back, in the dev client, before considering this feature done — no
 automated screen-render tests exist in this repo for this iteration (see spec).
