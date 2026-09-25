@@ -60,7 +60,7 @@ export default function ProviderConsultations() {
   ];
 
   const upcomingReq = useAsync(
-    () => getProviderConsultations(uid, ['pending', 'confirmed']),
+    () => getProviderConsultations(uid, ['pending_payment', 'scheduled']),
     [uid],
   );
   const inProgressReq = useAsync(() => getTodayConsultations(uid), [uid]);

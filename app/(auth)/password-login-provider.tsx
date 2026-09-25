@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Stethoscope } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { authErrorMessage, isProviderPending, PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
@@ -84,10 +84,15 @@ export default function PasswordLoginProvider() {
 
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 16 }} keyboardShouldPersistTaps="handled">
         <View className="items-center mb-7">
-          <View className="w-14 h-14 rounded-3xl bg-accent items-center justify-center mb-4">
-            <Stethoscope color={colors.white} size={28} />
-          </View>
-          <ScreenTitle center>Connexion médecin</ScreenTitle>
+          <Image
+            source={require('../../assets/logo-icon-orange.png')}
+            style={{ width: 56, height: 64, marginBottom: 8 }}
+            resizeMode="contain"
+          />
+          <Text className="font-serif-bold text-accent" style={{ fontSize: 22, letterSpacing: -0.2 }}>
+            VisioDoc
+          </Text>
+          <ScreenTitle center className="mt-4">Connexion médecin</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">Portail prestataire</Text>
         </View>
 
@@ -118,7 +123,13 @@ export default function PasswordLoginProvider() {
           </View>
         ) : null}
 
-        <Button label="Se connecter" variant="accent" loading={loading && !busy} onPress={onSubmit} />
+        <Button
+          label="Se connecter"
+          variant="accent"
+          loading={loading && !busy}
+          disabled={!(email.includes('@') && email.includes('.')) || password.length === 0}
+          onPress={onSubmit}
+        />
         <Button
           label="Créer un compte médecin"
           variant="outline"

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
@@ -84,7 +84,15 @@ export default function PasswordLogin() {
 
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 16 }} keyboardShouldPersistTaps="handled">
         <View className="items-center mb-7">
-          <ScreenTitle center>Content de vous revoir</ScreenTitle>
+          <Image
+            source={require('../../assets/logo-icon-green.png')}
+            style={{ width: 56, height: 64, marginBottom: 8 }}
+            resizeMode="contain"
+          />
+          <Text className="font-serif-bold text-primary" style={{ fontSize: 22, letterSpacing: -0.2 }}>
+            VisioDoc
+          </Text>
+          <ScreenTitle center className="mt-4">Content de vous revoir</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
             Accédez à votre espace santé
           </Text>
@@ -117,7 +125,12 @@ export default function PasswordLogin() {
           </View>
         ) : null}
 
-        <Button label="Se connecter" loading={loading && !busy} onPress={onSubmit} />
+        <Button
+          label="Se connecter"
+          loading={loading && !busy}
+          disabled={!(email.includes('@') && email.includes('.')) || password.length === 0}
+          onPress={onSubmit}
+        />
         <Button
           label="Créer un compte patient"
           variant="outline"

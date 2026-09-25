@@ -118,7 +118,7 @@ async function fetchConsultations(patientId: string, statuses: string[]): Promis
 
 export async function getUpcomingConsultations(patientId: string): Promise<Consultation[]> {
   if (useMock()) return mock.consultations;
-  return fetchConsultations(patientId, ['pending', 'confirmed', 'in_progress']);
+  return fetchConsultations(patientId, ['pending_payment', 'scheduled', 'in_progress']);
 }
 
 export async function getPastConsultations(patientId: string): Promise<Consultation[]> {
@@ -151,12 +151,6 @@ export async function bookConsultation(input: {
   duration: number;
 }): Promise<{ id: string }> {
   if (useMock()) return { id: 'mock-booking' };
-  // ⚠️ status:'pending' n'est pas dans le CHECK de la migration locale de `consultations`
-  // (scheduled|in_progress|completed|cancelled|no_show) — bug pré-existant, hors périmètre
-  // de cette fonctionnalité (voir spec). Si ce CHECK existe tel quel en prod, CET INSERT
-  // échoue avant même d'atteindre les contraintes anti-double-réservation ci-dessous
-  // (no_overlapping_bookings / one_booking_per_provider_per_day), qui ne sont alors jamais
-  // exercées en réalité.
   const { data, error } = await supabase!
     .from('consultations')
     .insert({
@@ -166,7 +160,7 @@ export async function bookConsultation(input: {
       duration: input.duration,
       consultation_type: input.type,
       payment_amount: input.fee,
-      status: 'pending',
+      status: 'pending_payment',
       payment_status: 'pending',
     })
     .select('id')

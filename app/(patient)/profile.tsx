@@ -53,7 +53,7 @@ export default function PatientProfile() {
 
   const onLogout = async () => {
     await logout();
-    router.replace('/');
+    router.replace('/(auth)/login');
   };
 
   return (

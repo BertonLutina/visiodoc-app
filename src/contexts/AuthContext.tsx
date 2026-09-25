@@ -239,7 +239,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (supabaseConfigured && supabase) {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        const profile = (data.user && (await loadProfile(data.user.id))) || mockUser;
+        const profile = data.user && (await loadProfile(data.user.id));
+        if (!profile) {
+          // Compte auth valide mais aucune ligne `users` correspondante (RLS, ligne
+          // manquante…) : ne JAMAIS retomber sur mockUser ici — ce serait connecter
+          // la personne sous une fausse identité qui passe toujours guardProvider.
+          try {
+            await supabase.auth.signOut({ scope: 'local' });
+          } catch {
+            /* ignore */
+          }
+          throw new Error('Profil introuvable pour ce compte. Contacte le support.');
+        }
         await guardProvider(profile);
         signedIn(profile, 'password');
       } else {

@@ -1,8 +1,9 @@
 import '../global.css';
-import React from 'react';
-import { View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Platform, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { NavigationBar } from 'expo-navigation-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
@@ -37,6 +38,7 @@ function AppShell() {
       <Stack.Screen name="(patient)" />
       <Stack.Screen name="(provider)" />
       <Stack.Screen name="doctor/[id]" options={{ presentation: 'card' }} />
+      <Stack.Screen name="patient/[id]" options={{ presentation: 'card' }} />
       <Stack.Screen name="records" />
       <Stack.Screen name="provider/availability" />
       <Stack.Screen name="provider/fee" />
@@ -46,7 +48,25 @@ function AppShell() {
   );
 }
 
+// Barre de navigation Android masquée par défaut sur tout l'app, révélée
+// temporairement d'un swipe depuis le bord bas (mode immersif « sticky »).
+function useImmersiveNavigationBar() {
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    try {
+      // Edge-to-edge (activé par défaut depuis SDK 54+) fait déjà en sorte que
+      // masquer la barre la rend révélable d'un swipe depuis le bord, avant
+      // qu'elle ne se recache — pas besoin de configurer un « behavior » à part.
+      NavigationBar.setHidden(true);
+    } catch {
+      /* module natif pas encore lié dans ce build : dégrade en silence */
+    }
+  }, []);
+}
+
 export default function RootLayout() {
+  useImmersiveNavigationBar();
+
   const [fontsLoaded] = useFonts({
     Fraunces_500Medium,
     Fraunces_600SemiBold,

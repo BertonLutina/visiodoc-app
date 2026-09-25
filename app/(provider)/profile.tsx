@@ -44,7 +44,7 @@ export default function ProviderProfile() {
 
   const onLogout = async () => {
     await logout();
-    router.replace('/');
+    router.replace('/(auth)/login-provider');
   };
 
   return (
