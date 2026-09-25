@@ -5,7 +5,6 @@ import type {
   ConsultationType,
   Doctor,
   MedicalRecord,
-  MedicalRecordKind,
   Wallet,
 } from '@/types';
 import { isMedicalRecordKind } from './medicalRecordTaxonomy';

@@ -46,13 +46,16 @@ export async function logMedicalRecordEvent(
 ): Promise<void> {
   if (!supabase) return;
   try {
-    await supabase.from('audit_logs').insert({
+    const { error } = await supabase.from('audit_logs').insert({
       actor_id: doctorId,
       actor_role: 'provider',
       action,
       target_id: patientId,
       payload: { record_id: recordId, record_type: recordType },
     });
+    // Best-effort, mais pas silencieux : un refus RLS sur le journal doit au moins
+    // être visible en développement (ne change pas le comportement : on ne throw jamais).
+    if (error) console.warn('audit log failed', error);
   } catch {
     /* best-effort : ne jamais bloquer l'écriture du dossier pour un souci de journalisation */
   }

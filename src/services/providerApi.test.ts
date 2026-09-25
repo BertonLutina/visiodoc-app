@@ -176,6 +176,44 @@ describe('createMedicalRecord / updateMedicalRecord / archiveMedicalRecord', () 
     expect(logMock).toHaveBeenCalledWith('medical_record:update', 'doc-1', 'pat-1', 'rec-1', 'note');
   });
 
+  it('updateMedicalRecord writes a changed kind to record_type', async () => {
+    const eqMock = jest.fn().mockResolvedValue({ error: null });
+    const updateMock = jest.fn(() => ({ eq: eqMock }));
+    const fromMock = jest.fn(() => ({ update: updateMock }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+
+    const { updateMedicalRecord: updateFresh } = require('./providerApi');
+    await updateFresh(
+      'rec-1',
+      { doctorId: 'doc-1', patientId: 'pat-1', kind: 'note' },
+      { kind: 'note', title: 'Devenu une note', metadata: {} },
+    );
+
+    expect(updateMock).toHaveBeenCalledWith({ record_type: 'note', title: 'Devenu une note', metadata: {} });
+  });
+
+  it('updateMedicalRecord sends null for an explicitly cleared optional field', async () => {
+    const eqMock = jest.fn().mockResolvedValue({ error: null });
+    const updateMock = jest.fn(() => ({ eq: eqMock }));
+    const fromMock = jest.fn(() => ({ update: updateMock }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+
+    const { updateMedicalRecord: updateFresh } = require('./providerApi');
+    await updateFresh(
+      'rec-1',
+      { doctorId: 'doc-1', patientId: 'pat-1', kind: 'note' },
+      { description: null, category: null, severity: null, startDate: null, endDate: null },
+    );
+
+    expect(updateMock).toHaveBeenCalledWith({
+      description: null,
+      category: null,
+      severity: null,
+      start_date: null,
+      end_date: null,
+    });
+  });
+
   it('archiveMedicalRecord sets status to inactive, never deletes the row', async () => {
     const eqMock = jest.fn().mockResolvedValue({ error: null });
     const updateMock = jest.fn(() => ({ eq: eqMock }));

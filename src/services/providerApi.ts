@@ -11,7 +11,13 @@ import type {
   ProviderPatient,
   ProviderStats,
 } from '@/types/provider';
-import type { MedicalRecord, MedicalRecordAttachment, MedicalRecordInput, MedicalRecordKind } from '@/types';
+import type {
+  MedicalRecord,
+  MedicalRecordAttachment,
+  MedicalRecordInput,
+  MedicalRecordKind,
+  MedicalRecordSeverity,
+} from '@/types';
 
 const useMock = () => !supabaseConfigured || !supabase;
 const initials = (a?: string, b?: string) =>
@@ -122,11 +128,18 @@ export async function startConsultation(id: string): Promise<void> {
 /* ---------- Patients ---------- */
 export async function getPatients(doctorId: string): Promise<ProviderPatient[]> {
   if (useMock()) return mock.providerPatients;
-  // Patients distincts ayant eu une consultation avec ce médecin
+  // Patients distincts ayant eu une consultation avec ce médecin.
+  // Les consultations annulées / no-show sont exclues : elles n'établissent pas de relation
+  // de soin, et la RLS de `medical_records` les exclut de la même façon (voir le plan, Task 4 :
+  // `consultations.status NOT IN ('cancelled', 'no_show')`). Sans ce filtre, un patient dont la
+  // seule consultation a été annulée apparaîtrait dans la liste mais son dossier serait vide/refusé.
   const { data, error } = await supabase!
     .from('consultations')
-    .select(`patient:users!consultations_patient_id_fkey ( id, first_name, last_name ), reason`)
-    .eq('doctor_id', doctorId);
+    .select(
+      `patient:users!consultations_patient_id_fkey ( id, first_name, last_name, date_of_birth, gender ), reason`,
+    )
+    .eq('doctor_id', doctorId)
+    .not('status', 'in', '("cancelled","no_show")');
   if (error) throw error;
   const seen = new Map<string, ProviderPatient>();
   for (const row of data ?? []) {
@@ -136,8 +149,8 @@ export async function getPatients(doctorId: string): Promise<ProviderPatient[]> 
         id: p.id,
         firstName: p.first_name ?? '',
         lastName: p.last_name ?? '',
-        age: 0,
-        gender: 'F',
+        age: calculateAge(p.date_of_birth),
+        gender: p.gender === 'M' || p.gender === 'F' ? p.gender : null,
         mainCondition: (row as any).reason ?? '',
         initials: initials(p.first_name, p.last_name),
       });
@@ -259,13 +272,32 @@ export async function createMedicalRecord(input: MedicalRecordInput): Promise<{ 
 
 export type MedicalRecordContext = { doctorId: string; patientId: string; kind: MedicalRecordKind };
 
+/**
+ * Patch d'une entrée de dossier. Pour chaque champ optionnel :
+ * - `undefined` = champ non touché (absent du `UPDATE`),
+ * - `null`      = champ explicitement vidé (envoyé comme `NULL` à la base).
+ * Sans cette distinction, effacer une description était impossible : l'ancienne valeur
+ * persistait silencieusement.
+ */
+export type MedicalRecordPatch = {
+  kind?: MedicalRecordKind;
+  title?: string;
+  description?: string | null;
+  category?: string | null;
+  severity?: MedicalRecordSeverity | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  metadata?: Record<string, string> | null;
+};
+
 export async function updateMedicalRecord(
   id: string,
   context: MedicalRecordContext,
-  patch: Partial<Pick<MedicalRecordInput, 'title' | 'description' | 'category' | 'severity' | 'startDate' | 'endDate' | 'metadata'>>,
+  patch: MedicalRecordPatch,
 ): Promise<void> {
   if (useMock()) return;
   const dbPatch: Record<string, any> = {};
+  if (patch.kind !== undefined) dbPatch.record_type = patch.kind;
   if (patch.title !== undefined) dbPatch.title = patch.title;
   if (patch.description !== undefined) dbPatch.description = patch.description;
   if (patch.category !== undefined) dbPatch.category = patch.category;
