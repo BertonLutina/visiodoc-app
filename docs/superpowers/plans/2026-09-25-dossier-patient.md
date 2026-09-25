@@ -1606,10 +1606,32 @@ git commit -m "feat: replace mock Dossiers list with real patients + latest reco
 
 **Files:**
 - Modify: `app/patient/[id].tsx` (full rewrite)
+- Modify: `src/hooks/useAsync.ts:55` (one line — see Step 0; required for this screen's
+  `useFocusEffect` to work correctly, not optional)
 
 **Interfaces:**
 - Consumes: `getPatient`, `getPatientConsultationHistory` (Tasks 6, 8); `getMedicalRecords`
   (Task 5); `RECORD_KIND_META`, `RECORD_KINDS` (Task 3).
+
+- [ ] **Step 0: Memoize `useAsync`'s `reload` (prerequisite, found during Task 11's review)**
+
+`useAsync.ts:55` currently returns `reload: () => setNonce((n) => n + 1)` — a fresh function on
+every render, unlike `refresh` a few lines above it which IS wrapped in `useCallback(..., [])`.
+This screen's `useFocusEffect(useCallback(() => { reloadPatient(); reloadRecords(); }, [reloadPatient,
+reloadRecords]))` depends on `reloadPatient`/`reloadRecords` for its own memoization — with an
+unstable `reload` reference, the outer `useCallback` never stabilizes either, so expo-router's
+`useFocusEffect` internal effect re-runs on every render, and re-runs the reload on every visit to
+this screen: an infinite reload loop on the single most common path through this feature (opening
+any patient's dossier). Fix `useAsync.ts` to match `refresh`'s existing pattern:
+
+```typescript
+const reload = useCallback(() => setNonce((n) => n + 1), []);
+```
+
+(replacing the inline `reload: () => setNonce((n) => n + 1)` in the returned object with a plain
+`reload,` referencing this memoized version). This is a pure, backward-compatible change — `reload`'s
+behavior is identical, only its identity is now stable — and benefits every other screen using
+`useAsync().reload()` today, not just this one.
 
 - [ ] **Step 1: Replace the full contents of `app/patient/[id].tsx`**
 
