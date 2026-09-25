@@ -102,7 +102,7 @@ Expected: no new type errors (these are config-only changes).
 - [ ] **Step 4: Commit**
 
 ```bash
-git add package.json app.json
+git add package.json package-lock.json app.json
 git commit -m "chore: add expo-image-picker and expo-document-picker for record attachments"
 ```
 
