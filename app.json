@@ -16,6 +16,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "VisioDoc utilise la caméra pour les consultations vidéo.",
         "NSMicrophoneUsageDescription": "VisioDoc utilise le micro pour les consultations vidéo.",
+        "NSPhotoLibraryUsageDescription": "VisioDoc utilise votre photothèque pour joindre des documents au dossier médical d'un patient.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -35,6 +36,12 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "VisioDoc utilise Face ID pour sécuriser l'accès à votre dossier médical."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "VisioDoc utilise votre photothèque pour joindre des documents au dossier médical d'un patient."
         }
       ],
       "expo-font",
