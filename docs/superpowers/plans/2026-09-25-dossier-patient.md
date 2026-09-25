@@ -1308,7 +1308,7 @@ describe('uploadRecordAttachment', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
-    global.fetch = jest.fn().mockResolvedValue({ blob: () => Promise.resolve('fake-blob') });
+    globalThis.fetch = jest.fn().mockResolvedValue({ blob: () => Promise.resolve('fake-blob') }) as any;
   });
   afterEach(() => {
     jest.dontMock('@/lib/supabase');
