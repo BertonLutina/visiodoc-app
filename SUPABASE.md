@@ -142,14 +142,25 @@ sont PAS affectés — leurs policies filtrent uniquement sur la propriété
 
 ## Correction : projet live réel
 
-Le projet mentionné plus haut (`lgcvcxicywyguqjrxvma`) est la source de vérité au
-2026-09-24. Les migrations `20260924000000` à `20260924000003` (branche
-`feat/scheduling-availability`) référençaient encore `cftqxuxhsellvquidpxr` dans leurs
-commentaires d'avertissement — corrigé.
+**Le projet live réel est `cftqxuxhsellvquidpxr`** — voir la section "⚠️ Correction
+majeure (2026-09-24)" en tête de ce fichier, et `.env`
+(`EXPO_PUBLIC_SUPABASE_URL=https://cftqxuxhsellvquidpxr.supabase.co`). C'est bien ce
+projet que référencent les commentaires d'avertissement des migrations `20260924000000`
+à `20260924000003` (branche `feat/scheduling-availability`), et c'est correct.
 
-## Edge Functions déployées (25)
-Toutes les fonctions de `../supabase/functions/` sont déployées sur
-`lgcvcxicywyguqjrxvma`. Celles utilisées par le mobile :
+`lgcvcxicywyguqjrxvma` est un des deux projets orphelins créés sous "Creative African
+Designers" lors de la tentative de reconstruction depuis le dossier de migrations local,
+avant la découverte du vrai projet : un clone de test vide, **jamais la prod**. Une
+version antérieure de cette section affirmait l'inverse (que `lgcvcxicywyguqjrxvma`
+était la source de vérité) — c'était faux, et appliquer des migrations en s'y fiant
+aurait échoué silencieusement exactement comme le bug RLS de `doctor_availability`
+décrit plus haut.
+
+## Edge Functions déployées
+Les Edge Functions utilisées par l'app tournent sur la vraie prod
+`cftqxuxhsellvquidpxr`, qui en compte **43** déployées — le dossier local
+`../supabase/functions/` n'en liste que 25 (voir la liste des 18 manquantes en tête de
+fichier). Celles utilisées par le mobile :
 - `register-presta` — inscription prestataire (corrigée, voir ci-dessus).
 - `payment-initiate` — réservation/paiement (non testée en profondeur ;
   dépend probablement de secrets de gateway de paiement non configurés).

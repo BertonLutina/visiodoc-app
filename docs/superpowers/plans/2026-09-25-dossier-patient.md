@@ -386,6 +386,7 @@ create policy "Circle of care can read attachments"
         select 1 from medical_records mr
         join consultations c on c.doctor_id = auth.uid() and c.patient_id = mr.patient_id
         where mr.id::text = (storage.foldername(name))[2]
+          and (storage.foldername(name))[1] = mr.patient_id::text
           and c.status not in ('cancelled', 'no_show')
       )
       or (storage.foldername(name))[1] = auth.uid()::text
@@ -400,11 +401,20 @@ create policy "Circle of care can upload attachments"
       select 1 from medical_records mr
       join consultations c on c.doctor_id = auth.uid() and c.patient_id = mr.patient_id
       where mr.id::text = (storage.foldername(name))[2]
+        and (storage.foldername(name))[1] = mr.patient_id::text
         and mr.doctor_id = auth.uid()
         and c.status not in ('cancelled', 'no_show')
     )
   );
 ```
+
+Le segment `(storage.foldername(name))[1]` doit être lié à `mr.patient_id` : sans cette
+condition, le chemin (`{patient_id}/{record_id}/{filename}`) n'est vérifié que sur son segment
+`record_id`. Un prestataire pourrait alors déposer un fichier sous le dossier d'un patient
+arbitraire tout en référençant l'id d'une de ses propres entrées ; la clause
+`or (storage.foldername(name))[1] = auth.uid()::text` de la policy SELECT donnerait ensuite
+l'accès en lecture à ce patient étranger. Le chemin doit donc toujours décrire le patient
+réellement propriétaire de l'entrée.
 
 - [ ] **Step 3: Verify live**
 
