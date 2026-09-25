@@ -2,28 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Pill, Stethoscope, FlaskConical, Syringe, AlertTriangle } from 'lucide-react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import { Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getMedicalRecords } from '@/services/patientApi';
+import { RECORD_KIND_META, RECORD_KINDS } from '@/services/medicalRecordTaxonomy';
 import type { MedicalRecordKind } from '@/types';
-
-const kindMeta: Record<MedicalRecordKind, { icon: typeof Pill; color: string; label: string }> = {
-  ordonnance: { icon: Pill, color: colors.primary, label: 'Ordonnance' },
-  diagnostic: { icon: Stethoscope, color: '#3B82F6', label: 'Diagnostic' },
-  analyse: { icon: FlaskConical, color: '#8B5CF6', label: 'Analyse' },
-  vaccin: { icon: Syringe, color: colors.success, label: 'Vaccin' },
-  allergie: { icon: AlertTriangle, color: colors.warning, label: 'Allergie' },
-};
-
-const filters: { key: string; match?: MedicalRecordKind }[] = [
-  { key: 'Tout' },
-  { key: 'Ordon.', match: 'ordonnance' },
-  { key: 'Diagn.', match: 'diagnostic' },
-  { key: 'Vaccins', match: 'vaccin' },
-];
 
 export default function MedicalRecords() {
   const { user } = useAuth();
@@ -31,12 +17,20 @@ export default function MedicalRecords() {
   const [active, setActive] = useState('Tout');
   const { data: records } = useAsync(() => getMedicalRecords(uid), [uid]);
 
+  const filters = useMemo(
+    () => [
+      { key: 'Tout', match: undefined as MedicalRecordKind | undefined },
+      ...RECORD_KINDS.map((k) => ({ key: RECORD_KIND_META[k].label, match: k })),
+    ],
+    [],
+  );
+
   const list = useMemo(() => {
     const all = records ?? [];
     const f = filters.find((x) => x.key === active);
     if (!f?.match) return all;
     return all.filter((r) => r.kind === f.match);
-  }, [active, records]);
+  }, [active, records, filters]);
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
@@ -66,7 +60,7 @@ export default function MedicalRecords() {
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 12 }}>
         {list.map((r) => {
-          const meta = kindMeta[r.kind];
+          const meta = RECORD_KIND_META[r.kind];
           return (
             <Card key={r.id} className="mb-3 flex-row">
               <View
@@ -80,9 +74,7 @@ export default function MedicalRecords() {
                   {meta.label}
                 </Text>
                 <Text className="font-sans-bold text-ink mt-0.5">{r.title}</Text>
-                <Text className="font-sans text-xs text-muted mt-0.5">
-                  {r.author} · {r.date}
-                </Text>
+                <Text className="font-sans text-xs text-muted mt-0.5">{r.date}</Text>
               </View>
             </Card>
           );
