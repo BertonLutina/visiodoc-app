@@ -38,6 +38,20 @@ export interface ProviderPatient {
   initials: string;
 }
 
+export interface PatientDetail {
+  id: string;
+  firstName: string;
+  lastName: string;
+  initials: string;
+  age: number | null;
+  gender: 'M' | 'F' | null;
+  bloodType: string | null;
+  allergiesSummary: string | null;
+  address: string | null;
+  emergencyContactName: string | null;
+  emergencyContactPhone: string | null;
+}
+
 export interface ProviderConsultation {
   id: string;
   patient: { id: string; firstName: string; lastName: string; initials: string };

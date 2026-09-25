@@ -76,17 +76,55 @@ export interface Wallet {
 }
 
 export type MedicalRecordKind =
-  | 'ordonnance'
-  | 'diagnostic'
-  | 'analyse'
-  | 'vaccin'
-  | 'allergie';
+  | 'allergy'
+  | 'medication'
+  | 'condition'
+  | 'vaccination'
+  | 'lab_result'
+  | 'document'
+  | 'note'
+  | 'prescription'
+  | 'consultation_report';
+
+export type MedicalRecordSeverity = 'mild' | 'moderate' | 'severe';
+export type MedicalRecordStatus = 'active' | 'inactive' | 'resolved';
+
+export interface MedicalRecordAttachment {
+  name: string;
+  path: string;
+  type: string;
+  uploadedAt: string;
+}
 
 export interface MedicalRecord {
   id: string;
+  patientId: string;
+  doctorId: string;
+  consultationId?: string;
   kind: MedicalRecordKind;
   title: string;
-  detail: string;
+  description?: string;
+  category?: string;
+  severity?: MedicalRecordSeverity;
+  status: MedicalRecordStatus;
   author: string;
   date: string;
+  startDate?: string;
+  endDate?: string;
+  attachments: MedicalRecordAttachment[];
+  metadata: Record<string, string>;
+}
+
+export interface MedicalRecordInput {
+  patientId: string;
+  doctorId: string;
+  kind: MedicalRecordKind;
+  title: string;
+  description?: string;
+  category?: string;
+  severity?: MedicalRecordSeverity;
+  startDate?: string;
+  endDate?: string;
+  metadata?: Record<string, string>;
+  consultationId?: string;
 }
