@@ -16,8 +16,13 @@ export default function ProviderRecords() {
   const doctorId = user?.id ?? currentProvider.id;
   const [query, setQuery] = useState('');
 
-  const { data: patients } = useAsync(() => getPatients(doctorId), [doctorId]);
-  const { data: latestByPatient } = useAsync(() => getLatestRecordByPatient(doctorId), [doctorId]);
+  // `error` est lu explicitement : un échec de lecture (RLS, réseau) ne doit pas se déguiser
+  // en « aucun patient », qui se lit comme une information clinique valide.
+  const { data: patients, error: patientsError } = useAsync(() => getPatients(doctorId), [doctorId]);
+  const { data: latestByPatient, error: latestError } = useAsync(
+    () => getLatestRecordByPatient(doctorId),
+    [doctorId],
+  );
 
   const list = useMemo(
     () => (patients ?? []).filter((p) => `${p.firstName} ${p.lastName}`.toLowerCase().includes(query.toLowerCase())),
@@ -44,9 +49,18 @@ export default function ProviderRecords() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 12 }}>
+        {patientsError ? (
+          <View className="bg-surface border border-line rounded-3xl p-6 items-center">
+            <Text className="font-sans-semibold text-ink text-center">Erreur de chargement. Réessayez.</Text>
+          </View>
+        ) : null}
         {list.map((p) => {
           const last = latestByPatient?.get(p.id);
-          const lastLabel = last ? `${RECORD_KIND_META[last.kind].label} · ${last.date}` : 'Aucun dossier pour le moment';
+          const lastLabel = latestError
+            ? 'Dernier acte indisponible'
+            : last
+              ? `${RECORD_KIND_META[last.kind].label} · ${last.date}`
+              : 'Aucun dossier pour le moment';
           return (
             <Pressable key={p.id} onPress={() => router.push(`/patient/${p.id}`)}>
               <Card className="mb-3 flex-row items-center">
@@ -61,7 +75,7 @@ export default function ProviderRecords() {
             </Pressable>
           );
         })}
-        {list.length === 0 ? (
+        {!patientsError && list.length === 0 ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center">
             <Text className="font-sans-semibold text-ink text-center">Aucun patient pour le moment</Text>
           </View>

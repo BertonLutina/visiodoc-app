@@ -52,7 +52,8 @@ export default function ProviderPatients() {
                 {p.firstName} {p.lastName}
               </Text>
               <Text className="font-sans text-xs text-muted mt-0.5">
-                {p.age} ans · {p.gender}
+                {p.age !== null ? `${p.age} ans` : 'Âge inconnu'}
+                {p.gender ? ` · ${p.gender}` : ''}
               </Text>
               <Text className="font-sans text-xs text-clay mt-0.5">{p.mainCondition}</Text>
             </View>

@@ -20,9 +20,18 @@ export default function PatientProfile() {
   const [activeFilter, setActiveFilter] = useState('Tout');
   const [showArchived, setShowArchived] = useState(false);
 
-  const { data: patient, reload: reloadPatient } = useAsync(() => getPatient(id), [id]);
-  const { data: records, reload: reloadRecords } = useAsync(() => getMedicalRecords(id), [id]);
-  const { data: consultations } = useAsync(() => getPatientConsultationHistory(doctorId, id), [doctorId, id]);
+  // `error` est lu explicitement : un refus RLS ne doit jamais s'afficher comme un dossier
+  // vide (en clinique, « aucune allergie connue » et « lecture impossible » ne sont pas la
+  // même information).
+  const { data: patient, error: patientError, reload: reloadPatient } = useAsync(() => getPatient(id), [id]);
+  const { data: records, error: recordsError, reload: reloadRecords } = useAsync(
+    () => getMedicalRecords(id),
+    [id],
+  );
+  const { data: consultations, error: consultationsError } = useAsync(
+    () => getPatientConsultationHistory(doctorId, id),
+    [doctorId, id],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -66,6 +75,14 @@ export default function PatientProfile() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }}>
+        {patientError ? (
+          <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-4">
+            <Text className="font-sans-semibold text-ink text-center">
+              Erreur de chargement de la fiche patient. Réessayez.
+            </Text>
+          </View>
+        ) : null}
+
         <View className="items-center mb-6">
           <Avatar initials={patient?.initials ?? '?'} size={80} tone="light" />
           <Text className="font-serif-bold text-2xl text-ink mt-3">
@@ -81,6 +98,15 @@ export default function PatientProfile() {
           {patient?.allergiesSummary ? (
             <View className="mt-2 bg-red-50 px-3 py-1.5 rounded-full">
               <Text className="font-sans-bold text-xs text-danger">⚠ Allergies : {patient.allergiesSummary}</Text>
+            </View>
+          ) : null}
+          {patient?.emergencyContactName ? (
+            <View className="mt-3 items-center">
+              <Text className="font-sans text-xs text-muted">Contact d'urgence</Text>
+              <Text className="font-sans-semibold text-sm text-ink mt-0.5">
+                {patient.emergencyContactName}
+                {patient.emergencyContactPhone ? ` · ${patient.emergencyContactPhone}` : ''}
+              </Text>
             </View>
           ) : null}
         </View>
@@ -106,7 +132,11 @@ export default function PatientProfile() {
           </Text>
         </Pressable>
 
-        {visibleRecords.length === 0 ? (
+        {recordsError ? (
+          <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-6">
+            <Text className="font-sans-semibold text-ink text-center">Erreur de chargement. Réessayez.</Text>
+          </View>
+        ) : visibleRecords.length === 0 ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-6">
             <Text className="font-sans-semibold text-ink text-center">Aucun élément pour le moment</Text>
           </View>
@@ -141,7 +171,11 @@ export default function PatientProfile() {
         )}
 
         <SectionTitle>Historique des consultations</SectionTitle>
-        {(consultations ?? []).length === 0 ? (
+        {consultationsError ? (
+          <View className="bg-surface border border-line rounded-3xl p-6 items-center">
+            <Text className="font-sans-semibold text-ink text-center">Erreur de chargement. Réessayez.</Text>
+          </View>
+        ) : (consultations ?? []).length === 0 ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center">
             <Text className="font-sans-semibold text-ink text-center">Aucune consultation pour le moment</Text>
           </View>

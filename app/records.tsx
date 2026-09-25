@@ -26,7 +26,10 @@ export default function MedicalRecords() {
   );
 
   const list = useMemo(() => {
-    const all = records ?? [];
+    // Une entrée archivée (`status === 'inactive'`) est une information périmée : ne jamais
+    // la présenter au patient comme si elle était toujours d'actualité. Pas de bascule côté
+    // patient — contrairement à la fiche prestataire, qui a besoin de l'historique complet.
+    const all = (records ?? []).filter((r) => r.status !== 'inactive');
     const f = filters.find((x) => x.key === active);
     if (!f?.match) return all;
     return all.filter((r) => r.kind === f.match);
