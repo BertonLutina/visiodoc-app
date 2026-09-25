@@ -11,7 +11,7 @@ import type {
   ProviderPatient,
   ProviderStats,
 } from '@/types/provider';
-import type { MedicalRecord, MedicalRecordInput, MedicalRecordKind } from '@/types';
+import type { MedicalRecord, MedicalRecordAttachment, MedicalRecordInput, MedicalRecordKind } from '@/types';
 
 const useMock = () => !supabaseConfigured || !supabase;
 const initials = (a?: string, b?: string) =>
@@ -445,4 +445,14 @@ export async function getFeeConfig(): Promise<{ currentFee: number; platformFeeR
     currentFee: mock.feeConfig.currentFee,
     platformFeeRate: (data?.platform_fee_percentage ?? 4) / 100,
   };
+}
+
+export async function appendMedicalRecordAttachment(
+  id: string,
+  existing: MedicalRecordAttachment[],
+  attachment: MedicalRecordAttachment,
+): Promise<void> {
+  if (useMock()) return;
+  const { error } = await supabase!.from('medical_records').update({ attachments: [...existing, attachment] }).eq('id', id);
+  if (error) throw error;
 }

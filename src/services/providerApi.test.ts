@@ -245,3 +245,28 @@ describe('getPatientConsultationHistory', () => {
     expect(orderMock).toHaveBeenCalledWith('scheduled_at', { ascending: false });
   });
 });
+
+describe('appendMedicalRecordAttachment', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+  afterEach(() => {
+    jest.dontMock('@/lib/supabase');
+  });
+
+  it('appends the new attachment to the existing list rather than replacing it', async () => {
+    const eqMock = jest.fn().mockResolvedValue({ error: null });
+    const updateMock = jest.fn(() => ({ eq: eqMock }));
+    const fromMock = jest.fn(() => ({ update: updateMock }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+
+    const { appendMedicalRecordAttachment: appendFresh } = require('./providerApi');
+    const existing = [{ name: 'old.pdf', path: 'p/r/old.pdf', type: 'application/pdf', uploadedAt: '2026-01-01T00:00:00.000Z' }];
+    const newOne = { name: 'new.jpg', path: 'p/r/new.jpg', type: 'image/jpeg', uploadedAt: '2026-06-01T00:00:00.000Z' };
+
+    await appendFresh('rec-1', existing, newOne);
+
+    expect(updateMock).toHaveBeenCalledWith({ attachments: [...existing, newOne] });
+  });
+});
