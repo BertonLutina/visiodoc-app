@@ -36,3 +36,24 @@ export async function logAuthEvent(
     /* best-effort : ne jamais bloquer l'auth pour un souci de journalisation */
   }
 }
+
+export async function logMedicalRecordEvent(
+  action: 'medical_record:create' | 'medical_record:update' | 'medical_record:archive',
+  doctorId: string,
+  patientId: string,
+  recordId: string,
+  recordType: string,
+): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('audit_logs').insert({
+      actor_id: doctorId,
+      actor_role: 'provider',
+      action,
+      target_id: patientId,
+      payload: { record_id: recordId, record_type: recordType },
+    });
+  } catch {
+    /* best-effort : ne jamais bloquer l'écriture du dossier pour un souci de journalisation */
+  }
+}

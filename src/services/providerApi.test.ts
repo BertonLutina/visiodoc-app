@@ -133,3 +133,59 @@ describe('getPatient', () => {
     expect(result.age).toBeGreaterThan(30);
   });
 });
+
+describe('createMedicalRecord / updateMedicalRecord / archiveMedicalRecord', () => {
+  const logMock = jest.fn().mockResolvedValue(undefined);
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    jest.doMock('./auditLog', () => ({ logMedicalRecordEvent: logMock }));
+  });
+
+  afterEach(() => {
+    jest.dontMock('@/lib/supabase');
+    jest.dontMock('./auditLog');
+  });
+
+  it('createMedicalRecord inserts record_type from kind and defaults status to active', async () => {
+    const singleMock = jest.fn().mockResolvedValue({ data: { id: 'rec-1' }, error: null });
+    const selectMock = jest.fn(() => ({ single: singleMock }));
+    const insertMock = jest.fn(() => ({ select: selectMock }));
+    const fromMock = jest.fn(() => ({ insert: insertMock }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+
+    const { createMedicalRecord: createFresh } = require('./providerApi');
+    const result = await createFresh({ patientId: 'pat-1', doctorId: 'doc-1', kind: 'prescription', title: 'Amox' });
+
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({ record_type: 'prescription', status: 'active', title: 'Amox' }));
+    expect(result).toEqual({ id: 'rec-1' });
+    expect(logMock).toHaveBeenCalledWith('medical_record:create', 'doc-1', 'pat-1', 'rec-1', 'prescription');
+  });
+
+  it('updateMedicalRecord only patches the fields that were provided', async () => {
+    const eqMock = jest.fn().mockResolvedValue({ error: null });
+    const updateMock = jest.fn(() => ({ eq: eqMock }));
+    const fromMock = jest.fn(() => ({ update: updateMock }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+
+    const { updateMedicalRecord: updateFresh } = require('./providerApi');
+    await updateFresh('rec-1', { doctorId: 'doc-1', patientId: 'pat-1', kind: 'note' }, { title: 'Nouveau titre' });
+
+    expect(updateMock).toHaveBeenCalledWith({ title: 'Nouveau titre' });
+    expect(logMock).toHaveBeenCalledWith('medical_record:update', 'doc-1', 'pat-1', 'rec-1', 'note');
+  });
+
+  it('archiveMedicalRecord sets status to inactive, never deletes the row', async () => {
+    const eqMock = jest.fn().mockResolvedValue({ error: null });
+    const updateMock = jest.fn(() => ({ eq: eqMock }));
+    const fromMock = jest.fn(() => ({ update: updateMock }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+
+    const { archiveMedicalRecord: archiveFresh } = require('./providerApi');
+    await archiveFresh('rec-1', { doctorId: 'doc-1', patientId: 'pat-1', kind: 'allergy' });
+
+    expect(updateMock).toHaveBeenCalledWith({ status: 'inactive' });
+    expect(logMock).toHaveBeenCalledWith('medical_record:archive', 'doc-1', 'pat-1', 'rec-1', 'allergy');
+  });
+});

@@ -1,5 +1,6 @@
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 import * as mock from '@/data/mockProvider';
+import { logMedicalRecordEvent } from './auditLog';
 import type { ConsultationType } from '@/types';
 import type {
   AvailabilitySlot,
@@ -8,6 +9,7 @@ import type {
   ProviderPatient,
   ProviderStats,
 } from '@/types/provider';
+import type { MedicalRecordInput, MedicalRecordKind } from '@/types';
 
 const useMock = () => !supabaseConfigured || !supabase;
 const initials = (a?: string, b?: string) =>
@@ -191,6 +193,59 @@ export async function getPatient(patientId: string): Promise<PatientDetail> {
     emergencyContactName: data.emergency_contact_name ?? null,
     emergencyContactPhone: data.emergency_contact_phone ?? null,
   };
+}
+
+export async function createMedicalRecord(input: MedicalRecordInput): Promise<{ id: string }> {
+  if (useMock()) return { id: `mock-${Date.now()}` };
+  const { data, error } = await supabase!
+    .from('medical_records')
+    .insert({
+      patient_id: input.patientId,
+      doctor_id: input.doctorId,
+      consultation_id: input.consultationId ?? null,
+      record_type: input.kind,
+      title: input.title,
+      description: input.description ?? null,
+      category: input.category ?? null,
+      severity: input.severity ?? null,
+      status: 'active',
+      start_date: input.startDate ?? null,
+      end_date: input.endDate ?? null,
+      metadata: input.metadata ?? {},
+    })
+    .select('id')
+    .single();
+  if (error) throw error;
+  await logMedicalRecordEvent('medical_record:create', input.doctorId, input.patientId, data.id, input.kind);
+  return { id: data.id };
+}
+
+export type MedicalRecordContext = { doctorId: string; patientId: string; kind: MedicalRecordKind };
+
+export async function updateMedicalRecord(
+  id: string,
+  context: MedicalRecordContext,
+  patch: Partial<Pick<MedicalRecordInput, 'title' | 'description' | 'category' | 'severity' | 'startDate' | 'endDate' | 'metadata'>>,
+): Promise<void> {
+  if (useMock()) return;
+  const dbPatch: Record<string, any> = {};
+  if (patch.title !== undefined) dbPatch.title = patch.title;
+  if (patch.description !== undefined) dbPatch.description = patch.description;
+  if (patch.category !== undefined) dbPatch.category = patch.category;
+  if (patch.severity !== undefined) dbPatch.severity = patch.severity;
+  if (patch.startDate !== undefined) dbPatch.start_date = patch.startDate;
+  if (patch.endDate !== undefined) dbPatch.end_date = patch.endDate;
+  if (patch.metadata !== undefined) dbPatch.metadata = patch.metadata;
+  const { error } = await supabase!.from('medical_records').update(dbPatch).eq('id', id);
+  if (error) throw error;
+  await logMedicalRecordEvent('medical_record:update', context.doctorId, context.patientId, id, context.kind);
+}
+
+export async function archiveMedicalRecord(id: string, context: MedicalRecordContext): Promise<void> {
+  if (useMock()) return;
+  const { error } = await supabase!.from('medical_records').update({ status: 'inactive' }).eq('id', id);
+  if (error) throw error;
+  await logMedicalRecordEvent('medical_record:archive', context.doctorId, context.patientId, id, context.kind);
 }
 
 /* ---------- Disponibilités hebdomadaires ---------- */
