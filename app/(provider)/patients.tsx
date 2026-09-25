@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search } from 'lucide-react-native';
 import { Avatar, Card } from '@/components/ui';
@@ -55,7 +56,7 @@ export default function ProviderPatients() {
               </Text>
               <Text className="font-sans text-xs text-clay mt-0.5">{p.mainCondition}</Text>
             </View>
-            <Pressable className="bg-accent-50 px-4 py-2.5 rounded-2xl">
+            <Pressable onPress={() => router.push(`/patient/${p.id}`)} className="bg-accent-50 px-4 py-2.5 rounded-2xl">
               <Text className="text-accent font-sans-bold">Voir</Text>
             </Pressable>
           </Card>

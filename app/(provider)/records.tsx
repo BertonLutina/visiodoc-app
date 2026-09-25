@@ -1,15 +1,27 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search } from 'lucide-react-native';
 import { Avatar, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
-import { providerPatientFiles } from '@/data/mockProvider';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAsync } from '@/hooks/useAsync';
+import { getPatients, getLatestRecordByPatient } from '@/services/providerApi';
+import { RECORD_KIND_META } from '@/services/medicalRecordTaxonomy';
+import { currentProvider } from '@/data/mockProvider';
 
 export default function ProviderRecords() {
+  const { user } = useAuth();
+  const doctorId = user?.id ?? currentProvider.id;
   const [query, setQuery] = useState('');
-  const list = providerPatientFiles.filter((p) =>
-    `${p.firstName} ${p.lastName}`.toLowerCase().includes(query.toLowerCase()),
+
+  const { data: patients } = useAsync(() => getPatients(doctorId), [doctorId]);
+  const { data: latestByPatient } = useAsync(() => getLatestRecordByPatient(doctorId), [doctorId]);
+
+  const list = useMemo(
+    () => (patients ?? []).filter((p) => `${p.firstName} ${p.lastName}`.toLowerCase().includes(query.toLowerCase())),
+    [patients, query],
   );
 
   return (
@@ -32,20 +44,28 @@ export default function ProviderRecords() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 12 }}>
-        {list.map((p) => (
-          <Card key={p.patientId} className="mb-3 flex-row items-center">
-            <Avatar initials={p.initials} size={44} tone="light" />
-            <View className="flex-1 ml-3.5">
-              <Text className="font-sans-bold text-ink">
-                {p.firstName} {p.lastName}
-              </Text>
-              <Text className="font-sans text-xs text-muted mt-0.5">{p.lastActLabel}</Text>
-            </View>
-            <Pressable className="border border-line px-4 py-2.5 rounded-2xl bg-surface">
-              <Text className="text-accent font-sans-bold">Modifier</Text>
+        {list.map((p) => {
+          const last = latestByPatient?.get(p.id);
+          const lastLabel = last ? `${RECORD_KIND_META[last.kind].label} · ${last.date}` : 'Aucun dossier pour le moment';
+          return (
+            <Pressable key={p.id} onPress={() => router.push(`/patient/${p.id}`)}>
+              <Card className="mb-3 flex-row items-center">
+                <Avatar initials={p.initials} size={44} tone="light" />
+                <View className="flex-1 ml-3.5">
+                  <Text className="font-sans-bold text-ink">
+                    {p.firstName} {p.lastName}
+                  </Text>
+                  <Text className="font-sans text-xs text-muted mt-0.5">{lastLabel}</Text>
+                </View>
+              </Card>
             </Pressable>
-          </Card>
-        ))}
+          );
+        })}
+        {list.length === 0 ? (
+          <View className="bg-surface border border-line rounded-3xl p-6 items-center">
+            <Text className="font-sans-semibold text-ink text-center">Aucun patient pour le moment</Text>
+          </View>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
