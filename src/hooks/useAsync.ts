@@ -46,12 +46,14 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
     }
   }, []);
 
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
+
   return {
     data,
     loading,
     refreshing,
     error,
     refresh,
-    reload: () => setNonce((n) => n + 1),
+    reload,
   };
 }
