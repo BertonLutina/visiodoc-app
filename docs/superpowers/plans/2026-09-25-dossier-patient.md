@@ -1473,6 +1473,7 @@ git commit -m "feat: add medical record attachment upload via Supabase Storage"
 
 **Files:**
 - Modify: `app/(provider)/records.tsx` (full rewrite)
+- Modify: `app/(provider)/patients.tsx` (one line — see Step 2)
 
 **Interfaces:**
 - Consumes: `getPatients`, `getLatestRecordByPatient` (Tasks: existing, 8); `RECORD_KIND_META`
@@ -1555,23 +1556,47 @@ export default function ProviderRecords() {
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [ ] **Step 2: Wire the "Patients" tab's dead "Voir" button to the same screen**
+
+`app/(provider)/patients.tsx`'s "Voir" button currently has no `onPress` at all — tapping it does
+nothing (verified directly: the committed file has `<Pressable className="bg-accent-50 px-4 py-2.5
+rounded-2xl">` with no handler). The unified-screen decision requires both tabs to reach the same
+patient detail screen, so add the navigation. Change:
+
+```tsx
+<Pressable className="bg-accent-50 px-4 py-2.5 rounded-2xl">
+  <Text className="text-accent font-sans-bold">Voir</Text>
+</Pressable>
+```
+
+to:
+
+```tsx
+<Pressable onPress={() => router.push(`/patient/${p.id}`)} className="bg-accent-50 px-4 py-2.5 rounded-2xl">
+  <Text className="text-accent font-sans-bold">Voir</Text>
+</Pressable>
+```
+
+Add `import { router } from 'expo-router';` to that file's imports (it currently has none).
+
+- [ ] **Step 3: Typecheck**
 
 Run: `npx tsc --noEmit`
-Expected: no errors in `app/(provider)/records.tsx`. `app/patient/[id].tsx` errors remain expected
-until Task 11.
+Expected: no errors in `app/(provider)/records.tsx` or `app/(provider)/patients.tsx`.
+`app/patient/[id].tsx` errors remain expected until Task 11.
 
-- [ ] **Step 3: Manual QA in the dev client (mock mode, no Supabase env needed)**
+- [ ] **Step 4: Manual QA in the dev client (mock mode, no Supabase env needed)**
 
 Run: `npx expo start`, open the app as a provider, go to the "Dossiers" tab.
 Expected: 4 patients listed (from `mock.providerPatients`), each showing a real last-record label
 (e.g. "Ordonnance · 10/06/2026") derived from the updated `mock.medicalRecords` fixture — not the
-old hardcoded emoji strings. Tapping a row navigates to the patient detail screen.
+old hardcoded emoji strings. Tapping a row navigates to the patient detail screen. Also check the
+"Patients" tab: tapping "Voir" on a patient now navigates to the same screen.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add app/\(provider\)/records.tsx
+git add app/\(provider\)/records.tsx app/\(provider\)/patients.tsx
 git commit -m "feat: replace mock Dossiers list with real patients + latest record"
 ```
 
