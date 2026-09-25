@@ -171,6 +171,21 @@ gateway de paiement, fournisseurs IA) qui n'ont pas été configurés dans cette
 session — à faire via `supabase secrets set` si ces fonctionnalités sont
 utilisées.
 
+## Correctif appliqué : RLS `medical_records` + bucket pièces jointes (2026-09-25)
+
+Même bug que `doctor_availability` (voir plus haut) : les policies INSERT/SELECT de
+`medical_records` vérifiaient encore `role = 'doctor'` et n'excluaient pas les consultations
+`cancelled`/`no_show` de la relation de soin. Corrigé en direct sur la vraie prod par deux
+`ALTER POLICY` (voir `docs/superpowers/plans/2026-09-25-dossier-patient.md`, Task 4) — vérifié
+en relisant les policies après coup : les deux contiennent désormais `role = 'provider'` et
+`status <> ALL (ARRAY['cancelled','no_show'])`.
+
+Nouveau bucket Storage privé `medical-record-attachments` créé (`public = false`), avec deux
+policies calquées sur le même modèle de cercle de soins ("Circle of care can read attachments",
+"Circle of care can upload attachments") — chemin de fichier `{patient_id}/{record_id}/{filename}`,
+les deux segments `[1]` (patient) et `[2]` (dossier) sont vérifiés, pas seulement le second (une
+lacune trouvée et corrigée pendant la revue finale, avant exécution).
+
 ## Structure de `users` (inchangée dans ses grandes lignes)
 `id` · `email` · `first_name` · `last_name` · `phone` · `role` · `is_active` ·
 `doctor_status` (vocabulaire étendu, voir plus haut) · `specialization` ·
