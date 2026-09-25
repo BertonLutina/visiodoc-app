@@ -207,9 +207,10 @@ export interface PatientDetail {
 
 Run: `npx tsc --noEmit`
 Expected: errors in `src/services/patientApi.ts`, `src/data/mock.ts`, `app/records.tsx`,
-`app/patient/[id].tsx` — these are exactly the files fixed in Tasks 5, 10, 11. Confirm no error
-appears anywhere else (if one does, note it — it means something else depended on the old shape
-that this plan didn't anticipate).
+`app/patient/[id].tsx` — these are exactly the files fixed in Task 5 (the first three) and Task 11
+(the last one). `app/(provider)/records.tsx` (rewritten in Task 10) does not use `MedicalRecordKind`
+directly today, so it is not expected to error here. Confirm no error appears anywhere else (if one
+does, note it — it means something else depended on the old shape that this plan didn't anticipate).
 
 - [ ] **Step 4: Commit**
 
@@ -451,10 +452,13 @@ git commit -m "docs: record the medical_records RLS fix and new attachments buck
 **Files:**
 - Modify: `src/services/patientApi.ts:188-218`
 - Modify: `src/data/mock.ts:156-162`
+- Modify: `app/records.tsx` (patient-facing dossier screen — full rewrite; do not confuse with
+  `app/(provider)/records.tsx`, a different file rewritten in Task 10)
 - Test: `src/services/patientApi.test.ts`
 
 **Interfaces:**
-- Consumes: `MedicalRecord`, `isMedicalRecordKind` (Tasks 2, 3).
+- Consumes: `MedicalRecord`, `isMedicalRecordKind` (Tasks 2, 3); `RECORD_KIND_META`, `RECORD_KINDS`
+  (Task 3, for `app/records.tsx`).
 - Produces: `mapMedicalRecordRow(row: any): MedicalRecord` (exported, pure — reused by `providerApi.ts`
   in Task 8), updated `getMedicalRecords(patientId: string): Promise<MedicalRecord[]>`.
 
@@ -587,22 +591,121 @@ export const medicalRecords: MedicalRecord[] = [
 (`r5`'s status is set to `'inactive'` deliberately, so the demo/mock app has one archived entry to
 exercise the "show archived" toggle built in Task 11.)
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [ ] **Step 5: Replace the full contents of `app/records.tsx`**
+
+This is the patient's own read-only dossier screen. Its `kindMeta`/`filters` currently hardcode the
+old 5-value taxonomy — after Task 2, that object no longer matches `MedicalRecordKind` and stops
+compiling. Replace it with the shared taxonomy module from Task 3 (the module was built exactly so
+both this screen and the provider screens share one source of truth — this is the one place that
+was missed when the module was designed):
+
+```tsx
+import React, { useMemo, useState } from 'react';
+import { Pressable, ScrollView, Text, View } from 'react-native';
+import { router } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ChevronLeft } from 'lucide-react-native';
+import { Card } from '@/components/ui';
+import { colors } from '@/theme/colors';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAsync } from '@/hooks/useAsync';
+import { getMedicalRecords } from '@/services/patientApi';
+import { RECORD_KIND_META, RECORD_KINDS } from '@/services/medicalRecordTaxonomy';
+import type { MedicalRecordKind } from '@/types';
+
+export default function MedicalRecords() {
+  const { user } = useAuth();
+  const uid = user?.id ?? 'patient-1';
+  const [active, setActive] = useState('Tout');
+  const { data: records } = useAsync(() => getMedicalRecords(uid), [uid]);
+
+  const filters = useMemo(
+    () => [
+      { key: 'Tout', match: undefined as MedicalRecordKind | undefined },
+      ...RECORD_KINDS.map((k) => ({ key: RECORD_KIND_META[k].label, match: k })),
+    ],
+    [],
+  );
+
+  const list = useMemo(() => {
+    const all = records ?? [];
+    const f = filters.find((x) => x.key === active);
+    if (!f?.match) return all;
+    return all.filter((r) => r.kind === f.match);
+  }, [active, records, filters]);
+
+  return (
+    <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
+      <View className="flex-row items-center px-5 pt-2 pb-2">
+        <Pressable onPress={() => router.back()} className="p-1 mr-2">
+          <ChevronLeft color={colors.ink} size={26} />
+        </Pressable>
+        <Text className="font-sans-bold text-lg text-ink">Dossier médical</Text>
+      </View>
+
+      <View className="px-5 pb-2">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {filters.map((f) => {
+            const on = f.key === active;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() => setActive(f.key)}
+                className={`px-4 py-2 rounded-full mr-2 ${on ? 'bg-primary' : 'bg-surface border border-line'}`}
+              >
+                <Text className={`text-sm font-sans-semibold ${on ? 'text-white' : 'text-muted'}`}>{f.key}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 12 }}>
+        {list.map((r) => {
+          const meta = RECORD_KIND_META[r.kind];
+          return (
+            <Card key={r.id} className="mb-3 flex-row">
+              <View
+                className="w-11 h-11 rounded-2xl items-center justify-center mr-3"
+                style={{ backgroundColor: meta.color + '22' }}
+              >
+                <meta.icon color={meta.color} size={20} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-xs font-sans-bold" style={{ color: meta.color }}>
+                  {meta.label}
+                </Text>
+                <Text className="font-sans-bold text-ink mt-0.5">{r.title}</Text>
+                <Text className="font-sans text-xs text-muted mt-0.5">{r.date}</Text>
+              </View>
+            </Card>
+          );
+        })}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+```
+
+(The old `{r.author} · {r.date}` line is replaced with just `{r.date}` — `author` is always `''` in
+`mapMedicalRecordRow`, so the old text rendered as a stray leading " · ".)
+
+- [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `npx jest src/services/patientApi.test.ts`
 Expected: PASS (all tests, including the pre-existing `bookConsultation`/`SlotUnavailableError` ones).
 
-- [ ] **Step 6: Typecheck**
+- [ ] **Step 7: Typecheck**
 
 Run: `npx tsc --noEmit`
-Expected: the `src/services/patientApi.ts` and `src/data/mock.ts` errors from Task 2 Step 3 are
-gone. Remaining errors should only be in `app/records.tsx` and `app/patient/[id].tsx` (fixed in
-Tasks 10-11).
+Expected: the `src/services/patientApi.ts`, `src/data/mock.ts`, and `app/records.tsx` errors from
+Task 2 Step 3 are gone (the pre-existing, unrelated `global.css` error is expected to remain — see
+ledger). Remaining errors should only be in `app/patient/[id].tsx` (fixed in Task 11).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/services/patientApi.ts src/services/patientApi.test.ts src/data/mock.ts
+git add src/services/patientApi.ts src/services/patientApi.test.ts src/data/mock.ts app/records.tsx
 git commit -m "feat: read the full medical_records schema, drop the stale kind-mapping table"
 ```
 
@@ -1650,8 +1753,8 @@ export default function PatientProfile() {
 - [ ] **Step 2: Typecheck**
 
 Run: `npx tsc --noEmit`
-Expected: zero errors anywhere in the project — this was the last file with a pending error from
-Task 2.
+Expected: only the pre-existing, unrelated `global.css` error remains (see ledger baseline) — every
+error introduced by Task 2's type changes is now gone; this was the last file with a pending one.
 
 - [ ] **Step 3: Manual QA in the dev client**
 
@@ -1982,6 +2085,7 @@ npx jest
 npx tsc --noEmit
 ```
 
-Expected: all tests pass, zero type errors. Then do one full manual pass through the "Dossiers" tab
+Expected: all tests pass, no type errors beyond the pre-existing `global.css` one (see ledger
+baseline). Then do one full manual pass through the "Dossiers" tab
 → patient → add/edit/archive → back, in the dev client, before considering this feature done — no
 automated screen-render tests exist in this repo for this iteration (see spec).
