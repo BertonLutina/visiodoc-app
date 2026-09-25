@@ -21,6 +21,10 @@
     },
     "android": {
       "package": "com.visiodoc.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0F6E56"
+      },
       "permissions": [
         "CAMERA",
         "RECORD_AUDIO",
@@ -39,6 +43,12 @@
       ],
       "expo-font",
       "expo-status-bar",
+      [
+        "expo-navigation-bar",
+        {
+          "hidden": true
+        }
+      ],
       [
         "expo-splash-screen",
         {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search } from 'lucide-react-native';
 import { Avatar, Card } from '@/components/ui';
@@ -44,21 +45,23 @@ export default function ProviderPatients() {
         }
       >
         {list.map((p) => (
-          <Card key={p.id} className="mb-3 flex-row items-center">
-            <Avatar initials={p.initials} size={44} tone="light" />
-            <View className="flex-1 ml-3.5">
-              <Text className="font-sans-bold text-ink">
-                {p.firstName} {p.lastName}
-              </Text>
-              <Text className="font-sans text-xs text-muted mt-0.5">
-                {p.age} ans · {p.gender}
-              </Text>
-              <Text className="font-sans text-xs text-clay mt-0.5">{p.mainCondition}</Text>
-            </View>
-            <Pressable className="bg-accent-50 px-4 py-2.5 rounded-2xl">
-              <Text className="text-accent font-sans-bold">Voir</Text>
-            </Pressable>
-          </Card>
+          <Pressable key={p.id} onPress={() => router.push(`/patient/${p.id}`)}>
+            <Card className="mb-3 flex-row items-center">
+              <Avatar initials={p.initials} size={44} tone="light" />
+              <View className="flex-1 ml-3.5">
+                <Text className="font-sans-bold text-ink">
+                  {p.firstName} {p.lastName}
+                </Text>
+                <Text className="font-sans text-xs text-muted mt-0.5">
+                  {p.age} ans · {p.gender}
+                </Text>
+                <Text className="font-sans text-xs text-clay mt-0.5">{p.mainCondition}</Text>
+              </View>
+              <View className="bg-accent-50 px-4 py-2.5 rounded-2xl">
+                <Text className="text-accent font-sans-bold">Voir</Text>
+              </View>
+            </Card>
+          </Pressable>
         ))}
       </ScrollView>
     </SafeAreaView>
