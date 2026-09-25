@@ -189,3 +189,59 @@ describe('createMedicalRecord / updateMedicalRecord / archiveMedicalRecord', () 
     expect(logMock).toHaveBeenCalledWith('medical_record:archive', 'doc-1', 'pat-1', 'rec-1', 'allergy');
   });
 });
+
+describe('getLatestRecordByPatient', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+  afterEach(() => {
+    jest.dontMock('@/lib/supabase');
+  });
+
+  it('keeps only the most recent record per patient (rows already ordered desc by created_at)', async () => {
+    const rows = [
+      { id: 'r2', patient_id: 'pat-1', doctor_id: 'doc-1', record_type: 'prescription', title: 'Récent', status: 'active', created_at: '2026-06-10T00:00:00.000Z' },
+      { id: 'r1', patient_id: 'pat-1', doctor_id: 'doc-1', record_type: 'condition', title: 'Ancien', status: 'active', created_at: '2026-05-01T00:00:00.000Z' },
+      { id: 'r3', patient_id: 'pat-2', doctor_id: 'doc-1', record_type: 'allergy', title: 'Autre patient', status: 'active', created_at: '2026-06-01T00:00:00.000Z' },
+    ];
+    const orderMock = jest.fn().mockResolvedValue({ data: rows, error: null });
+    const eqMock = jest.fn(() => ({ order: orderMock }));
+    const selectMock = jest.fn(() => ({ eq: eqMock }));
+    const fromMock = jest.fn(() => ({ select: selectMock }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+
+    const { getLatestRecordByPatient: getFresh } = require('./providerApi');
+    const result = await getFresh('doc-1');
+
+    expect(result.get('pat-1')?.id).toBe('r2');
+    expect(result.get('pat-2')?.id).toBe('r3');
+    expect(result.size).toBe(2);
+  });
+});
+
+describe('getPatientConsultationHistory', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+  afterEach(() => {
+    jest.dontMock('@/lib/supabase');
+  });
+
+  it('filters consultations by both doctor and patient, most recent first', async () => {
+    const orderMock = jest.fn().mockResolvedValue({ data: [], error: null });
+    const eq2Mock = jest.fn(() => ({ order: orderMock }));
+    const eq1Mock = jest.fn(() => ({ eq: eq2Mock }));
+    const selectMock = jest.fn(() => ({ eq: eq1Mock }));
+    const fromMock = jest.fn(() => ({ select: selectMock }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+
+    const { getPatientConsultationHistory: getFresh } = require('./providerApi');
+    await getFresh('doc-1', 'pat-1');
+
+    expect(eq1Mock).toHaveBeenCalledWith('doctor_id', 'doc-1');
+    expect(eq2Mock).toHaveBeenCalledWith('patient_id', 'pat-1');
+    expect(orderMock).toHaveBeenCalledWith('scheduled_at', { ascending: false });
+  });
+});

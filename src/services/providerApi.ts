@@ -1,6 +1,8 @@
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 import * as mock from '@/data/mockProvider';
+import * as patientMock from '@/data/mock';
 import { logMedicalRecordEvent } from './auditLog';
+import { mapMedicalRecordRow } from './patientApi';
 import type { ConsultationType } from '@/types';
 import type {
   AvailabilitySlot,
@@ -9,7 +11,7 @@ import type {
   ProviderPatient,
   ProviderStats,
 } from '@/types/provider';
-import type { MedicalRecordInput, MedicalRecordKind } from '@/types';
+import type { MedicalRecord, MedicalRecordInput, MedicalRecordKind } from '@/types';
 
 const useMock = () => !supabaseConfigured || !supabase;
 const initials = (a?: string, b?: string) =>
@@ -142,6 +144,41 @@ export async function getPatients(doctorId: string): Promise<ProviderPatient[]> 
     }
   }
   return [...seen.values()];
+}
+
+export async function getLatestRecordByPatient(doctorId: string): Promise<Map<string, MedicalRecord>> {
+  const map = new Map<string, MedicalRecord>();
+  if (useMock()) {
+    for (const r of patientMock.medicalRecords) if (!map.has(r.patientId)) map.set(r.patientId, r);
+    return map;
+  }
+  const { data, error } = await supabase!
+    .from('medical_records')
+    .select(
+      'id, patient_id, doctor_id, consultation_id, record_type, title, description, category, severity, status, date_recorded, start_date, end_date, attachments, metadata, created_at',
+    )
+    .eq('doctor_id', doctorId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  for (const row of data ?? []) {
+    if (!map.has(row.patient_id)) map.set(row.patient_id, mapMedicalRecordRow(row));
+  }
+  return map;
+}
+
+export async function getPatientConsultationHistory(
+  doctorId: string,
+  patientId: string,
+): Promise<ProviderConsultation[]> {
+  if (useMock()) return mock.providerUpcomingConsultations.filter((c) => c.patient.id === patientId);
+  const { data, error } = await supabase!
+    .from('consultations')
+    .select(`*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name )`)
+    .eq('doctor_id', doctorId)
+    .eq('patient_id', patientId)
+    .order('scheduled_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapConsultation);
 }
 
 export function calculateAge(dateOfBirth: string | null | undefined): number | null {
