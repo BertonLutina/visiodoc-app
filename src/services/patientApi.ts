@@ -1,4 +1,5 @@
 import { supabase, supabasePublic, supabaseConfigured } from '@/lib/supabase';
+import * as Linking from 'expo-linking';
 import * as mock from '@/data/mock';
 import type {
   Consultation,
@@ -8,6 +9,8 @@ import type {
   Wallet,
 } from '@/types';
 import { isMedicalRecordKind } from './medicalRecordTaxonomy';
+import { normalizeConsultationStatus } from '@/utils/format';
+import { appLocale, translate } from '@/i18n/core';
 
 const useMock = () => !supabaseConfigured || !supabase;
 
@@ -37,38 +40,40 @@ function mapDoctor(row: any): Doctor {
     patientsCount: hp.total_consultations ?? 0,
     availabilityLabel: hp.availability_status === 'available' ? 'Dispo auj.' : 'Sur RDV',
     initials: initials(row.first_name, row.last_name),
+    avatarUrl: row.avatar_url ?? undefined,
   };
+}
+
+const DOCTOR_COLUMNS = `id, first_name, last_name, specialization, consultation_fee, years_of_experience,
+       healthcare_professionals ( specialization, city, consultation_fee, rating,
+         years_of_experience, total_consultations, availability_status )`;
+
+/**
+ * `avatar_url` est ajouté en tête de sélection ; si les droits colonne de la table `users`
+ * ne l'exposent pas à ce rôle, on réessaie sans la photo plutôt que de casser le catalogue.
+ */
+async function withAvatarFallback<T>(run: (columns: string) => PromiseLike<{ data: T | null; error: any }>) {
+  const first = await run(`avatar_url, ${DOCTOR_COLUMNS}`);
+  if (!first.error) return first;
+  return run(DOCTOR_COLUMNS);
 }
 
 export async function getDoctors(): Promise<Doctor[]> {
   if (useMock()) return mock.doctors;
   // Client PUBLIC (anon) : le catalogue des médecins est visible de tous,
   // alors qu'un patient connecté ne verrait que sa propre ligne `users` (RLS).
-  const { data, error } = await supabasePublic!
-    .from('users')
-    .select(
-      `id, first_name, last_name, specialization, consultation_fee, years_of_experience,
-       healthcare_professionals ( specialization, city, consultation_fee, rating,
-         years_of_experience, total_consultations, availability_status )`,
-    )
-    .eq('role', 'provider')
-    .eq('is_active', true)
-    .limit(50);
+  const { data, error } = await withAvatarFallback<any[]>((columns) =>
+    supabasePublic!.from('users').select(columns).eq('role', 'provider').eq('is_active', true).limit(50),
+  );
   if (error) throw error;
   return (data ?? []).map(mapDoctor);
 }
 
 export async function getDoctor(id: string): Promise<Doctor | null> {
   if (useMock()) return mock.doctors.find((d) => d.id === id) ?? null;
-  const { data, error } = await supabasePublic!
-    .from('users')
-    .select(
-      `id, first_name, last_name, specialization, consultation_fee, years_of_experience,
-       healthcare_professionals ( specialization, city, consultation_fee, rating,
-         years_of_experience, total_consultations, availability_status )`,
-    )
-    .eq('id', id)
-    .single();
+  const { data, error } = await withAvatarFallback<any>((columns) =>
+    supabasePublic!.from('users').select(columns).eq('id', id).single(),
+  );
   if (error) throw error;
   return data ? mapDoctor(data) : null;
 }
@@ -86,7 +91,7 @@ function mapConsultation(row: any): Consultation {
       initials: initials(d.first_name, d.last_name),
     },
     date: row.scheduled_at,
-    dateLabel: new Date(row.scheduled_at).toLocaleString('fr-FR', {
+    dateLabel: new Date(row.scheduled_at).toLocaleString(appLocale(), {
       weekday: 'short',
       day: 'numeric',
       month: 'short',
@@ -96,7 +101,10 @@ function mapConsultation(row: any): Consultation {
     type: (row.consultation_type as ConsultationType) ?? 'video',
     durationMin: row.duration ?? 30,
     fee: row.payment_amount ?? 0,
-    status: row.status,
+    status:
+      row.status === 'scheduled' && row.payment_status === 'pending'
+        ? 'pending'
+        : normalizeConsultationStatus(row.status),
     roomId: row.video_room_id ?? undefined,
   };
 }
@@ -131,13 +139,41 @@ export class SlotUnavailableError extends Error {
   constructor(reason: 'overlap' | 'daily-limit') {
     super(
       reason === 'overlap'
-        ? "Ce créneau vient d'être réservé, choisissez-en un autre."
-        : 'Vous avez déjà un rendez-vous ce jour-là avec ce professionnel.',
+        ? translate("Ce créneau vient d'être réservé, choisissez-en un autre.")
+        : translate('Vous avez déjà un rendez-vous ce jour-là avec ce professionnel.'),
     );
     this.name = 'SlotUnavailableError';
     this.reason = reason;
   }
 }
+
+/** Écran vers lequel la passerelle de paiement ramène l'utilisateur. */
+export const RETURN_PATH = '/(patient)/appointments';
+
+export type PaymentMethod = 'CARD' | 'MOBILE_MONEY';
+
+/** Intention de paiement renvoyée par l'Edge Function payment-initiate-v2. */
+export type PaymentIntent = {
+  txnRef: string;
+  actionUrl: string;
+  httpMethod: 'POST';
+  integrator: string;
+  expiresAt: string;
+  payload: Record<string, unknown>;
+};
+
+export class PaymentInitiationError extends Error {
+  /** Id de la consultation déjà créée (statut `scheduled`, paiement `pending`). */
+  consultationId: string;
+  constructor(consultationId: string, message: string) {
+    super(message);
+    this.name = 'PaymentInitiationError';
+    this.consultationId = consultationId;
+  }
+}
+
+/** Les montants sont envoyés en plus petite unité (×100), cf. docs Interswitch du backend. */
+const toSmallestUnit = (amount: number) => Math.round(amount * 100);
 
 export async function bookConsultation(input: {
   patientId: string;
@@ -149,8 +185,14 @@ export async function bookConsultation(input: {
    * valeur fixe : la contrainte anti-chevauchement côté DB se base sur cette colonne, donc
    * une valeur fausse réserve la mauvaise plage horaire. */
   duration: number;
-}): Promise<{ id: string }> {
+  countryCode?: string;
+  paymentMethod?: PaymentMethod;
+  customerEmail?: string;
+  customerName?: string;
+}): Promise<{ id: string; paymentIntent?: PaymentIntent }> {
   if (useMock()) return { id: 'mock-booking' };
+  // `pending_payment` n'est pas dans le CHECK de consultations.status : on réserve en
+  // `scheduled` et le paiement est suivi par `payment_status`.
   const { data, error } = await supabase!
     .from('consultations')
     .insert({
@@ -160,7 +202,7 @@ export async function bookConsultation(input: {
       duration: input.duration,
       consultation_type: input.type,
       payment_amount: input.fee,
-      status: 'pending_payment',
+      status: 'scheduled',
       payment_status: 'pending',
     })
     .select('id')
@@ -172,11 +214,29 @@ export async function bookConsultation(input: {
     }
     throw error;
   }
-  // Paiement : Edge Function payment-initiate
-  await supabase!.functions.invoke('payment-initiate', {
-    body: { consultationId: data.id, amount: input.fee },
+  // Paiement : Edge Function payment-initiate-v2
+  const { data: intent, error: payError } = await supabase!.functions.invoke('payment-initiate-v2', {
+    body: {
+      countryCode: input.countryCode ?? 'CD',
+      method: input.paymentMethod ?? 'MOBILE_MONEY',
+      amountSmallestUnit: toSmallestUnit(input.fee),
+      callbackUrl: Linking.createURL(RETURN_PATH),
+      patientId: input.patientId,
+      providerId: input.doctorId,
+      consultationId: data.id,
+      customerEmail: input.customerEmail,
+      customerName: input.customerName,
+    },
   });
-  return { id: data.id };
+  if (payError || !intent || (intent as any).error) {
+    const reason = (intent as any)?.error ?? payError?.message ?? 'unknown';
+    throw new PaymentInitiationError(
+      data.id,
+      translate("Rendez-vous réservé, mais le paiement n'a pas pu démarrer. Réessayez depuis vos rendez-vous.") +
+        ` (${reason})`,
+    );
+  }
+  return { id: data.id, paymentIntent: intent as PaymentIntent };
 }
 
 /* ---------- Dossier médical ---------- */
@@ -193,7 +253,7 @@ export function mapMedicalRecordRow(row: any): MedicalRecord {
     severity: row.severity ?? undefined,
     status: row.status ?? 'active',
     author: '',
-    date: new Date(row.date_recorded ?? row.created_at).toLocaleDateString('fr-FR'),
+    date: new Date(row.date_recorded ?? row.created_at).toLocaleDateString(appLocale()),
     startDate: row.start_date ?? undefined,
     endDate: row.end_date ?? undefined,
     attachments: Array.isArray(row.attachments) ? row.attachments : [],

@@ -25,6 +25,8 @@ describe('bookConsultation', () => {
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+    invokeMock.mockResolvedValue({ data: { txnRef: 'T0' }, error: null });
+    jest.doMock('expo-linking', () => ({ createURL: (path: string) => `visiodoc://${path}` }));
     singleMock.mockResolvedValue({ data: { id: 'consult-1' }, error: null });
     selectMock.mockReturnValue({ single: singleMock });
     insertMock.mockReturnValue({ select: selectMock });
@@ -38,6 +40,7 @@ describe('bookConsultation', () => {
 
   afterEach(() => {
     jest.dontMock('@/lib/supabase');
+    jest.dontMock('expo-linking');
   });
 
   it('persists the actual appointment duration, not a hardcoded default', async () => {
@@ -51,6 +54,41 @@ describe('bookConsultation', () => {
       duration: 60,
     });
     expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({ duration: 60 }));
+  });
+
+  it('inserts status "scheduled" (valid CHECK value) with payment_status "pending"', async () => {
+    invokeMock.mockResolvedValue({ data: { txnRef: 'T1' }, error: null });
+    const { bookConsultation: b } = require('./patientApi');
+    await b({ patientId: 'p1', doctorId: 'd1', scheduledAt: '2026-10-15T09:00:00.000Z', type: 'video', fee: 5000, duration: 30 });
+    expect(insertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'scheduled', payment_status: 'pending' }),
+    );
+  });
+
+  it('calls payment-initiate-v2 with the payload the Edge Function requires', async () => {
+    invokeMock.mockResolvedValue({ data: { txnRef: 'T1' }, error: null });
+    const { bookConsultation: b } = require('./patientApi');
+    const res = await b({ patientId: 'p1', doctorId: 'd1', scheduledAt: '2026-10-15T09:00:00.000Z', type: 'video', fee: 5000, duration: 30, countryCode: 'CD' });
+    expect(invokeMock).toHaveBeenCalledWith('payment-initiate-v2', {
+      body: expect.objectContaining({
+        countryCode: 'CD',
+        method: 'MOBILE_MONEY',
+        amountSmallestUnit: 500000,
+        patientId: 'p1',
+        providerId: 'd1',
+        consultationId: 'consult-1',
+        callbackUrl: expect.any(String),
+      }),
+    });
+    expect(res.paymentIntent).toEqual({ txnRef: 'T1' });
+  });
+
+  it('throws PaymentInitiationError when the payment function fails', async () => {
+    invokeMock.mockResolvedValue({ data: { error: 'INTEGRATOR_NOT_IMPLEMENTED' }, error: null });
+    const { bookConsultation: b } = require('./patientApi');
+    await expect(
+      b({ patientId: 'p1', doctorId: 'd1', scheduledAt: '2026-10-15T09:00:00.000Z', type: 'video', fee: 5000, duration: 30 }),
+    ).rejects.toMatchObject({ name: 'PaymentInitiationError', consultationId: 'consult-1' });
   });
 
   it('maps a Postgres exclusion-violation (23P01) to SlotUnavailableError("overlap")', async () => {

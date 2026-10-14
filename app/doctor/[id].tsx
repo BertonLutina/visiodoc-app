@@ -6,14 +6,16 @@ import { ChevronLeft, Video, MessageCircle, Phone, CalendarX } from 'lucide-reac
 import { Avatar, Button, SectionTitle, Stars } from '@/components/ui';
 import { MonthCalendar } from '@/components/MonthCalendar';
 import { formatMoney } from '@/utils/format';
-import { activeCountry } from '@/config/countries';
+import { getCountry } from '@/config/countries';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
-import { bookConsultation, getDoctor, SlotUnavailableError } from '@/services/patientApi';
+import { bookConsultation, getDoctor, PaymentInitiationError, SlotUnavailableError } from '@/services/patientApi';
 import { getDaySlots, getMonthAvailability } from '@/services/availabilityApi';
 import { doctors } from '@/data/mock';
+import { appLocale } from '@/i18n';
 import type { ConsultationType } from '@/types';
+import { useT } from '@/i18n';
 
 const types: { key: ConsultationType; icon: typeof Video; label: string }[] = [
   { key: 'video', icon: Video, label: 'Vidéo' },
@@ -24,8 +26,10 @@ const types: { key: ConsultationType; icon: typeof Video; label: string }[] = [
 const timeLabel = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
 export default function DoctorProfile() {
+  const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const country = getCountry(user?.countryCode ?? 'CD');
   const { data: fetched } = useAsync(() => getDoctor(id), [id]);
   const doctor = fetched ?? doctors.find((d) => d.id === id) ?? doctors[0];
 
@@ -63,23 +67,33 @@ export default function DoctorProfile() {
     if (!activeSlot) return;
     setBooking(true);
     try {
-      await bookConsultation({
+      const { paymentIntent } = await bookConsultation({
         patientId: user?.id ?? 'patient-1',
         doctorId: doctor.id,
         scheduledAt: activeSlot.start.toISOString(),
         duration: Math.round((activeSlot.end.getTime() - activeSlot.start.getTime()) / 60000),
         type,
         fee: doctor.fee,
+        countryCode: user?.countryCode,
+        customerEmail: user?.email,
+        customerName: user ? `${user.firstName} ${user.lastName}` : undefined,
       });
-      router.replace('/(patient)/appointments');
+      if (paymentIntent) {
+        router.replace({ pathname: '/payment', params: { intent: JSON.stringify(paymentIntent) } });
+      } else {
+        router.replace('/(patient)/appointments');
+      }
     } catch (e: any) {
       if (e instanceof SlotUnavailableError) {
-        Alert.alert('Créneau indisponible', e.message);
+        Alert.alert(t('Créneau indisponible'), e.message);
         setTime(null);
         reloadDay();
         reloadMonth();
+      } else if (e instanceof PaymentInitiationError) {
+        Alert.alert(t('Paiement non démarré'), e.message);
+        router.replace('/(patient)/appointments');
       } else {
-        Alert.alert('Réservation impossible', e?.message ?? 'Réessayez plus tard.');
+        Alert.alert(t('Réservation impossible'), e?.message ?? t('Réessayez plus tard.'));
       }
     } finally {
       setBooking(false);
@@ -92,29 +106,29 @@ export default function DoctorProfile() {
         <Pressable onPress={() => router.back()} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">Profil médecin</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Profil médecin')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }}>
         <View className="items-center mb-6">
-          <Avatar initials={doctor.initials} size={80} />
+          <Avatar initials={doctor.initials} size={80} uri={doctor.avatarUrl} />
           <Text className="font-serif-bold text-2xl text-ink mt-3">
             Dr. {doctor.firstName} {doctor.lastName}
           </Text>
           <Text className="font-sans text-sm text-muted mt-0.5">
-            {doctor.specialty} · {doctor.city}
+            {t(doctor.specialty)} · {doctor.city}
           </Text>
           <View className="mt-2">
             <Stars rating={doctor.rating} />
           </View>
-          <Text className="font-sans text-xs text-muted mt-1">{doctor.reviewsCount} avis</Text>
+          <Text className="font-sans text-xs text-muted mt-1">{doctor.reviewsCount} {t('avis')}</Text>
         </View>
 
         <View className="flex-row justify-between mb-6">
           {[
-            { v: `${doctor.yearsOfExperience} ans`, l: 'Expérience' },
-            { v: `${doctor.patientsCount}`, l: 'Patients' },
-            { v: `${Math.round(doctor.fee / 1000)}k ${activeCountry.currency.symbol}`, l: 'Tarif' },
+            { v: `${doctor.yearsOfExperience} ${t('ans')}`, l: t('Expérience') },
+            { v: `${doctor.patientsCount}`, l: t('Patients') },
+            { v: `${Math.round(doctor.fee / 1000)}k ${country.currency.symbol}`, l: t('Tarif') },
           ].map((s) => (
             <View key={s.l} className="flex-1 items-center bg-surface border border-line rounded-3xl py-4 mx-1">
               <Text className="font-serif-bold text-xl text-ink">{s.v}</Text>
@@ -123,20 +137,20 @@ export default function DoctorProfile() {
           ))}
         </View>
 
-        <SectionTitle>Choisir un créneau</SectionTitle>
+        <SectionTitle>{t('Choisir un créneau')}</SectionTitle>
         {monthError ? (
           <View className="bg-sand rounded-2xl px-4 py-4 items-center mb-4">
             <Text className="font-sans-medium text-sm text-clay text-center mb-3">
-              Impossible de charger le calendrier. {monthError}
+              {t('Impossible de charger le calendrier.')} {monthError}
             </Text>
-            <Button label="Réessayer" variant="outline" onPress={reloadMonth} />
+            <Button label={t('Réessayer')} variant="outline" onPress={reloadMonth} />
           </View>
         ) : !monthLoading && Object.keys(monthStatus ?? {}).length > 0 && Object.values(monthStatus ?? {}).every((s) => s === 'unavailable') ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-4">
             <View className="w-12 h-12 rounded-2xl bg-sand items-center justify-center mb-3">
               <CalendarX color={colors.clay} size={22} />
             </View>
-            <Text className="font-sans-semibold text-ink text-center">Aucune disponibilité ce mois-ci</Text>
+            <Text className="font-sans-semibold text-ink text-center">{t('Aucune disponibilité ce mois-ci')}</Text>
           </View>
         ) : null}
         <MonthCalendar
@@ -162,27 +176,27 @@ export default function DoctorProfile() {
         {selectedDate ? (
           <View className="mt-4 mb-4">
             <Text className="font-sans-bold text-ink mb-3">
-              {new Date(selectedDate + 'T00:00:00').toLocaleDateString('fr-FR', {
+              {new Date(selectedDate + 'T00:00:00').toLocaleDateString(appLocale(), {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long',
               })}
             </Text>
             {dayLoading ? (
-              <Text className="font-sans text-muted">Chargement des créneaux…</Text>
+              <Text className="font-sans text-muted">{t('Chargement des créneaux…')}</Text>
             ) : dayError ? (
               <View className="bg-sand rounded-2xl px-4 py-4 items-center">
                 <Text className="font-sans-medium text-sm text-clay text-center mb-3">
-                  Impossible de charger les créneaux. {dayError}
+                  {t('Impossible de charger les créneaux.')} {dayError}
                 </Text>
-                <Button label="Réessayer" variant="outline" onPress={reloadDay} />
+                <Button label={t('Réessayer')} variant="outline" onPress={reloadDay} />
               </View>
             ) : (daySlots ?? []).length === 0 ? (
               <View className="bg-surface border border-line rounded-3xl p-6 items-center">
                 <View className="w-12 h-12 rounded-2xl bg-sand items-center justify-center mb-3">
                   <CalendarX color={colors.clay} size={22} />
                 </View>
-                <Text className="font-sans-semibold text-ink text-center">Aucun créneau ce jour-là</Text>
+                <Text className="font-sans-semibold text-ink text-center">{t('Aucun créneau ce jour-là')}</Text>
               </View>
             ) : (
               <View className="flex-row flex-wrap">
@@ -213,18 +227,18 @@ export default function DoctorProfile() {
           </View>
         ) : null}
 
-        <SectionTitle>Type de consultation</SectionTitle>
+        <SectionTitle>{t('Type de consultation')}</SectionTitle>
         <View className="flex-row justify-between mb-6">
-          {types.map((t) => {
-            const on = type === t.key;
+          {types.map((ty) => {
+            const on = type === ty.key;
             return (
               <Pressable
-                key={t.key}
-                onPress={() => setType(t.key)}
+                key={ty.key}
+                onPress={() => setType(ty.key)}
                 className={`flex-1 items-center py-4 rounded-3xl mx-1 ${on ? 'bg-primary' : 'bg-surface border border-line'}`}
               >
-                <t.icon color={on ? colors.white : colors.primary} size={22} />
-                <Text className={`text-sm mt-1 font-sans-semibold ${on ? 'text-white' : 'text-ink'}`}>{t.label}</Text>
+                <ty.icon color={on ? colors.white : colors.primary} size={22} />
+                <Text className={`text-sm mt-1 font-sans-semibold ${on ? 'text-white' : 'text-ink'}`}>{t(ty.label)}</Text>
               </Pressable>
             );
           })}
@@ -233,8 +247,12 @@ export default function DoctorProfile() {
         <Button
           label={
             activeSlot && selectedDate
-              ? `Réserver ${new Date(selectedDate + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' })} à ${timeLabel(activeSlot.start)} — ${formatMoney(doctor.fee)}`
-              : `Réserver — ${formatMoney(doctor.fee)}`
+              ? t('Réserver {date} à {time} — {price}', {
+                  date: new Date(selectedDate + 'T00:00:00').toLocaleDateString(appLocale(), { weekday: 'long', day: 'numeric' }),
+                  time: timeLabel(activeSlot.start),
+                  price: formatMoney(doctor.fee, country),
+                })
+              : t('Réserver — {price}', { price: formatMoney(doctor.fee, country) })
           }
           disabled={!activeSlot}
           loading={booking}
