@@ -1,6 +1,7 @@
 // Types côté médecin (provider) — alignés sur le backend Supabase de l'app web.
 import type { ConsultationStatus, ConsultationType } from '@/types';
 import type { Gender } from '@/services/registration';
+import type { ProviderEarnings } from '@/services/dashboardMetrics';
 
 export interface ProviderProfile {
   id: string;
@@ -118,8 +119,13 @@ export interface DashboardOverview {
   patientsNew: number;
   consultationsThisMonth: number;
   consultationsTrend: string;
+  /** Revenu payé du mois dans `revenueCurrency` (montant stocké, sans commission côté client). */
   netRevenue: number;
+  /** Devise de `netRevenue` / `revenueSeries` ; `null` sans revenu ou sans code devise. */
+  revenueCurrency: string | null;
   revenueSeries: { label: string; amount: number }[];
+  /** En cours (consultations payées non versées) et versés (`provider_payouts` payés), par devise. */
+  earnings: ProviderEarnings;
   /** % sur les 90 derniers jours, `null` s'il n'y a aucun rendez-vous passé. */
   cancellationRate: number | null;
   noShowRate: number | null;

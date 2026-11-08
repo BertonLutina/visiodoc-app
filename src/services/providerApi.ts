@@ -16,7 +16,17 @@ import type {
   DashboardOverview,
   ReviewSummary,
 } from '@/types/provider';
-import { computeDashboardOverview, weeklyCapacity, type DashboardRow } from './dashboardMetrics';
+import {
+  computeDashboardOverview,
+  computeProviderEarnings,
+  weeklyCapacity,
+  EARNING_PAYMENT_STATUS,
+  EARNING_STATUSES,
+  PAYOUT_PAID_STATUS,
+  type DashboardRow,
+  type PayoutRow,
+  type ProviderEarnings,
+} from './dashboardMetrics';
 import { getSchedulingSettings, isMissingColumnError } from './availabilityApi';
 import type {
   MedicalRecord,
@@ -39,7 +49,7 @@ export async function getDashboardStats(doctorId: string): Promise<ProviderStats
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
 
-  const [{ count: patientsTotal }, { count: consultMonth }, hp] = await Promise.all([
+  const [{ count: patientsTotal }, { count: consultMonth }, hp, earnings] = await Promise.all([
     supabase!
       .from('consultations')
       .select('patient_id', { count: 'exact', head: true })
@@ -54,6 +64,7 @@ export async function getDashboardStats(doctorId: string): Promise<ProviderStats
       .select('rating, average_rating')
       .eq('user_id', doctorId)
       .maybeSingle(),
+    getProviderEarnings(doctorId),
   ]);
 
   return {
@@ -61,22 +72,67 @@ export async function getDashboardStats(doctorId: string): Promise<ProviderStats
     patientsNew: 0,
     consultationsThisMonth: consultMonth ?? 0,
     consultationsTrend: '',
-    netRevenue: 0,
+    // Paiements en cours (hors périodes versées) dans la devise principale : jamais de somme multi-devises.
+    netRevenue: earnings.inProgress[0]?.amount ?? 0,
     averageRating: hp.data?.average_rating ?? hp.data?.rating ?? 0,
   };
+}
+
+/* ---------- Revenus (contrat serveur : consultations payées + provider_payouts payés) ---------- */
+/**
+ * Lecture seule, avec le client de SESSION (RLS : le prestataire ne voit que ses lignes).
+ * Aucune commission n'est appliquée ici : on lit `payment_amount`, tel que stocké par le serveur.
+ * - en cours : `consultations` du médecin, `status in ('completed','no_show')`, `payment_status = 'paid'` ;
+ * - versé : `provider_payouts` du médecin au statut `paid`.
+ */
+export async function getProviderEarnings(doctorId: string): Promise<ProviderEarnings> {
+  if (useMock()) return mock.dashboardOverview.earnings;
+
+  const payoutCols = 'status, period_start, period_end, net_amount, currency_code';
+  const [consultations, payouts] = await Promise.all([
+    supabase!
+      .from('consultations')
+      .select('status, payment_status, payment_amount, currency, scheduled_at')
+      .eq('doctor_id', doctorId)
+      .in('status', [...EARNING_STATUSES])
+      .eq('payment_status', EARNING_PAYMENT_STATUS),
+    readPaidPayouts(doctorId, payoutCols),
+  ]);
+  if (consultations.error) throw consultations.error;
+  return computeProviderEarnings((consultations.data ?? []) as DashboardRow[], payouts);
+}
+
+async function readPaidPayouts(doctorId: string, cols: string): Promise<PayoutRow[]> {
+  const first = await supabase!
+    .from('provider_payouts')
+    .select(cols)
+    .eq('provider_id', doctorId)
+    .eq('status', PAYOUT_PAID_STATUS);
+  if (!first.error) return (first.data ?? []) as unknown as PayoutRow[];
+  // Certains schémas n'ont pas de colonne `status` : l'existence d'une ligne y vaut « versé ».
+  if (!/status/i.test(first.error.message ?? '') || !/column|does not exist|schema cache/i.test(first.error.message ?? '')) {
+    throw first.error;
+  }
+  const retry = await supabase!
+    .from('provider_payouts')
+    .select('period_start, period_end, net_amount, currency_code')
+    .eq('provider_id', doctorId);
+  if (retry.error) throw retry.error;
+  return ((retry.data ?? []) as unknown as PayoutRow[]).map((p) => ({ ...p, status: PAYOUT_PAID_STATUS }));
 }
 
 /* ---------- Dashboard enrichi ---------- */
 export async function getDashboardOverview(doctorId: string): Promise<DashboardOverview> {
   if (useMock()) return mock.dashboardOverview;
 
-  const [{ data, error }, fee, rules, settings] = await Promise.all([
+  const [{ data, error }, earnings, rules, settings] = await Promise.all([
     supabase!
       .from('consultations')
-      .select('id, patient_id, scheduled_at, duration, status, payment_status, payment_amount')
+      .select('id, patient_id, scheduled_at, duration, status, payment_status, payment_amount, currency')
       .eq('doctor_id', doctorId)
       .gte('scheduled_at', new Date(Date.now() - 200 * 86_400_000).toISOString()),
-    getFeeConfig(),
+    // Un échec de lecture des revenus ne masque pas le reste du tableau de bord.
+    getProviderEarnings(doctorId).catch((): ProviderEarnings => ({ inProgress: [], paid: [] })),
     getAvailability(doctorId),
     getSchedulingSettings(doctorId),
   ]);
@@ -85,7 +141,6 @@ export async function getDashboardOverview(doctorId: string): Promise<DashboardO
   const slotMinutes = settings.appointmentDurationMinutes;
   const { nextRowId, ...rest } = computeDashboardOverview((data ?? []) as DashboardRow[], {
     now: new Date(),
-    feeRate: fee.platformFeeRate,
     weeklyCapacity: weeklyCapacity(rules, slotMinutes),
   });
 
@@ -98,7 +153,7 @@ export async function getDashboardOverview(doctorId: string): Promise<DashboardO
       .maybeSingle();
     if (row) next = mapConsultation(row);
   }
-  return { ...rest, next };
+  return { ...rest, earnings, next };
 }
 
 /** Statut de validation du compte prestataire (`provider_profiles.status`), `null` si inconnu. */

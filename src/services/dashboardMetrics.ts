@@ -10,12 +10,41 @@ export interface DashboardRow {
   status: string;
   payment_status: string | null;
   payment_amount: number | null;
+  /** Devise du paiement (`consultations.currency`). `null` sur les anciennes lignes. */
+  currency?: string | null;
 }
+
+/** Ligne `provider_payouts` (période clôturée, montants figés au moment du versement). */
+export interface PayoutRow {
+  status: string | null;
+  /** `YYYY-MM-DD`, inclus. */
+  period_start: string;
+  /** `YYYY-MM-DD`, inclus. */
+  period_end: string;
+  net_amount: number | null;
+  currency_code: string | null;
+}
+
+export interface CurrencyAmount {
+  /** Code ISO (`USD`, `CDF`…), `null` quand la ligne n'en porte pas. */
+  currency: string | null;
+  amount: number;
+}
+
+export interface ProviderEarnings {
+  /** Consultations payées pas encore couvertes par une période versée, par devise. */
+  inProgress: CurrencyAmount[];
+  /** Périodes clôturées et versées (`provider_payouts.status = 'paid'`), par devise. */
+  paid: CurrencyAmount[];
+}
+
+/** Statuts de consultation qui génèrent un revenu une fois payée (un no_show payé reste acquis). */
+export const EARNING_STATUSES = ['completed', 'no_show'] as const;
+export const EARNING_PAYMENT_STATUS = 'paid';
+export const PAYOUT_PAID_STATUS = 'paid';
 
 export interface DashboardInput {
   now: Date;
-  /** Taux de commission plateforme (0.04 = 4 %). */
-  feeRate: number;
   /** Nombre de créneaux réservables par semaine (0 = aucune disponibilité configurée). */
   weeklyCapacity: number;
 }
@@ -47,10 +76,56 @@ export function weeklyCapacity(
   }, 0);
 }
 
+const amountOf = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+/** Arrondi au centime : évite 0.1 + 0.2 = 0.30000000000000004 sans jamais tronquer les décimales. */
+const cents = (n: number) => Math.round(n * 100) / 100;
+
+const isPaidEarning = (r: Pick<DashboardRow, 'status' | 'payment_status'>) =>
+  (EARNING_STATUSES as readonly string[]).includes(r.status) && r.payment_status === EARNING_PAYMENT_STATUS;
+
+function sumByCurrency(items: { currency: string | null; amount: number }[]): CurrencyAmount[] {
+  const totals = new Map<string, CurrencyAmount>();
+  for (const { currency, amount } of items) {
+    const key = currency ?? '';
+    const entry = totals.get(key) ?? { currency, amount: 0 };
+    entry.amount += amount;
+    totals.set(key, entry);
+  }
+  return [...totals.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, v]) => ({ currency: v.currency, amount: cents(v.amount) }));
+}
+
+/**
+ * Revenus du prestataire d'après le contrat serveur : AUCUNE commission n'est calculée ici.
+ * - `inProgress` : consultations `completed` / `no_show` avec `payment_status = 'paid'`, montant stocké
+ *   (`payment_amount`), hors périodes déjà versées ;
+ * - `paid` : somme de `net_amount` des `provider_payouts` au statut `paid` (montants figés au versement).
+ * Les devises ne sont jamais additionnées entre elles.
+ */
+export function computeProviderEarnings(
+  consultations: Pick<DashboardRow, 'status' | 'payment_status' | 'payment_amount' | 'currency' | 'scheduled_at'>[],
+  payouts: PayoutRow[],
+): ProviderEarnings {
+  const paidPayouts = payouts.filter((p) => p.status === PAYOUT_PAID_STATUS);
+  const covered = (r: { scheduled_at: string }) => {
+    const day = dayKey(new Date(r.scheduled_at));
+    return paidPayouts.some((p) => day >= p.period_start.slice(0, 10) && day <= p.period_end.slice(0, 10));
+  };
+  return {
+    inProgress: sumByCurrency(
+      consultations
+        .filter((r) => isPaidEarning(r) && !covered(r))
+        .map((r) => ({ currency: r.currency ?? null, amount: amountOf(r.payment_amount) })),
+    ),
+    paid: sumByCurrency(paidPayouts.map((p) => ({ currency: p.currency_code ?? null, amount: amountOf(p.net_amount) }))),
+  };
+}
+
 export function computeDashboardOverview(
   rows: DashboardRow[],
-  { now, feeRate, weeklyCapacity: capacity }: DashboardInput,
-): Omit<DashboardOverview, 'next'> & { nextRowId: string | null } {
+  { now, weeklyCapacity: capacity }: DashboardInput,
+): Omit<DashboardOverview, 'next' | 'earnings'> & { nextRowId: string | null } {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -77,14 +152,20 @@ export function computeDashboardOverview(
     consultationsTrend = translate('{pct} vs mois préc.', { pct: `${pct >= 0 ? '+' : ''}${pct}%` });
   }
 
-  // Revenu net : consultations terminées et payées, commission déduite. 6 derniers mois.
-  const net = (r: DashboardRow) =>
-    r.status === 'completed' && r.payment_status === 'paid' ? (r.payment_amount ?? 0) * (1 - feeRate) : 0;
+  // Revenu : consultations payées (completed / no_show), montant stocké tel quel, 6 derniers mois.
+  // Une seule devise alimente le chiffre et le graphique (la plus fréquente) : jamais de somme multi-devises.
+  const earned = rows.filter(isPaidEarning);
+  const counts = new Map<string, number>();
+  for (const r of earned) counts.set(r.currency ?? '', (counts.get(r.currency ?? '') ?? 0) + 1);
+  const mainKey =
+    [...counts.entries()].sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1))[0]?.[0] ?? null;
+  const revenueCurrency = mainKey === null || mainKey === '' ? null : mainKey;
+  const mainRows = mainKey === null ? [] : earned.filter((r) => (r.currency ?? '') === mainKey);
   const revenueSeries = Array.from({ length: 6 }, (_, i) => {
     const from = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
     const to = new Date(from.getFullYear(), from.getMonth() + 1, 1);
-    const amount = rows.filter((r) => inRange(r, from, to)).reduce((s, r) => s + net(r), 0);
-    return { label: MONTHS[from.getMonth()], amount: Math.round(amount) };
+    const amount = mainRows.filter((r) => inRange(r, from, to)).reduce((s, r) => s + amountOf(r.payment_amount), 0);
+    return { label: MONTHS[from.getMonth()], amount: cents(amount) };
   });
   const netRevenue = revenueSeries[5].amount;
 
@@ -132,6 +213,7 @@ export function computeDashboardOverview(
     consultationsThisMonth: monthCount,
     consultationsTrend,
     netRevenue,
+    revenueCurrency,
     revenueSeries,
     cancellationRate: rate('cancelled'),
     noShowRate: rate('no_show'),

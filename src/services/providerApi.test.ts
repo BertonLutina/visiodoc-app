@@ -428,3 +428,85 @@ describe('getTodayConsultations (agenda du jour / onglet « En cours »)', () =>
     expect(query.in).not.toHaveBeenCalled();
   });
 });
+
+describe('getProviderEarnings (revenus : consultations payées + provider_payouts payés)', () => {
+  const calls: Record<string, { method: string; args: unknown[] }[]> = {};
+  type Res = { data: unknown; error: unknown };
+  const results: Record<string, Res | Res[]> = {};
+  const makeQuery = (table: string) => {
+    calls[table] = [];
+    const q: any = {};
+    for (const m of ['select', 'eq', 'in', 'neq', 'gte', 'lt', 'order']) {
+      q[m] = jest.fn((...args: unknown[]) => {
+        calls[table].push({ method: m, args });
+        return q;
+      });
+    }
+    q.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+      Promise.resolve(Array.isArray(results[table]) ? (results[table] as Res[]).shift() : results[table]).then(resolve, reject);
+    return q;
+  };
+  const filters = (table: string, method: string) => calls[table].filter((c) => c.method === method).map((c) => c.args);
+
+  beforeEach(() => {
+    jest.resetModules();
+    results.consultations = { data: [], error: null };
+    results.provider_payouts = { data: [], error: null };
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: jest.fn((table: string) => makeQuery(table)) },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+  });
+  afterEach(() => jest.dontMock('@/lib/supabase'));
+
+  it('filtre consultations sur exactement doctor_id, les deux statuts et payment_status = paid (aucune commission)', async () => {
+    await require('./providerApi').getProviderEarnings('doc-1');
+    expect(filters('consultations', 'eq')).toEqual([
+      ['doctor_id', 'doc-1'],
+      ['payment_status', 'paid'],
+    ]);
+    expect(filters('consultations', 'in')).toEqual([['status', ['completed', 'no_show']]]);
+    expect(String(filters('consultations', 'select')[0][0])).toContain('payment_amount');
+    expect(String(filters('consultations', 'select')[0][0])).not.toMatch(/fee/);
+  });
+
+  it('lit provider_payouts du prestataire au statut paid, lecture seule', async () => {
+    await require('./providerApi').getProviderEarnings('doc-1');
+    expect(filters('provider_payouts', 'eq')).toEqual([
+      ['provider_id', 'doc-1'],
+      ['status', 'paid'],
+    ]);
+  });
+
+  it('renvoie les montants stockés par devise, sans pourcentage appliqué', async () => {
+    results.consultations = {
+      data: [
+        { status: 'completed', payment_status: 'paid', payment_amount: 100, currency: 'USD', scheduled_at: '2026-10-05T09:00:00.000Z' },
+        { status: 'no_show', payment_status: 'paid', payment_amount: 50, currency: 'USD', scheduled_at: '2026-10-06T09:00:00.000Z' },
+      ],
+      error: null,
+    };
+    results.provider_payouts = {
+      data: [{ status: 'paid', period_start: '2026-09-01', period_end: '2026-09-15', net_amount: 90, currency_code: 'USD' }],
+      error: null,
+    };
+    const e = await require('./providerApi').getProviderEarnings('doc-1');
+    expect(e).toEqual({ inProgress: [{ currency: 'USD', amount: 150 }], paid: [{ currency: 'USD', amount: 90 }] });
+  });
+
+  it('propage une erreur de lecture consultations', async () => {
+    results.consultations = { data: null, error: { message: 'boom' } };
+    await expect(require('./providerApi').getProviderEarnings('doc-1')).rejects.toEqual({ message: 'boom' });
+  });
+
+  it('si provider_payouts n’a pas de colonne status, relit sans ce filtre (l’existence d’une ligne = versé)', async () => {
+    results.provider_payouts = [
+      { data: null, error: { code: '42703', message: 'column provider_payouts.status does not exist' } },
+      { data: [{ period_start: '2026-09-01', period_end: '2026-09-15', net_amount: 80, currency_code: 'USD' }], error: null },
+    ];
+    const e = await require('./providerApi').getProviderEarnings('doc-1');
+    expect(e.paid).toEqual([{ currency: 'USD', amount: 80 }]);
+    expect(filters('provider_payouts', 'eq')).toEqual([['provider_id', 'doc-1']]);
+  });
+});

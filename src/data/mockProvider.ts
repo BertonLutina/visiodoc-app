@@ -131,6 +131,8 @@ export const dashboardOverview: DashboardOverview = {
   consultationsThisMonth: 38,
   consultationsTrend: '+12% vs mois préc.',
   netRevenue: 450000,
+  revenueCurrency: 'CDF',
+  earnings: { inProgress: [{ currency: 'CDF', amount: 450000 }], paid: [{ currency: 'CDF', amount: 1200000 }] },
   revenueSeries: [
     { label: 'mai', amount: 280000 },
     { label: 'juin', amount: 310000 },

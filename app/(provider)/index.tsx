@@ -27,7 +27,7 @@ import {
 } from '@/services/providerApi';
 import { buildAlerts, countdownLabel } from '@/services/dashboardMetrics';
 import { currentProvider } from '@/data/mockProvider';
-import { formatMoney, typeLabel } from '@/utils/format';
+import { formatDoctorFee, formatMoney, typeLabel } from '@/utils/format';
 import { translate } from '@/i18n';
 import type { ProviderConsultation } from '@/types/provider';
 import { useLanguage, useT } from '@/i18n';
@@ -268,7 +268,11 @@ export default function ProviderDashboard() {
                 hintTone="success"
                 onPress={() => router.push('/(provider)/consultations')}
               />
-              <Stat value={formatMoney(ov.netRevenue)} label={t('Revenu net')} hint={t('ce mois, après commission')} />
+              <Stat
+                value={formatDoctorFee(ov.netRevenue, ov.revenueCurrency) ?? formatMoney(ov.netRevenue)}
+                label={t('Revenus du mois')}
+                hint={t('consultations payées')}
+              />
               <Stat
                 value={reviews?.average != null ? reviews.average.toFixed(1) : '—'}
                 label={t('Note moyenne')}
@@ -315,7 +319,7 @@ export default function ProviderDashboard() {
 
             {/* Revenus 6 mois */}
             <View className="px-5 mb-5">
-              <SectionTitle>{t('Revenus nets · 6 mois')}</SectionTitle>
+              <SectionTitle>{t('Revenus · 6 mois')}</SectionTitle>
               <Card>
                 <View className="flex-row items-end justify-between" style={{ height: 110 }}>
                   {ov.revenueSeries.map((m, i) => (
@@ -333,10 +337,34 @@ export default function ProviderDashboard() {
                 </View>
                 {ov.revenueSeries.every((m) => m.amount === 0) && (
                   <Text className="font-sans text-xs text-muted mt-3">
-                    {t('Aucun revenu encaissé sur la période (consultations terminées et payées).')}
+                    {t('Aucun revenu encaissé sur la période (consultations payées).')}
                   </Text>
                 )}
               </Card>
+              {(ov.earnings.inProgress.length > 0 || ov.earnings.paid.length > 0) && (
+                <Card className="mt-3">
+                  <Text className="font-sans-semibold text-sm text-ink">{t('Pas encore versé')}</Text>
+                  {ov.earnings.inProgress.length === 0 ? (
+                    <Text className="font-sans text-xs text-muted mt-1">—</Text>
+                  ) : (
+                    ov.earnings.inProgress.map((e) => (
+                      <Text key={`ip-${e.currency ?? ''}`} className="font-serif-bold text-primary text-lg mt-1">
+                        {formatDoctorFee(e.amount, e.currency) ?? formatMoney(e.amount)}
+                      </Text>
+                    ))
+                  )}
+                  <Text className="font-sans-semibold text-sm text-ink mt-3">{t('Déjà versé')}</Text>
+                  {ov.earnings.paid.length === 0 ? (
+                    <Text className="font-sans text-xs text-muted mt-1">—</Text>
+                  ) : (
+                    ov.earnings.paid.map((e) => (
+                      <Text key={`pd-${e.currency ?? ''}`} className="font-serif-bold text-primary text-lg mt-1">
+                        {formatDoctorFee(e.amount, e.currency) ?? formatMoney(e.amount)}
+                      </Text>
+                    ))
+                  )}
+                </Card>
+              )}
             </View>
           </>
         )}
