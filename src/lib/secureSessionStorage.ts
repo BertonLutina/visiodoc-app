@@ -43,6 +43,9 @@ const metaKey = (key: string): string => `${escapeKey(key)}.__n`;
 const journalKey = (key: string): string => `${escapeKey(key)}.__j`;
 const chunkKey = (key: string, nonce: string, index: number): string => `${escapeKey(key)}.g${nonce}.__${index}`;
 
+/** Générations périmées suivies au maximum dans le journal (une valeur SecureStore ne dépasse pas ~2048 octets). */
+const MAX_STALE_GENERATIONS = 10;
+
 const newNonce = (): string => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 const useKeychain = (): boolean => Platform.OS !== 'web';
@@ -110,15 +113,27 @@ async function deleteGeneration(key: string, gen: Generation): Promise<unknown> 
   return firstError;
 }
 
+/**
+ * Borne le journal : conserve les `MAX_STALE_GENERATIONS` générations périmées les plus récentes ; pour les plus
+ * anciennes (écartées), une dernière tentative de suppression au mieux avant de les oublier.
+ */
+async function pruneStale(key: string, stale: Generation[]): Promise<Generation[]> {
+  if (stale.length <= MAX_STALE_GENERATIONS) return stale;
+  const dropped = stale.slice(0, stale.length - MAX_STALE_GENERATIONS);
+  for (const gen of dropped) await deleteGeneration(key, gen);
+  return stale.slice(-MAX_STALE_GENERATIONS);
+}
+
 async function writeKeychain(key: string, value: string): Promise<void> {
   const chunks = splitByBytes(value, CHUNK_BYTES);
   const nonce = newNonce();
   const previousMeta = await readMeta(key).catch(() => null);
   const previous = await readJournal(key);
   if (previousMeta && !previous.some((g) => g.nonce === previousMeta.nonce)) previous.push(previousMeta);
+  const tracked = await pruneStale(key, previous);
 
   // 1. Journal (ancien + nouveau) AVANT les fragments : aucun fragment n'est jamais introuvable pour un nettoyage.
-  await SecureStore.setItemAsync(journalKey(key), serializeJournal([...previous, { nonce, count: chunks.length }]), writeOptions());
+  await SecureStore.setItemAsync(journalKey(key), serializeJournal([...tracked, { nonce, count: chunks.length }]), writeOptions());
   // 2. Fragments de la nouvelle génération (invisibles pour les lecteurs tant que l'enregistrement ne pointe pas dessus).
   for (let i = 0; i < chunks.length; i += 1) {
     await SecureStore.setItemAsync(chunkKey(key, nonce, i), chunks[i], writeOptions());
@@ -128,11 +143,11 @@ async function writeKeychain(key: string, value: string): Promise<void> {
 
   // 4. Nettoyage au mieux des générations précédentes ; une panne ici ne remet pas en cause l'écriture.
   try {
-    let clean = true;
-    for (const gen of previous) if ((await deleteGeneration(key, gen)) !== null) clean = false;
+    const stillStale: Generation[] = [];
+    for (const gen of tracked) if ((await deleteGeneration(key, gen)) !== null) stillStale.push(gen);
     await SecureStore.setItemAsync(
       journalKey(key),
-      serializeJournal(clean ? [{ nonce, count: chunks.length }] : [...previous, { nonce, count: chunks.length }]),
+      serializeJournal([...(await pruneStale(key, stillStale)), { nonce, count: chunks.length }]),
       writeOptions(),
     );
   } catch {
@@ -161,62 +176,91 @@ async function removeKeychain(key: string): Promise<void> {
   const gens = await readJournal(key);
   if (meta && !gens.some((g) => g.nonce === meta.nonce)) gens.push(meta);
 
-  let firstError: unknown = null;
   // L'enregistrement d'abord : dès cet instant plus aucune lecture ne reconstitue la session, même si une
-  // suppression de fragment échoue ensuite. Le journal, supprimé en dernier, garde de quoi relancer le balayage.
+  // suppression de fragment échoue ensuite.
+  let metaError: unknown = null;
   try {
     await SecureStore.deleteItemAsync(metaKey(key));
   } catch (e) {
-    firstError ??= e;
+    metaError = e;
   }
-  for (const gen of gens) firstError ??= await deleteGeneration(key, gen);
-  if (firstError === null) {
+  // Toutes les générations sont tentées, quoi qu'il arrive (une erreur n'en dispense pas les suivantes).
+  let fragmentError: unknown = null;
+  for (const gen of gens) {
+    const e = await deleteGeneration(key, gen);
+    fragmentError ??= e;
+  }
+  // Le journal, supprimé en dernier, n'est retiré que si tout est parti : sinon il permet de relancer le balayage.
+  if (fragmentError === null) {
     try {
       await SecureStore.deleteItemAsync(journalKey(key));
     } catch (e) {
-      firstError = e;
+      fragmentError = e;
     }
   }
-  if (firstError !== null) throw firstError;
+  // Échec de l'enregistrement : la session reste lisible, on le signale. Une fois l'enregistrement supprimé, les
+  // restes de fragments (illisibles, tracés par le journal) ne doivent pas empêcher le SDK d'émettre SIGNED_OUT.
+  if (metaError !== null) throw metaError;
+}
+
+/** File d'attente par clé : lectures/écritures/suppressions d'une même clé s'exécutent l'une après l'autre. */
+const queues = new Map<string, Promise<unknown>>();
+function serialized<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const previous = queues.get(key) ?? Promise.resolve();
+  // `previous` est toujours « réglée » (jamais rejetée) : une opération en échec n'empoisonne pas la file.
+  const run = previous.then(operation);
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  queues.set(key, tail);
+  void tail.then(() => {
+    if (queues.get(key) === tail) queues.delete(key);
+  });
+  return run;
+}
+
+async function getItemUnsafe(key: string): Promise<string | null> {
+  if (!useKeychain()) return AsyncStorage.getItem(key);
+
+  const secure = await readKeychain(key);
+  if (secure !== null) return secure;
+
+  // Migration unique : session laissée dans AsyncStorage par une version précédente de l'app.
+  const legacy = await AsyncStorage.getItem(key);
+  if (legacy === null) return null;
+  try {
+    await writeKeychain(key, legacy);
+  } catch {
+    // Trousseau indisponible : on garde la session lisible (l'utilisateur reste connecté) et on
+    // laisse l'entrée AsyncStorage pour retenter la migration au prochain démarrage.
+    return legacy;
+  }
+  await AsyncStorage.removeItem(key);
+  return legacy;
+}
+
+async function setItemUnsafe(key: string, value: string): Promise<void> {
+  if (!useKeychain()) return AsyncStorage.setItem(key, value);
+
+  await writeKeychain(key, value);
+  // Plus aucune copie en clair : une éventuelle entrée héritée est supprimée.
+  await AsyncStorage.removeItem(key);
+}
+
+async function removeItemUnsafe(key: string): Promise<void> {
+  if (!useKeychain()) return AsyncStorage.removeItem(key);
+
+  try {
+    await removeKeychain(key);
+  } finally {
+    // Toujours, même si le trousseau a échoué : sinon la migration ressusciterait une session AsyncStorage.
+    await AsyncStorage.removeItem(key);
+  }
 }
 
 export const secureSessionStorage = {
-  async getItem(key: string): Promise<string | null> {
-    if (!useKeychain()) return AsyncStorage.getItem(key);
-
-    const secure = await readKeychain(key);
-    if (secure !== null) return secure;
-
-    // Migration unique : session laissée dans AsyncStorage par une version précédente de l'app.
-    const legacy = await AsyncStorage.getItem(key);
-    if (legacy === null) return null;
-    try {
-      await writeKeychain(key, legacy);
-    } catch {
-      // Trousseau indisponible : on garde la session lisible (l'utilisateur reste connecté) et on
-      // laisse l'entrée AsyncStorage pour retenter la migration au prochain démarrage.
-      return legacy;
-    }
-    await AsyncStorage.removeItem(key);
-    return legacy;
-  },
-
-  async setItem(key: string, value: string): Promise<void> {
-    if (!useKeychain()) return AsyncStorage.setItem(key, value);
-
-    await writeKeychain(key, value);
-    // Plus aucune copie en clair : une éventuelle entrée héritée est supprimée.
-    await AsyncStorage.removeItem(key);
-  },
-
-  async removeItem(key: string): Promise<void> {
-    if (!useKeychain()) return AsyncStorage.removeItem(key);
-
-    try {
-      await removeKeychain(key);
-    } finally {
-      // Toujours, même si le trousseau a échoué : sinon la migration ressusciterait une session AsyncStorage.
-      await AsyncStorage.removeItem(key);
-    }
-  },
+  getItem: (key: string): Promise<string | null> => serialized(key, () => getItemUnsafe(key)),
+  setItem: (key: string, value: string): Promise<void> => serialized(key, () => setItemUnsafe(key, value)),
+  removeItem: (key: string): Promise<void> => serialized(key, () => removeItemUnsafe(key)),
 };

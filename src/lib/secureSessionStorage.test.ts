@@ -354,7 +354,7 @@ describe('secureSessionStorage', () => {
       expect(secureMap.size).toBe(0);
     });
 
-    it('lets a retry finish the job after a delete failed midway, leaving no token fragment', async () => {
+    it('lets a retry finish the job after a fragment delete failed, leaving no token fragment', async () => {
       await secureSessionStorage.setItem(KEY, bigSession());
       let calls = 0;
       (SecureStore.deleteItemAsync as jest.Mock).mockImplementation(async (k: string) => {
@@ -363,14 +363,54 @@ describe('secureSessionStorage', () => {
         return impl.del(k);
       });
 
-      await expect(secureSessionStorage.removeItem(KEY)).rejects.toThrow('delete failed');
-      // Déjà illisible : la session n'est plus restaurable même si un fragment reste.
+      // La métadonnée est partie : la déconnexion aboutit (le SDK peut émettre SIGNED_OUT).
+      await expect(secureSessionStorage.removeItem(KEY)).resolves.toBeUndefined();
       expect(await secureSessionStorage.getItem(KEY)).toBeNull();
+      expect(secureMap.size).toBeGreaterThan(0); // un fragment + le journal restent pour le balayage suivant
 
       (SecureStore.deleteItemAsync as jest.Mock).mockImplementation(impl.del);
       await secureSessionStorage.removeItem(KEY);
 
       expect(secureMap.size).toBe(0);
+    });
+
+    it('still rejects when the META delete itself fails', async () => {
+      await secureSessionStorage.setItem(KEY, bigSession());
+      (SecureStore.deleteItemAsync as jest.Mock).mockImplementation(async (k: string) => {
+        if (k.endsWith('.__n')) throw new Error('meta delete failed');
+        return impl.del(k);
+      });
+
+      await expect(secureSessionStorage.removeItem(KEY)).rejects.toThrow('meta delete failed');
+    });
+
+    it('attempts every generation (the current one included) even after a delete failed', async () => {
+      const OLD = 'old-' + 'o'.repeat(4000);
+      const NEW = 'new-' + 'n'.repeat(4000);
+      await secureSessionStorage.setItem(KEY, OLD);
+      // Le nettoyage de l'ancienne génération échoue : le journal en garde deux.
+      let failing = true;
+      (SecureStore.deleteItemAsync as jest.Mock).mockImplementation(async (k: string) => {
+        if (failing) throw new Error('delete failed');
+        return impl.del(k);
+      });
+      await secureSessionStorage.setItem(KEY, NEW);
+      const generations = new Set(
+        [...secureMap.keys()].map((k) => /\.g([A-Za-z0-9]+)\.__\d+$/.exec(k)?.[1]).filter(Boolean),
+      );
+      expect(generations.size).toBe(2);
+
+      // Un seul fragment refuse de se supprimer ; tous les autres doivent partir.
+      const stuck = [...secureMap.keys()].find((k) => /\.__0$/.test(k)) as string;
+      failing = false;
+      (SecureStore.deleteItemAsync as jest.Mock).mockImplementation(async (k: string) => {
+        if (k === stuck) throw new Error('delete failed');
+        return impl.del(k);
+      });
+
+      await secureSessionStorage.removeItem(KEY);
+
+      expect([...secureMap.keys()].filter((k) => k !== `${stuck.split('.g')[0]}.__j`)).toEqual([stuck]);
     });
 
     it('sweeps the generation left behind by a failed write', async () => {
@@ -387,6 +427,95 @@ describe('secureSessionStorage', () => {
       await secureSessionStorage.removeItem(KEY);
 
       expect(secureMap.size).toBe(0);
+    });
+  });
+
+  describe('journal bound', () => {
+    const journalEntries = (): number => {
+      const raw = [...secureMap.entries()].find(([k]) => k.endsWith('.__j'))?.[1] ?? '';
+      return raw ? raw.split(',').length : 0;
+    };
+
+    it('stays small when cleanups keep failing, and never breaks a write', async () => {
+      (SecureStore.deleteItemAsync as jest.Mock).mockRejectedValue(new Error('delete failed'));
+      for (let i = 0; i < 40; i += 1) {
+        await expect(secureSessionStorage.setItem(KEY, `session-${i}-` + 'x'.repeat(3000))).resolves.toBeUndefined();
+      }
+      expect(journalEntries()).toBeLessThanOrEqual(11); // 10 générations périmées + la courante
+      expect(await secureSessionStorage.getItem(KEY)).toBe('session-39-' + 'x'.repeat(3000));
+      for (const v of secureMap.values()) expect(utf8Bytes(v)).toBeLessThanOrEqual(2048);
+    });
+
+    it('makes one last delete attempt on the generations it drops', async () => {
+      (SecureStore.deleteItemAsync as jest.Mock).mockRejectedValue(new Error('delete failed'));
+      for (let i = 0; i < 14; i += 1) await secureSessionStorage.setItem(KEY, `v${i}`);
+      // Le trousseau redevient disponible : les prochaines écritures balayent ce qui est encore suivi.
+      (SecureStore.deleteItemAsync as jest.Mock).mockImplementation(impl.del);
+      await secureSessionStorage.setItem(KEY, 'final');
+      expect(journalEntries()).toBe(1);
+      expect(await secureSessionStorage.getItem(KEY)).toBe('final');
+    });
+  });
+
+  describe('per-key serialisation', () => {
+    it('a concurrent setItem and getItem never returns null when an old value existed', async () => {
+      const OLD = 'old-' + 'o'.repeat(4000);
+      await secureSessionStorage.setItem(KEY, OLD);
+      for (let round = 0; round < 15; round += 1) {
+        const NEW = `new-${round}-` + 'n'.repeat(4000);
+        const [, ...reads] = await Promise.all([
+          secureSessionStorage.setItem(KEY, NEW),
+          secureSessionStorage.getItem(KEY),
+          secureSessionStorage.getItem(KEY),
+          secureSessionStorage.getItem(KEY),
+        ]);
+        for (const r of reads) expect(r).not.toBeNull();
+      }
+    });
+
+    it('removeItem after overlapping setItems leaves no keys', async () => {
+      await Promise.all([
+        secureSessionStorage.setItem(KEY, 'a' + 'x'.repeat(4000)),
+        secureSessionStorage.setItem(KEY, 'b' + 'y'.repeat(4000)),
+        secureSessionStorage.setItem(KEY, 'c' + 'z'.repeat(4000)),
+      ]);
+      await secureSessionStorage.removeItem(KEY);
+      expect(secureMap.size).toBe(0);
+    });
+
+    it('keeps operations in call order for the same key', async () => {
+      const results = await Promise.all([
+        secureSessionStorage.setItem(KEY, 'first'),
+        secureSessionStorage.setItem(KEY, 'second'),
+        secureSessionStorage.getItem(KEY),
+        secureSessionStorage.removeItem(KEY),
+        secureSessionStorage.getItem(KEY),
+      ]);
+      expect(results[2]).toBe('second');
+      expect(results[4]).toBeNull();
+    });
+
+    it('a rejected operation does not poison the chain', async () => {
+      (SecureStore.setItemAsync as jest.Mock).mockRejectedValueOnce(new Error('boom'));
+      const failed = secureSessionStorage.setItem(KEY, 'lost');
+      const next = secureSessionStorage.setItem(KEY, 'kept');
+      await expect(failed).rejects.toThrow('boom');
+      await expect(next).resolves.toBeUndefined();
+      expect(await secureSessionStorage.getItem(KEY)).toBe('kept');
+    });
+
+    it('does not serialise different keys against each other', async () => {
+      let release: () => void = () => {};
+      const gate = new Promise<void>((r) => (release = r));
+      (SecureStore.getItemAsync as jest.Mock).mockImplementationOnce(async (k: string) => {
+        await gate;
+        return impl.get(k);
+      });
+      const slow = secureSessionStorage.getItem('slow-key');
+      await secureSessionStorage.setItem('other-key', 'v');
+      expect(await secureSessionStorage.getItem('other-key')).toBe('v');
+      release();
+      await slow;
     });
   });
 
