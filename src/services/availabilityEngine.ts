@@ -3,7 +3,14 @@
  * Convention de jour identique à src/utils/availability.ts : 0=Lundi … 6=Dimanche.
  */
 
-export type WeeklyRule = { dayOfWeek: number; startTime: string; endTime: string };
+export type WeeklyRule = {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  /** Bornes inclusives `YYYY-MM-DD`. Absentes = la règle n'a pas de période. */
+  validFrom?: string | null;
+  validTo?: string | null;
+};
 
 export type OverrideRule = {
   date: string; // 'YYYY-MM-DD'
@@ -70,8 +77,15 @@ export function effectiveRangesForDate(
   }
   const model = jsDayToModel(date.getDay());
   return weeklyRules
-    .filter((r) => r.dayOfWeek === model)
+    .filter((r) => r.dayOfWeek === model && ruleCoversDate(r, key))
     .map((r) => ({ startTime: r.startTime, endTime: r.endTime }));
+}
+
+/** Une règle sans bornes couvre toutes les dates. `validFrom` / `validTo` sont inclusives. */
+function ruleCoversDate(rule: WeeklyRule, key: string): boolean {
+  if (rule.validFrom && key < rule.validFrom) return false;
+  if (rule.validTo && key > rule.validTo) return false;
+  return true;
 }
 
 /**
@@ -93,30 +107,22 @@ export function generateSlots(
   todayStart.setHours(0, 0, 0, 0);
   if (dayStart < todayStart) return [];
 
-  const horizonEnd = new Date(todayStart);
-  horizonEnd.setDate(horizonEnd.getDate() + settings.bookingHorizonDays);
-  if (dayStart > horizonEnd) return [];
-
-  const minStart = new Date(now.getTime() + settings.minimumNoticeMinutes * 60000);
+  // 0 min = créneaux collés : on avance de la durée du rendez-vous, jamais de 0 (boucle infinie).
+  const step = settings.slotIntervalMinutes > 0 ? settings.slotIntervalMinutes : settings.appointmentDurationMinutes;
+  if (step <= 0 || settings.appointmentDurationMinutes <= 0) return [];
 
   const slots: Slot[] = [];
   for (const range of ranges) {
     const rangeStartMin = toMinutes(range.startTime);
     const rangeEndMin = toMinutes(range.endTime);
-    for (
-      let m = rangeStartMin;
-      m + settings.appointmentDurationMinutes <= rangeEndMin;
-      m += settings.slotIntervalMinutes
-    ) {
+    for (let m = rangeStartMin; m + settings.appointmentDurationMinutes <= rangeEndMin; m += step) {
       const start = new Date(dayStart);
       start.setMinutes(m);
       const end = new Date(start.getTime() + settings.appointmentDurationMinutes * 60000);
 
-      if (start < minStart) continue;
+      if (start < now) continue;
 
-      const bufferedStart = new Date(start.getTime() - settings.bufferBeforeMinutes * 60000);
-      const bufferedEnd = new Date(end.getTime() + settings.bufferAfterMinutes * 60000);
-      const conflicts = bookedRanges.some((b) => bufferedStart < b.end && bufferedEnd > b.start);
+      const conflicts = bookedRanges.some((b) => start < b.end && end > b.start);
 
       slots.push({ start, end, available: !conflicts });
     }

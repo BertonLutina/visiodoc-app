@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Video, MessageCircle, Phone, CalendarX } from 'lucide-react-native';
@@ -12,7 +12,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { bookConsultation, getDoctor, PaymentInitiationError, SlotUnavailableError } from '@/services/patientApi';
 import { getDaySlots, getMonthAvailability } from '@/services/availabilityApi';
-import { doctors } from '@/data/mock';
 import { appLocale } from '@/i18n';
 import type { ConsultationType } from '@/types';
 import { useT } from '@/i18n';
@@ -30,8 +29,12 @@ export default function DoctorProfile() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const country = getCountry(user?.countryCode ?? 'CD');
-  const { data: fetched } = useAsync(() => getDoctor(id), [id]);
-  const doctor = fetched ?? doctors.find((d) => d.id === id) ?? doctors[0];
+  const {
+    data: doctor,
+    loading: doctorLoading,
+    error: doctorError,
+    reload: reloadDoctor,
+  } = useAsync(() => (id ? getDoctor(id) : Promise.resolve(null)), [id]);
 
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -46,7 +49,10 @@ export default function DoctorProfile() {
     loading: monthLoading,
     error: monthError,
     reload: reloadMonth,
-  } = useAsync(() => getMonthAvailability(doctor.id, year, month), [doctor.id, year, month]);
+  } = useAsync(
+    () => (doctor ? getMonthAvailability(doctor.id, year, month) : Promise.resolve({})),
+    [doctor?.id, year, month],
+  );
 
   const {
     data: daySlots,
@@ -54,8 +60,11 @@ export default function DoctorProfile() {
     error: dayError,
     reload: reloadDay,
   } = useAsync(
-    () => (selectedDate ? getDaySlots(doctor.id, new Date(selectedDate + 'T00:00:00')) : Promise.resolve([])),
-    [doctor.id, selectedDate],
+    () =>
+      doctor && selectedDate
+        ? getDaySlots(doctor.id, new Date(selectedDate + 'T00:00:00'))
+        : Promise.resolve([]),
+    [doctor?.id, selectedDate],
   );
 
   const maxDate = new Date(today);
@@ -64,7 +73,7 @@ export default function DoctorProfile() {
   const activeSlot = (daySlots ?? []).find((s) => timeLabel(s.start) === time) ?? null;
 
   const onBook = async () => {
-    if (!activeSlot) return;
+    if (!doctor || !activeSlot) return;
     setBooking(true);
     try {
       const { paymentIntent } = await bookConsultation({
@@ -99,6 +108,31 @@ export default function DoctorProfile() {
       setBooking(false);
     }
   };
+
+  if (doctorLoading || !doctor) {
+    return (
+      <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
+        <View className="flex-row items-center px-5 pt-2 pb-2">
+          <Pressable onPress={() => router.back()} className="p-1 mr-2">
+            <ChevronLeft color={colors.ink} size={26} />
+          </Pressable>
+          <Text className="font-sans-bold text-lg text-ink">{t('Profil médecin')}</Text>
+        </View>
+        <View className="flex-1 items-center justify-center px-8">
+          {doctorLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <>
+              <Text className="font-sans text-muted text-center mb-4">
+                {doctorError ?? t('Médecin introuvable.')}
+              </Text>
+              <Button label={t('Réessayer')} variant="outline" onPress={reloadDoctor} />
+            </>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>

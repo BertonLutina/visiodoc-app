@@ -7,8 +7,10 @@ import { Button, Field, ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { authErrorMessage } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
+import { useT } from '@/i18n';
 
 export default function ForgotPassword() {
+  const t = useT();
   const { sendPasswordReset } = useAuth();
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
@@ -36,7 +38,7 @@ export default function ForgotPassword() {
         <Pressable onPress={() => router.back()} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">Mot de passe oublié</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Mot de passe oublié')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 24 }} keyboardShouldPersistTaps="handled">
@@ -44,20 +46,20 @@ export default function ForgotPassword() {
           <View className="w-14 h-14 rounded-3xl bg-primary-50 items-center justify-center mb-4">
             {sent ? <MailCheck color={colors.primary} size={28} /> : <KeyRound color={colors.primary} size={28} />}
           </View>
-          <ScreenTitle center>{sent ? 'Email envoyé' : 'Réinitialiser'}</ScreenTitle>
+          <ScreenTitle center>{sent ? t('Email envoyé') : t('Réinitialiser')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
             {sent
-              ? `Si un compte existe pour ${email}, vous recevrez un lien pour choisir un nouveau mot de passe.`
-              : 'Entrez votre email, on vous envoie un lien de réinitialisation.'}
+              ? t('Si un compte existe pour {email}, vous recevrez un lien pour choisir un nouveau mot de passe.', { email })
+              : t('Entrez votre email, on vous envoie un lien de réinitialisation.')}
           </Text>
         </View>
 
         {sent ? (
-          <Button label="Retour à la connexion" onPress={() => router.back()} />
+          <Button label={t('Retour à la connexion')} onPress={() => router.back()} />
         ) : (
           <>
             <Field
-              label="Adresse email"
+              label={t('Adresse email')}
               placeholder="marie.konate@gmail.com"
               autoCapitalize="none"
               keyboardType="email-address"
@@ -70,7 +72,7 @@ export default function ForgotPassword() {
                 <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
               </View>
             ) : null}
-            <Button label="Envoyer le lien" loading={sending} disabled={!emailValid} onPress={onSend} />
+            <Button label={t('Envoyer le lien')} loading={sending} disabled={!emailValid} onPress={onSend} />
           </>
         )}
       </ScrollView>

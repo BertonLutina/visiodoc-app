@@ -20,6 +20,7 @@ import {
   Mulish_800ExtraBold,
 } from '@expo-google-fonts/mulish';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { LanguageProvider } from '@/i18n';
 import { BiometricLock } from '@/components/BiometricLock';
 import { useBiometricOffer } from '@/hooks/useBiometricOffer';
 import { colors } from '@/theme/colors';
@@ -42,6 +43,7 @@ function AppShell() {
       <Stack.Screen name="records" />
       <Stack.Screen name="provider/availability" />
       <Stack.Screen name="provider/fee" />
+      <Stack.Screen name="provider/specializations" />
       <Stack.Screen name="provider/subscription" />
       <Stack.Screen name="call/[room]" options={{ presentation: 'fullScreenModal' }} />
     </Stack>
@@ -86,8 +88,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="dark" />
-          <AppShell />
+          <LanguageProvider>
+            <StatusBar style="dark" />
+            <AppShell />
+          </LanguageProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Keyboard, Pressable, Text, TextInput, View } from 'react-native';
 import { Check, Plus } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
+import { useT } from '@/i18n';
 
 // Normalise : sans accents, minuscule, sans espaces superflus
 const norm = (s: string) =>
@@ -26,6 +27,7 @@ export function Autocomplete({
   limit = 8,
 }: Props) {
   const [focused, setFocused] = useState(false);
+  const t = useT();
 
   const q = norm(value);
   const exactMatch = useMemo(() => options.some((o) => norm(o) === q), [options, q]);
@@ -77,7 +79,7 @@ export function Autocomplete({
             >
               <Plus color={colors.primary} size={16} />
               <Text className="font-sans-semibold text-primary ml-2" numberOfLines={1}>
-                Utiliser « {value} »
+                {t('Utiliser « {value} »', { value })}
               </Text>
             </Pressable>
           ) : null}

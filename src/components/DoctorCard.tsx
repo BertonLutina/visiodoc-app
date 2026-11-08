@@ -3,29 +3,41 @@ import { Pressable, Text, View } from 'react-native';
 import { Avatar } from '@/components/ui';
 import { formatMoney } from '@/utils/format';
 import { colors } from '@/theme/colors';
+import type { CountryConfig } from '@/config/countries';
 import type { Doctor } from '@/types';
+import { useT } from '@/i18n';
 
-export function DoctorCard({ doctor, onPress }: { doctor: Doctor; onPress?: () => void }) {
+export function DoctorCard({
+  doctor,
+  onPress,
+  country,
+}: {
+  doctor: Doctor;
+  onPress?: () => void;
+  /** Pays dont la devise doit être utilisée pour afficher le tarif (défaut : pays actif de l'app). */
+  country?: CountryConfig;
+}) {
+  const t = useT();
   return (
     <Pressable
       onPress={onPress}
       className="flex-row items-center bg-surface rounded-3xl border border-line p-3.5 mb-3"
     >
-      <Avatar initials={doctor.initials} />
+      <Avatar initials={doctor.initials} uri={doctor.avatarUrl} />
       <View className="flex-1 ml-3.5">
         <Text className="font-sans-bold text-base text-ink">
           Dr. {doctor.firstName} {doctor.lastName}
         </Text>
         <Text className="font-sans text-sm text-muted mt-0.5">
-          {doctor.specialty} · {doctor.city}
+          {t(doctor.specialty)} · {doctor.city}
         </Text>
         <Text className="text-xs mt-1 font-sans-semibold" style={{ color: colors.star }}>
           ★ {doctor.rating.toFixed(1)}
-          <Text className="font-sans text-muted"> · {doctor.availabilityLabel}</Text>
+          <Text className="font-sans text-muted"> · {t(doctor.availabilityLabel)}</Text>
         </Text>
       </View>
       <View className="items-end">
-        <Text className="font-serif-bold text-base text-primary">{formatMoney(doctor.fee)}</Text>
+        <Text className="font-serif-bold text-base text-primary">{formatMoney(doctor.fee, country)}</Text>
       </View>
     </Pressable>
   );

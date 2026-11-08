@@ -62,6 +62,10 @@ export interface ProviderConsultation {
   type: ConsultationType;
   durationMin: number;
   status: ConsultationStatus;
+  /** Statut brut de la table `consultations` (ex: `no_show`, absent du vocabulaire affiché). */
+  rawStatus?: string;
+  /** ISO de `scheduled_at`, pour les comptes à rebours. */
+  scheduledAt?: string;
   roomId?: string;
 }
 
@@ -72,6 +76,9 @@ export interface AvailabilitySlot {
   endTime: string;
   slotDuration: number; // min
   count: number; // nb créneaux
+  /** Période inclusive pendant laquelle la règle hebdomadaire est proposée aux patients. */
+  validFrom?: string | null;
+  validTo?: string | null;
 }
 
 export interface AvailabilityException {
@@ -96,4 +103,39 @@ export interface ProviderReview {
   rating: number;
   comment: string;
   date: string;
+}
+
+export interface DashboardAlert {
+  id: string;
+  tone: 'info' | 'warning' | 'danger';
+  message: string;
+  href: string;
+}
+
+export interface DashboardOverview {
+  patientsTotal: number;
+  patientsNew: number;
+  consultationsThisMonth: number;
+  consultationsTrend: string;
+  netRevenue: number;
+  revenueSeries: { label: string; amount: number }[];
+  /** % sur les 90 derniers jours, `null` s'il n'y a aucun rendez-vous passé. */
+  cancellationRate: number | null;
+  noShowRate: number | null;
+  weekAgenda: { date: string; label: string; dayNumber: number; count: number; isToday: boolean }[];
+  weekBooked: number;
+  weekCapacity: number;
+  /** `null` quand aucune disponibilité n'est configurée. */
+  fillRate: number | null;
+  patientsToRecall: number;
+  pendingPayment: number;
+  next: ProviderConsultation | null;
+}
+
+export interface ReviewSummary {
+  average: number | null;
+  count: number;
+  /** Nombre d'avis par note, index 0 = 1 étoile … index 4 = 5 étoiles. */
+  distribution: number[];
+  recent: ProviderReview[];
 }

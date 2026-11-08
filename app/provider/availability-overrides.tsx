@@ -18,11 +18,14 @@ import {
   type OverrideInput,
 } from '@/services/providerApi';
 import { TIME_OPTIONS, hasOverlappingRanges, toMinutes } from '@/utils/availability';
+import { appLocale } from '@/i18n';
 import type { DayStatus } from '@/services/availabilityEngine';
+import { useT } from '@/i18n';
 
 type Range = { start: string; end: string };
 
 export default function AvailabilityOverrides() {
+  const t = useT();
   const { user } = useAuth();
   const uid = user?.id ?? currentProvider.id;
   const today = new Date();
@@ -44,6 +47,11 @@ export default function AvailabilityOverrides() {
     }
     return m;
   }, [overrides]);
+
+  const configuredDates = useMemo(
+    () => new Set((overrides ?? []).map((o) => o.date)),
+    [overrides],
+  );
 
   const maxDate = useMemo(() => {
     const d = new Date();
@@ -83,7 +91,7 @@ export default function AvailabilityOverrides() {
   const onSave = async () => {
     if (!selectedDate) return;
     if (!unavailableAllDay && hasOverlappingRanges(ranges)) {
-      Alert.alert('Plages qui se chevauchent', "Corrigez les horaires : deux plages ne peuvent pas se chevaucher.");
+      Alert.alert(t('Plages qui se chevauchent'), t('Corrigez les horaires : deux plages ne peuvent pas se chevaucher.'));
       return;
     }
     setSaving(true);
@@ -97,7 +105,7 @@ export default function AvailabilityOverrides() {
       reload();
       setSelectedDate(null);
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message ?? "Impossible d'enregistrer cette date.");
+      Alert.alert(t('Erreur'), e?.message ?? t("Impossible d'enregistrer cette date."));
     } finally {
       setSaving(false);
     }
@@ -111,7 +119,7 @@ export default function AvailabilityOverrides() {
       reload();
       setSelectedDate(null);
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message ?? 'Impossible de restaurer cette date.');
+      Alert.alert(t('Erreur'), e?.message ?? t('Impossible de restaurer cette date.'));
     } finally {
       setSaving(false);
     }
@@ -125,23 +133,22 @@ export default function AvailabilityOverrides() {
         <Pressable onPress={() => router.back()} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">Dates spécifiques</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Dates spécifiques')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 32 }}>
         <AvailabilityTabs active="overrides" />
 
         <Text className="font-sans text-sm text-muted mb-5 leading-5">
-          Choisissez une date pour la marquer indisponible ou lui donner des horaires différents
-          de votre planning habituel.
+          {t('Choisissez une date pour la marquer indisponible ou lui donner des horaires différents de votre planning habituel.')}
         </Text>
 
         {loadError ? (
           <View className="bg-sand rounded-2xl px-4 py-4 items-center mb-4">
             <Text className="font-sans-medium text-sm text-clay text-center mb-3">
-              Impossible de charger vos dates spécifiques. {loadError}
+              {t('Impossible de charger vos dates spécifiques.')} {loadError}
             </Text>
-            <Button label="Réessayer" variant="outline" onPress={reload} />
+            <Button label={t('Réessayer')} variant="outline" onPress={reload} />
           </View>
         ) : null}
 
@@ -159,12 +166,21 @@ export default function AvailabilityOverrides() {
           maxDate={maxDate}
           loading={loading}
           alwaysSelectable
+          configuredDates={configuredDates}
         />
+
+        <View className="flex-row items-center mt-2 mb-1">
+          <View
+            style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: colors.lavender }}
+            className="mr-2"
+          />
+          <Text className="font-sans text-xs text-muted">{t('Date déjà configurée (horaires ou indisponibilité)')}</Text>
+        </View>
 
         {selectedDate ? (
           <Card className="mt-5">
             <Text className="font-sans-bold text-ink text-base mb-3">
-              {new Date(selectedDate + 'T00:00:00').toLocaleDateString('fr-FR', {
+              {new Date(selectedDate + 'T00:00:00').toLocaleDateString(appLocale(), {
                 weekday: 'long',
                 day: 'numeric',
                 month: 'long',
@@ -172,7 +188,7 @@ export default function AvailabilityOverrides() {
             </Text>
 
             <View className="flex-row items-center justify-between mb-3">
-              <Text className="font-sans-medium text-ink">Indisponible toute la journée</Text>
+              <Text className="font-sans-medium text-ink">{t('Indisponible toute la journée')}</Text>
               <Switch
                 value={unavailableAllDay}
                 onValueChange={setUnavailableAllDay}
@@ -192,7 +208,7 @@ export default function AvailabilityOverrides() {
                       <Clock color={colors.muted} size={15} />
                       <Text className="font-sans-bold text-ink ml-2">{r.start}</Text>
                     </Pressable>
-                    <Text className="font-sans text-muted mx-3">à</Text>
+                    <Text className="font-sans text-muted mx-3">{t('à')}</Text>
                     <Pressable
                       onPress={() => setPicking({ range: ri, which: 'end' })}
                       className="flex-1 flex-row items-center justify-center bg-bg rounded-2xl py-3 border border-line"
@@ -209,14 +225,14 @@ export default function AvailabilityOverrides() {
                 ))}
                 <Pressable onPress={addRange} className="flex-row items-center mt-1 mb-1">
                   <Plus color={colors.accent} size={16} />
-                  <Text className="font-sans-bold text-accent text-sm ml-1">Ajouter une plage</Text>
+                  <Text className="font-sans-bold text-accent text-sm ml-1">{t('Ajouter une plage')}</Text>
                 </Pressable>
               </View>
             ) : null}
 
-            <Button label="Enregistrer" onPress={onSave} loading={saving} className="mt-3" />
+            <Button label={t('Enregistrer')} onPress={onSave} loading={saving} className="mt-3" />
             {hasExistingOverride ? (
-              <Button label="Restaurer l'horaire habituel" variant="outline" onPress={onRestore} loading={saving} className="mt-2" />
+              <Button label={t("Restaurer l'horaire habituel")} variant="outline" onPress={onRestore} loading={saving} className="mt-2" />
             ) : null}
           </Card>
         ) : null}
@@ -227,26 +243,26 @@ export default function AvailabilityOverrides() {
           <Pressable className="bg-bg rounded-t-3xl" style={{ maxHeight: '70%' }} onPress={() => {}}>
             <View className="flex-row items-center justify-between px-5 pt-4 pb-2">
               <Text className="font-serif-bold text-xl text-ink">
-                {picking?.which === 'start' ? 'Heure de début' : 'Heure de fin'}
+                {picking?.which === 'start' ? t('Heure de début') : t('Heure de fin')}
               </Text>
               <Pressable onPress={() => setPicking(null)} hitSlop={10} className="p-1">
                 <X color={colors.ink} size={22} />
               </Pressable>
             </View>
             <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 28 }}>
-              {TIME_OPTIONS.filter((t) => {
+              {TIME_OPTIONS.filter((opt) => {
                 if (!picking) return true;
-                if (picking.which === 'end') return toMinutes(t) > toMinutes(ranges[picking.range].start);
+                if (picking.which === 'end') return toMinutes(opt) > toMinutes(ranges[picking.range].start);
                 return true;
-              }).map((t) => {
-                const active = picking && t === (picking.which === 'start' ? ranges[picking.range].start : ranges[picking.range].end);
+              }).map((opt) => {
+                const active = picking && opt === (picking.which === 'start' ? ranges[picking.range].start : ranges[picking.range].end);
                 return (
                   <Pressable
-                    key={t}
-                    onPress={() => onPickTime(t)}
+                    key={opt}
+                    onPress={() => onPickTime(opt)}
                     className={`py-3.5 px-4 rounded-2xl mb-1.5 ${active ? 'bg-accent' : 'bg-surface border border-line'}`}
                   >
-                    <Text className={`font-sans-bold text-center ${active ? 'text-white' : 'text-ink'}`}>{t}</Text>
+                    <Text className={`font-sans-bold text-center ${active ? 'text-white' : 'text-ink'}`}>{opt}</Text>
                   </Pressable>
                 );
               })}

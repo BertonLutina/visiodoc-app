@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { useT } from '@/i18n';
 
 const TABS = [
   { key: 'weekly', label: 'Hebdomadaire', href: '/provider/availability' },
@@ -9,6 +10,7 @@ const TABS = [
 ] as const;
 
 export function AvailabilityTabs({ active }: { active: (typeof TABS)[number]['key'] }) {
+  const translate = useT();
   return (
     <View className="flex-row bg-surface border border-line rounded-2xl p-1 mb-5">
       {TABS.map((t) => {
@@ -21,7 +23,7 @@ export function AvailabilityTabs({ active }: { active: (typeof TABS)[number]['ke
             }}
             className={`flex-1 items-center py-2.5 rounded-xl ${on ? 'bg-accent' : ''}`}
           >
-            <Text className={`font-sans-bold text-xs ${on ? 'text-white' : 'text-muted'}`}>{t.label}</Text>
+            <Text className={`font-sans-bold text-xs ${on ? 'text-white' : 'text-muted'}`}>{translate(t.label)}</Text>
           </Pressable>
         );
       })}

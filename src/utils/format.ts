@@ -1,11 +1,12 @@
-import type { ConsultationType } from '@/types';
+import type { ConsultationStatus, ConsultationType } from '@/types';
 import { activeCountry, type CountryConfig } from '@/config/countries';
+import { appLocale, translate } from '@/i18n/core';
 
 /** Montant dans la devise locale, ex: "25 000 FC". */
 export function formatMoney(amount: number, country: CountryConfig = activeCountry): string {
   const { symbol, position } = country.currency;
   const sign = amount < 0 ? '-' : '';
-  const abs = Math.abs(amount).toLocaleString('fr-FR');
+  const abs = Math.abs(amount).toLocaleString(appLocale());
   return position === 'prefix' ? `${sign}${symbol}${abs}` : `${sign}${abs} ${symbol}`;
 }
 
@@ -21,14 +22,31 @@ export function formatMoneyDual(amount: number, country: CountryConfig = activeC
   return `${formatMoney(amount, country)} · ${formatUsd(amount, country)}`;
 }
 
+/** La table `consultations` utilise des statuts DB (`pending_payment`, `scheduled`, ...)
+ *  distincts du vocabulaire `ConsultationStatus` affiché côté app. */
+export function normalizeConsultationStatus(status: string): ConsultationStatus {
+  switch (status) {
+    case 'pending_payment':
+      return 'pending';
+    case 'scheduled':
+      return 'confirmed';
+    case 'in_progress':
+    case 'completed':
+    case 'cancelled':
+      return status;
+    default:
+      return 'pending';
+  }
+}
+
 export function typeLabel(type: ConsultationType): string {
   switch (type) {
     case 'video':
-      return 'Vidéo';
+      return translate('Vidéo');
     case 'chat':
-      return 'Chat';
+      return translate('Chat');
     case 'phone':
-      return 'Téléphone';
+      return translate('Téléphone');
   }
 }
 

@@ -4,9 +4,7 @@ import type {
   MedicalRecord,
   TimeSlot,
   User,
-  Wallet,
 } from '@/types';
-import { activeCountry } from '@/config/countries';
 
 export const currentPatient: User = {
   id: 'patient-1',
@@ -140,18 +138,6 @@ export const pastConsultations: Consultation[] = [
     status: 'completed',
   },
 ];
-
-export const wallet: Wallet = {
-  balance: 47500,
-  currency: activeCountry.currency.symbol,
-  countryLabel: activeCountry.name,
-  aiCreditsLeft: 8,
-  transactions: [
-    { id: 't1', label: 'Recharge M-Pesa', date: '15 juin 2026', amount: 25000, method: 'M-Pesa' },
-    { id: 't2', label: 'Consult. Dr. Diallo', date: '10 juin 2026', amount: -15000 },
-    { id: 't3', label: 'Recharge Airtel Money', date: '2 juin 2026', amount: 50000, method: 'Airtel Money' },
-  ],
-};
 
 export const medicalRecords: MedicalRecord[] = [
   { id: 'r1', patientId: 'pat-1', doctorId: 'doc-1', kind: 'prescription', title: 'Paracétamol 1g — 3x/jour · 7 jours', status: 'active', author: 'Dr. Amara Diallo', date: '10 juin 2026', attachments: [], metadata: { medication_name: 'Paracétamol', dosage: '1g', frequency: '3x/jour' } },

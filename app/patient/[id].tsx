@@ -12,8 +12,11 @@ import { currentProvider } from '@/data/mockProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { RECORD_KIND_META, RECORD_KINDS } from '@/services/medicalRecordTaxonomy';
 import type { MedicalRecordKind } from '@/types';
+import { useLanguage, useT } from '@/i18n';
 
 export default function PatientProfile() {
+  const t = useT();
+  const { code: lang } = useLanguage();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const doctorId = user?.id ?? currentProvider.id;
@@ -26,11 +29,11 @@ export default function PatientProfile() {
   const { data: patient, error: patientError, reload: reloadPatient } = useAsync(() => getPatient(id), [id]);
   const { data: records, error: recordsError, reload: reloadRecords } = useAsync(
     () => getMedicalRecords(id),
-    [id],
+    [id, lang],
   );
   const { data: consultations, error: consultationsError } = useAsync(
     () => getPatientConsultationHistory(doctorId, id),
-    [doctorId, id],
+    [doctorId, id, lang],
   );
 
   useFocusEffect(
@@ -63,14 +66,14 @@ export default function PatientProfile() {
           <Pressable onPress={() => router.back()} className="p-1 mr-2">
             <ChevronLeft color={colors.ink} size={26} />
           </Pressable>
-          <Text className="font-sans-bold text-lg text-ink">Fiche patient</Text>
+          <Text className="font-sans-bold text-lg text-ink">{t('Fiche patient')}</Text>
         </View>
         <Pressable
           onPress={() => router.push(`/patient/record-form?patientId=${id}`)}
           className="flex-row items-center bg-primary px-3.5 py-2 rounded-2xl"
         >
           <Plus color={colors.white} size={16} />
-          <Text className="font-sans-bold text-white text-sm ml-1">Ajouter</Text>
+          <Text className="font-sans-bold text-white text-sm ml-1">{t('Ajouter')}</Text>
         </Pressable>
       </View>
 
@@ -78,7 +81,7 @@ export default function PatientProfile() {
         {patientError ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-4">
             <Text className="font-sans-semibold text-ink text-center">
-              Erreur de chargement de la fiche patient. Réessayez.
+              {t('Erreur de chargement de la fiche patient. Réessayez.')}
             </Text>
           </View>
         ) : null}
@@ -86,23 +89,23 @@ export default function PatientProfile() {
         <View className="items-center mb-6">
           <Avatar initials={patient?.initials ?? '?'} size={80} tone="light" />
           <Text className="font-serif-bold text-2xl text-ink mt-3">
-            {patient ? `${patient.firstName} ${patient.lastName}` : 'Patient'}
+            {patient ? `${patient.firstName} ${patient.lastName}` : t('Patient')}
           </Text>
           {patient && (
             <Text className="font-sans text-sm text-muted mt-0.5">
-              {patient.age !== null ? `${patient.age} ans` : 'Âge inconnu'}
+              {patient.age !== null ? `${patient.age} ${t('ans')}` : t('Âge inconnu')}
               {patient.gender ? ` · ${patient.gender}` : ''}
               {patient.bloodType ? ` · ${patient.bloodType}` : ''}
             </Text>
           )}
           {patient?.allergiesSummary ? (
             <View className="mt-2 bg-red-50 px-3 py-1.5 rounded-full">
-              <Text className="font-sans-bold text-xs text-danger">⚠ Allergies : {patient.allergiesSummary}</Text>
+              <Text className="font-sans-bold text-xs text-danger">{t('⚠ Allergies :')} {patient.allergiesSummary}</Text>
             </View>
           ) : null}
           {patient?.emergencyContactName ? (
             <View className="mt-3 items-center">
-              <Text className="font-sans text-xs text-muted">Contact d'urgence</Text>
+              <Text className="font-sans text-xs text-muted">{t("Contact d'urgence")}</Text>
               <Text className="font-sans-semibold text-sm text-ink mt-0.5">
                 {patient.emergencyContactName}
                 {patient.emergencyContactPhone ? ` · ${patient.emergencyContactPhone}` : ''}
@@ -111,7 +114,7 @@ export default function PatientProfile() {
           ) : null}
         </View>
 
-        <SectionTitle>Historique médical</SectionTitle>
+        <SectionTitle>{t('Historique médical')}</SectionTitle>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
           {kindFilters.map((f) => {
             const on = f.key === activeFilter;
@@ -121,24 +124,24 @@ export default function PatientProfile() {
                 onPress={() => setActiveFilter(f.key)}
                 className={`px-4 py-2 rounded-full mr-2 ${on ? 'bg-primary' : 'bg-surface border border-line'}`}
               >
-                <Text className={`text-sm font-sans-semibold ${on ? 'text-white' : 'text-muted'}`}>{f.key}</Text>
+                <Text className={`text-sm font-sans-semibold ${on ? 'text-white' : 'text-muted'}`}>{t(f.key)}</Text>
               </Pressable>
             );
           })}
         </ScrollView>
         <Pressable onPress={() => setShowArchived((s) => !s)} className="self-start mb-3">
           <Text className="font-sans-semibold text-xs text-muted underline">
-            {showArchived ? 'Masquer les entrées archivées' : 'Afficher les entrées archivées'}
+            {showArchived ? t('Masquer les entrées archivées') : t('Afficher les entrées archivées')}
           </Text>
         </Pressable>
 
         {recordsError ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-6">
-            <Text className="font-sans-semibold text-ink text-center">Erreur de chargement. Réessayez.</Text>
+            <Text className="font-sans-semibold text-ink text-center">{t('Erreur de chargement. Réessayez.')}</Text>
           </View>
         ) : visibleRecords.length === 0 ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-6">
-            <Text className="font-sans-semibold text-ink text-center">Aucun élément pour le moment</Text>
+            <Text className="font-sans-semibold text-ink text-center">{t('Aucun élément pour le moment')}</Text>
           </View>
         ) : (
           visibleRecords.map((r) => {
@@ -158,31 +161,31 @@ export default function PatientProfile() {
                   </View>
                   <View className="flex-1">
                     <Text className="text-xs font-sans-bold" style={{ color: meta.color }}>
-                      {meta.label}
+                      {t(meta.label)}
                     </Text>
                     <Text className="font-sans-bold text-ink mt-0.5">{r.title}</Text>
                     <Text className="font-sans text-xs text-muted mt-0.5">{r.date}</Text>
                   </View>
-                  {r.attachments.length > 0 ? <Badge label={`${r.attachments.length} pièce(s)`} tone="slate" /> : null}
+                  {r.attachments.length > 0 ? <Badge label={t('{n} pièce(s)', { n: r.attachments.length })} tone="slate" /> : null}
                 </Card>
               </Pressable>
             );
           })
         )}
 
-        <SectionTitle>Historique des consultations</SectionTitle>
+        <SectionTitle>{t('Historique des consultations')}</SectionTitle>
         {consultationsError ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center">
-            <Text className="font-sans-semibold text-ink text-center">Erreur de chargement. Réessayez.</Text>
+            <Text className="font-sans-semibold text-ink text-center">{t('Erreur de chargement. Réessayez.')}</Text>
           </View>
         ) : (consultations ?? []).length === 0 ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center">
-            <Text className="font-sans-semibold text-ink text-center">Aucune consultation pour le moment</Text>
+            <Text className="font-sans-semibold text-ink text-center">{t('Aucune consultation pour le moment')}</Text>
           </View>
         ) : (
           (consultations ?? []).map((c) => (
             <Card key={c.id} className="mb-3">
-              <Text className="font-sans-bold text-ink">{c.reason || 'Consultation'}</Text>
+              <Text className="font-sans-bold text-ink">{c.reason || t('Consultation')}</Text>
               <Text className="font-sans text-xs text-muted mt-0.5">{c.dateLabel}</Text>
             </Card>
           ))

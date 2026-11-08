@@ -9,8 +9,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getPatients } from '@/services/providerApi';
 import { currentProvider } from '@/data/mockProvider';
+import { useT } from '@/i18n';
 
 export default function ProviderPatients() {
+  const t = useT();
   const { user } = useAuth();
   const uid = user?.id ?? currentProvider.id;
   const [query, setQuery] = useState('');
@@ -23,12 +25,12 @@ export default function ProviderPatients() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="px-5 pt-2">
         <Text className="font-serif-bold text-3xl text-ink mb-4" style={{ letterSpacing: -0.3 }}>
-          Mes patients
+          {t('Mes patients')}
         </Text>
         <View className="flex-row items-center border border-line rounded-2xl px-4 py-1 bg-surface">
           <Search color={colors.muted} size={18} />
           <TextInput
-            placeholder="Rechercher un patient..."
+            placeholder={t('Rechercher un patient...')}
             placeholderTextColor={colors.muted}
             value={query}
             onChangeText={setQuery}
@@ -52,13 +54,13 @@ export default function ProviderPatients() {
                 {p.firstName} {p.lastName}
               </Text>
               <Text className="font-sans text-xs text-muted mt-0.5">
-                {p.age !== null ? `${p.age} ans` : 'Âge inconnu'}
+                {p.age !== null ? `${p.age} ${t('ans')}` : t('Âge inconnu')}
                 {p.gender ? ` · ${p.gender}` : ''}
               </Text>
               <Text className="font-sans text-xs text-clay mt-0.5">{p.mainCondition}</Text>
             </View>
             <Pressable onPress={() => router.push(`/patient/${p.id}`)} className="bg-accent-50 px-4 py-2.5 rounded-2xl">
-              <Text className="text-accent font-sans-bold">Voir</Text>
+              <Text className="text-accent font-sans-bold">{t('Voir')}</Text>
             </Pressable>
           </Card>
         ))}

@@ -5,10 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Button, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { formatMoney, typeLabel } from '@/utils/format';
+import { getCountry, type CountryConfig } from '@/config/countries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getPastConsultations, getUpcomingConsultations } from '@/services/patientApi';
 import type { Consultation, ConsultationStatus } from '@/types';
+import { useLanguage, useT } from '@/i18n';
 
 const statusBadge: Record<ConsultationStatus, { label: string; tone: 'green' | 'amber' | 'slate' }> = {
   confirmed: { label: 'Confirmée', tone: 'green' },
@@ -18,7 +20,8 @@ const statusBadge: Record<ConsultationStatus, { label: string; tone: 'green' | '
   cancelled: { label: 'Annulée', tone: 'slate' },
 };
 
-function Row({ c, joinable }: { c: Consultation; joinable: boolean }) {
+function Row({ c, joinable, country }: { c: Consultation; joinable: boolean; country: CountryConfig }) {
+  const t = useT();
   const sb = statusBadge[c.status];
   return (
     <Card className="mb-3">
@@ -30,15 +33,15 @@ function Row({ c, joinable }: { c: Consultation; joinable: boolean }) {
           </Text>
           <Text className="font-sans text-xs text-muted mt-0.5">{c.doctor.specialty}</Text>
         </View>
-        <Badge label={sb.label} tone={sb.tone} />
+        <Badge label={t(sb.label)} tone={sb.tone} />
       </View>
       <Text className="font-sans-semibold text-sm text-clay mt-3">{c.dateLabel}</Text>
       <Text className="font-sans text-sm text-muted mt-0.5">
-        {typeLabel(c.type)} · {c.durationMin} min · {formatMoney(c.fee)}
+        {typeLabel(c.type)} · {c.durationMin} {t('min')} · {formatMoney(c.fee, country)}
       </Text>
       {joinable && c.status !== 'pending' && (
         <Button
-          label="Rejoindre la consultation"
+          label={t('Rejoindre la consultation')}
           className="mt-3"
           onPress={() => router.push(`/call/${c.roomId ?? c.id}`)}
         />
@@ -48,11 +51,14 @@ function Row({ c, joinable }: { c: Consultation; joinable: boolean }) {
 }
 
 export default function Appointments() {
+  const t = useT();
+  const { code: lang } = useLanguage();
   const { user } = useAuth();
   const uid = user?.id ?? 'patient-1';
+  const country = getCountry(user?.countryCode ?? 'CD');
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
-  const up = useAsync(() => getUpcomingConsultations(uid), [uid]);
-  const pastReq = useAsync(() => getPastConsultations(uid), [uid]);
+  const up = useAsync(() => getUpcomingConsultations(uid), [uid, lang]);
+  const pastReq = useAsync(() => getPastConsultations(uid), [uid, lang]);
   const data = (tab === 'upcoming' ? up.data : pastReq.data) ?? [];
 
   const [refreshing, setRefreshing] = useState(false);
@@ -66,17 +72,17 @@ export default function Appointments() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="px-5 pt-2">
         <Text className="font-serif-bold text-3xl text-ink mb-4" style={{ letterSpacing: -0.3 }}>
-          Mes consultations
+          {t('Mes consultations')}
         </Text>
         <View className="flex-row bg-surface border border-line rounded-2xl p-1 mb-2">
-          {(['upcoming', 'past'] as const).map((t) => (
+          {(['upcoming', 'past'] as const).map((k) => (
             <Pressable
-              key={t}
-              onPress={() => setTab(t)}
-              className={`flex-1 py-2.5 rounded-xl items-center ${tab === t ? 'bg-primary' : ''}`}
+              key={k}
+              onPress={() => setTab(k)}
+              className={`flex-1 py-2.5 rounded-xl items-center ${tab === k ? 'bg-primary' : ''}`}
             >
-              <Text className={`font-sans-bold ${tab === t ? 'text-white' : 'text-muted'}`}>
-                {t === 'upcoming' ? 'À venir' : 'Passées'}
+              <Text className={`font-sans-bold ${tab === k ? 'text-white' : 'text-muted'}`}>
+                {k === 'upcoming' ? t('À venir') : t('Passées')}
               </Text>
             </Pressable>
           ))}
@@ -90,11 +96,11 @@ export default function Appointments() {
         }
       >
         {data.map((c) => (
-          <Row key={c.id} c={c} joinable={tab === 'upcoming'} />
+          <Row key={c.id} c={c} joinable={tab === 'upcoming'} country={country} />
         ))}
         {data.length === 0 && (
           <Text className="text-center font-sans text-muted mt-10">
-            {tab === 'upcoming' ? 'Aucune consultation à venir.' : 'Aucune consultation passée.'}
+            {tab === 'upcoming' ? t('Aucune consultation à venir.') : t('Aucune consultation passée.')}
           </Text>
         )}
       </ScrollView>

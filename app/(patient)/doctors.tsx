@@ -5,12 +5,18 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search } from 'lucide-react-native';
 import { DoctorCard } from '@/components/DoctorCard';
 import { colors } from '@/theme/colors';
+import { getCountry } from '@/config/countries';
+import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getDoctors } from '@/services/patientApi';
+import { useT } from '@/i18n';
 
 const filters = ['Tous', 'Généraliste', 'Pédiatrie', 'Cardio', 'Gynéco'];
 
 export default function DoctorsSearch() {
+  const t = useT();
+  const { user } = useAuth();
+  const country = getCountry(user?.countryCode ?? 'CD');
   const [active, setActive] = useState('Tous');
   const [query, setQuery] = useState('');
   const { data: doctors, loading, refreshing, refresh } = useAsync(getDoctors, []);
@@ -30,12 +36,12 @@ export default function DoctorsSearch() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="px-5 pt-2 pb-2">
         <Text className="font-serif-bold text-3xl text-ink mb-4" style={{ letterSpacing: -0.3 }}>
-          Trouver un médecin
+          {t('Trouver un médecin')}
         </Text>
         <View className="flex-row items-center border border-line rounded-2xl px-4 py-1 bg-surface mb-4">
           <Search color={colors.muted} size={18} />
           <TextInput
-            placeholder="Spécialité, nom, ville..."
+            placeholder={t('Spécialité, nom, ville...')}
             placeholderTextColor={colors.muted}
             value={query}
             onChangeText={setQuery}
@@ -52,7 +58,7 @@ export default function DoctorsSearch() {
                 onPress={() => setActive(f)}
                 className={`px-4 py-2 rounded-full mr-2 ${on ? 'bg-primary' : 'bg-surface border border-line'}`}
               >
-                <Text className={`text-sm font-sans-semibold ${on ? 'text-white' : 'text-muted'}`}>{f}</Text>
+                <Text className={`text-sm font-sans-semibold ${on ? 'text-white' : 'text-muted'}`}>{t(f)}</Text>
               </Pressable>
             );
           })}
@@ -66,11 +72,11 @@ export default function DoctorsSearch() {
         }
       >
         {list.map((d) => (
-          <DoctorCard key={d.id} doctor={d} onPress={() => router.push(`/doctor/${d.id}`)} />
+          <DoctorCard key={d.id} doctor={d} country={country} onPress={() => router.push(`/doctor/${d.id}`)} />
         ))}
-        {loading && <Text className="text-center text-muted mt-10">Chargement…</Text>}
+        {loading && <Text className="text-center text-muted mt-10">{t('Chargement…')}</Text>}
         {!loading && list.length === 0 && (
-          <Text className="text-center text-muted mt-10">Aucun médecin trouvé.</Text>
+          <Text className="text-center text-muted mt-10">{t('Aucun médecin trouvé.')}</Text>
         )}
       </ScrollView>
     </SafeAreaView>

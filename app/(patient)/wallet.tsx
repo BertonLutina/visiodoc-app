@@ -1,40 +1,71 @@
-import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Send, Clock, Smartphone, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { Card, SectionTitle } from '@/components/ui';
 import { formatMoney } from '@/utils/format';
 import { colors } from '@/theme/colors';
-import { activeCountry } from '@/config/countries';
-import { wallet } from '@/data/mock';
-
-// Moyens de paiement du pays actif (RDC : M-Pesa, Orange Money, Airtel Money)
-const methods = activeCountry.paymentMethods.map((label, i) => ({
-  icon: Smartphone,
-  label,
-  tag: i === 0 ? '✓' : '›',
-}));
+import { getCountry } from '@/config/countries';
+import { useAuth } from '@/contexts/AuthContext';
+import { useAsync } from '@/hooks/useAsync';
+import { getWallet } from '@/services/patientApi';
+import { appLocale, useT } from '@/i18n';
 
 export default function WalletScreen() {
+  const t = useT();
+  const { user } = useAuth();
+  const country = getCountry(user?.countryCode ?? 'CD');
+  const uid = user?.id ?? '';
+  const { data: wallet, loading, error, refresh, refreshing } = useAsync(() => getWallet(uid), [uid]);
+  const transactions = wallet?.transactions ?? [];
+
+  const [pulling, setPulling] = useState(false);
+  const onRefresh = async () => {
+    setPulling(true);
+    await refresh();
+    setPulling(false);
+  };
+
+  // Moyens de paiement du pays du patient (RDC : M-Pesa, Orange Money, Airtel Money)
+  const methods = country.paymentMethods.map((label, i) => ({
+    icon: Smartphone,
+    label,
+    tag: i === 0 ? '✓' : '›',
+  }));
+
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 24 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: 20, paddingBottom: 24 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={pulling || refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
         <Text className="font-serif-bold text-3xl text-ink mb-4" style={{ letterSpacing: -0.3 }}>
-          Portefeuille
+          {t('Portefeuille')}
         </Text>
 
-        {/* Solde */}
+        {/* Total des paiements réussis */}
         <View className="rounded-[28px] bg-primary p-6 mb-4 overflow-hidden">
           <View
             className="absolute -right-8 -top-8 w-36 h-36 rounded-full"
             style={{ backgroundColor: '#15846A', opacity: 0.55 }}
           />
-          <Text className="text-white/80 text-xs font-sans-bold">Solde disponible</Text>
-          <Text className="text-white font-serif-bold mt-1" style={{ fontSize: 38 }}>
-            {wallet.balance.toLocaleString('fr-FR')}
-          </Text>
+          <Text className="text-white/80 text-xs font-sans-bold">{t('Total payé')}</Text>
+          {loading ? (
+            <ActivityIndicator color={colors.white} style={{ marginTop: 16, marginBottom: 8 }} />
+          ) : (
+            <Text className="text-white font-serif-bold mt-1" style={{ fontSize: 38 }}>
+              {(wallet?.balance ?? 0).toLocaleString(appLocale())}
+            </Text>
+          )}
           <Text className="text-white/80 text-sm font-sans">
-            {wallet.currency} · {wallet.countryLabel}
+            {country.currency.symbol} · {country.name}
           </Text>
           <View className="flex-row justify-between mt-6">
             {[
@@ -46,25 +77,14 @@ export default function WalletScreen() {
                 <View className="w-12 h-12 rounded-full bg-white/20 items-center justify-center mb-1.5">
                   <a.icon color={colors.white} size={20} />
                 </View>
-                <Text className="text-white text-xs font-sans-medium">{a.label}</Text>
+                <Text className="text-white text-xs font-sans-medium">{t(a.label)}</Text>
               </Pressable>
             ))}
           </View>
         </View>
 
-        {/* Appels IA */}
-        <Card className="mb-4 flex-row items-center justify-between">
-          <View>
-            <Text className="font-sans-medium text-sm text-muted">Appels IA restants</Text>
-            <Text className="font-serif-bold text-3xl text-ink mt-0.5">{wallet.aiCreditsLeft}</Text>
-          </View>
-          <Pressable className="bg-primary-50 px-4 py-2.5 rounded-2xl">
-            <Text className="text-primary font-sans-bold">Recharger</Text>
-          </Pressable>
-        </Card>
-
         {/* Méthodes */}
-        <SectionTitle>Méthodes de paiement</SectionTitle>
+        <SectionTitle>{t('Méthodes de paiement')}</SectionTitle>
         {methods.map((m) => (
           <Card key={m.label} className="mb-2 flex-row items-center">
             <View className="w-10 h-10 rounded-2xl bg-primary-50 items-center justify-center mr-3">
@@ -76,11 +96,20 @@ export default function WalletScreen() {
         ))}
 
         {/* Transactions */}
-        <SectionTitle>Transactions récentes</SectionTitle>
-        {wallet.transactions.map((t) => {
-          const credit = t.amount > 0;
+        <SectionTitle>{t('Transactions récentes')}</SectionTitle>
+        {error ? (
+          <Text className="font-sans text-sm text-clay mb-3">{error}</Text>
+        ) : null}
+        {loading && transactions.length === 0 ? (
+          <Text className="text-center text-muted mt-6">{t('Chargement…')}</Text>
+        ) : null}
+        {!loading && transactions.length === 0 ? (
+          <Text className="text-center text-muted mt-6">{t('Aucune transaction pour le moment.')}</Text>
+        ) : null}
+        {transactions.map((tx) => {
+          const credit = tx.amount > 0;
           return (
-            <Card key={t.id} className="mb-2 flex-row items-center">
+            <Card key={tx.id} className="mb-2 flex-row items-center">
               <View
                 className="w-9 h-9 rounded-full items-center justify-center mr-3"
                 style={{ backgroundColor: credit ? colors.primaryLight : '#FEE2E2' }}
@@ -92,12 +121,15 @@ export default function WalletScreen() {
                 )}
               </View>
               <View className="flex-1">
-                <Text className="font-sans-semibold text-ink">{t.label}</Text>
-                <Text className="font-sans text-xs text-muted mt-0.5">{t.date}</Text>
+                <Text className="font-sans-semibold text-ink">
+                  {t(tx.label)}
+                  {tx.method ? ` · Dr. ${tx.method}` : ''}
+                </Text>
+                <Text className="font-sans text-xs text-muted mt-0.5">{tx.date}</Text>
               </View>
               <Text className={`font-sans-bold ${credit ? 'text-success' : 'text-danger'}`}>
                 {credit ? '+' : ''}
-                {formatMoney(t.amount)}
+                {formatMoney(tx.amount, country)}
               </Text>
             </Card>
           );

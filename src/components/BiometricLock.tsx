@@ -6,12 +6,14 @@ import { Button } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { authErrorMessage } from '@/utils/authError';
+import { useT } from '@/i18n';
 
 /** Écran affiché au lancement tant que la biométrie n'a pas été validée. */
 export function BiometricLock() {
   const { lockedFirstName, unlock, logout, biometricLabel } = useAuth();
   const [busy, setBusy] = useState(false);
   const autoTried = useRef(false);
+  const t = useT();
   const Icon = biometricLabel === 'Face ID' ? ScanFace : Fingerprint;
 
   const tryUnlock = useCallback(async () => {
@@ -19,11 +21,11 @@ export function BiometricLock() {
     try {
       await unlock();
     } catch (e) {
-      Alert.alert('Connexion impossible', authErrorMessage(e));
+      Alert.alert(t('Connexion impossible'), authErrorMessage(e));
     } finally {
       setBusy(false);
     }
-  }, [unlock]);
+  }, [unlock, t]);
 
   // Demande automatique une seule fois à l'ouverture.
   useEffect(() => {
@@ -40,16 +42,16 @@ export function BiometricLock() {
           <Icon color={colors.primary} size={40} />
         </View>
         <Text className="font-serif-bold text-2xl text-ink text-center">
-          {lockedFirstName ? `Bonjour ${lockedFirstName}` : 'Bon retour'}
+          {lockedFirstName ? t('Bonjour {name}', { name: lockedFirstName }) : t('Bon retour')}
         </Text>
         <Text className="font-sans text-muted text-center mt-2">
-          Déverrouillez VisioDoc pour accéder à votre espace.
+          {t('Déverrouillez VisioDoc pour accéder à votre espace.')}
         </Text>
       </View>
       <View className="pb-6">
-        <Button label={`Déverrouiller avec ${biometricLabel}`} onPress={tryUnlock} loading={busy} />
+        <Button label={t('Déverrouiller avec {method}', { method: biometricLabel })} onPress={tryUnlock} loading={busy} />
         <Pressable onPress={logout} className="py-4 items-center">
-          <Text className="font-sans-bold text-muted">Se déconnecter</Text>
+          <Text className="font-sans-bold text-muted">{t('Se déconnecter')}</Text>
         </Pressable>
       </View>
     </SafeAreaView>

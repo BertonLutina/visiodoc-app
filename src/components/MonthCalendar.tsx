@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
+import { useT } from '@/i18n';
 import { DAY_LABELS } from '@/utils/availability';
 import type { DayStatus } from '@/services/availabilityEngine';
 
@@ -28,6 +29,7 @@ export function MonthCalendar({
   maxDate,
   loading = false,
   alwaysSelectable = false,
+  configuredDates,
 }: {
   year: number;
   month: number;
@@ -45,7 +47,15 @@ export function MonthCalendar({
    * seules les dates 'available'/'full' sont sélectionnables.
    */
   alwaysSelectable?: boolean;
+  /**
+   * Dates ('YYYY-MM-DD') ayant déjà un override enregistré — surlignées en bleu pour que le
+   * prestataire les distingue au premier coup d'œil sans avoir à recliquer sur chacune. Non
+   * utilisé côté patient (où `monthStatus` a un tout autre sens : créneaux réservables, pas
+   * "date déjà configurée").
+   */
+  configuredDates?: Set<string>;
 }) {
+  const t = useT();
   const cells = useMemo(() => {
     const first = new Date(year, month - 1, 1);
     const startOffset = (first.getDay() + 6) % 7; // 0 = Lundi
@@ -78,7 +88,7 @@ export function MonthCalendar({
           <ChevronLeft color={colors.ink} size={20} />
         </Pressable>
         <Text className="font-sans-bold text-ink text-base">
-          {MONTH_LABELS[month - 1]} {year}
+          {t(MONTH_LABELS[month - 1])} {year}
         </Text>
         <Pressable
           onPress={() => onChangeMonth(month === 12 ? year + 1 : year, month === 12 ? 1 : month + 1)}
@@ -92,7 +102,7 @@ export function MonthCalendar({
       <View className="flex-row mb-1">
         {DAY_LABELS.map((l) => (
           <View key={l} style={{ width: `${100 / 7}%` }} className="items-center">
-            <Text className="font-sans-medium text-xs text-muted">{l}</Text>
+            <Text className="font-sans-medium text-xs text-muted">{t(l)}</Text>
           </View>
         ))}
       </View>
@@ -110,8 +120,15 @@ export function MonthCalendar({
           const disabled = outOfRange || (!alwaysSelectable && (!status || status === 'unavailable'));
           const isSelected = key === selectedDate;
           const isToday = key === todayKey;
+          const isConfigured = !isSelected && !!configuredDates?.has(key);
 
-          const bg = isSelected ? colors.primary : status === 'full' ? colors.sand : 'transparent';
+          const bg = isSelected
+            ? colors.primary
+            : status === 'full'
+              ? colors.sand
+              : isConfigured
+                ? colors.lavender
+                : 'transparent';
           const textColor = isSelected
             ? colors.white
             : disabled
@@ -144,7 +161,7 @@ export function MonthCalendar({
         })}
       </View>
 
-      {loading ? <Text className="font-sans text-xs text-muted text-center mt-2">Chargement…</Text> : null}
+      {loading ? <Text className="font-sans text-xs text-muted text-center mt-2">{t('Chargement…')}</Text> : null}
     </View>
   );
 }

@@ -8,6 +8,7 @@ import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getUpcomingConsultations, getPastConsultations } from '@/services/patientApi';
+import { useLanguage, useT } from '@/i18n';
 
 const quick = [
   { icon: Stethoscope, label: 'Médecin', href: '/(patient)/doctors' as const, tint: 'bg-sage' },
@@ -17,10 +18,12 @@ const quick = [
 ];
 
 export default function PatientDashboard() {
+  const t = useT();
+  const { code: lang } = useLanguage();
   const { user } = useAuth();
   const uid = user?.id ?? 'patient-1';
-  const up = useAsync(() => getUpcomingConsultations(uid), [uid]);
-  const pastReq = useAsync(() => getPastConsultations(uid), [uid]);
+  const up = useAsync(() => getUpcomingConsultations(uid), [uid, lang]);
+  const pastReq = useAsync(() => getPastConsultations(uid), [uid, lang]);
   const { data: upcoming, loading: upLoading } = up;
   const { data: past } = pastReq;
 
@@ -35,7 +38,7 @@ export default function PatientDashboard() {
   const pastList = past ?? [];
   const next = upList[0];
 
-  const fullName = user ? `${user.firstName} ${user.lastName}`.trim() : 'Bienvenue';
+  const fullName = user ? `${user.firstName} ${user.lastName}`.trim() : t('Bienvenue');
   const initials =
     `${(user?.firstName ?? '').charAt(0)}${(user?.lastName ?? '').charAt(0)}`.toUpperCase() || 'VD';
 
@@ -50,10 +53,10 @@ export default function PatientDashboard() {
         {/* Greeting */}
         <View className="flex-row items-center justify-between px-5 pt-3 pb-5">
           <View className="flex-1 pr-3">
-            <Text className="font-sans-medium text-sm text-muted">Bonjour,</Text>
+            <Text className="font-sans-medium text-sm text-muted">{t('Bonjour,')}</Text>
             <Text className="font-serif-bold text-2xl text-ink mt-0.5">{fullName}</Text>
           </View>
-          <Avatar initials={initials} />
+          <Avatar initials={initials} uri={user?.avatarUrl} />
         </View>
 
         {/* Prochaine consultation */}
@@ -69,18 +72,18 @@ export default function PatientDashboard() {
                 style={{ backgroundColor: '#15846A', opacity: 0.55 }}
               />
               <Eyebrow className="bg-white/20 mb-3">
-                <Text className="font-sans-bold text-white text-xs">Prochaine consultation</Text>
+                <Text className="font-sans-bold text-white text-xs">{t('Prochaine consultation')}</Text>
               </Eyebrow>
               <Text className="font-serif-bold text-white text-2xl">
                 Dr. {next.doctor.firstName} {next.doctor.lastName}
               </Text>
-              <Text className="font-sans text-white/80 text-sm mt-1 mb-5">{next.dateLabel} · Vidéo</Text>
+              <Text className="font-sans text-white/80 text-sm mt-1 mb-5">{next.dateLabel} · {t('Vidéo')}</Text>
               <Pressable
                 onPress={() => router.push(`/call/${next.roomId ?? next.id}`)}
                 className="bg-white rounded-2xl py-3.5 flex-row items-center justify-center"
               >
                 <Video color={colors.primary} size={18} />
-                <Text className="font-sans-bold text-primary text-base ml-2">Rejoindre</Text>
+                <Text className="font-sans-bold text-primary text-base ml-2">{t('Rejoindre')}</Text>
               </Pressable>
             </View>
           ) : (
@@ -88,15 +91,15 @@ export default function PatientDashboard() {
               <View className="w-12 h-12 rounded-2xl bg-primary-50 items-center justify-center mb-3">
                 <CalendarPlus color={colors.primary} size={24} />
               </View>
-              <Text className="font-serif-bold text-ink text-lg">Aucune consultation à venir</Text>
+              <Text className="font-serif-bold text-ink text-lg">{t('Aucune consultation à venir')}</Text>
               <Text className="font-sans text-sm text-muted mt-1 mb-4 text-center">
-                Trouvez un médecin et prenez rendez-vous en quelques minutes.
+                {t('Trouvez un médecin et prenez rendez-vous en quelques minutes.')}
               </Text>
               <Pressable
                 onPress={() => router.push('/(patient)/doctors')}
                 className="bg-primary rounded-2xl py-3.5 px-6 w-full items-center"
               >
-                <Text className="font-sans-bold text-white text-base">Prendre rendez-vous</Text>
+                <Text className="font-sans-bold text-white text-base">{t('Prendre rendez-vous')}</Text>
               </Pressable>
             </View>
           )}
@@ -106,26 +109,26 @@ export default function PatientDashboard() {
         <View className="px-5 flex-row justify-between mb-5">
           <Card className="w-[48%]">
             <Text className="font-serif-bold text-4xl text-ink">{pastList.length}</Text>
-            <Text className="font-sans-semibold text-sm text-ink mt-1">Consultations</Text>
-            <Text className="font-sans text-xs text-muted">au total</Text>
+            <Text className="font-sans-semibold text-sm text-ink mt-1">{t('Consultations')}</Text>
+            <Text className="font-sans text-xs text-muted">{t('au total')}</Text>
           </Card>
           <Card className="w-[48%]">
             <Text className="font-serif-bold text-4xl text-ink">{upList.length}</Text>
-            <Text className="font-sans-semibold text-sm text-ink mt-1">À venir</Text>
-            <Text className="font-sans text-xs text-muted">consultations</Text>
+            <Text className="font-sans-semibold text-sm text-ink mt-1">{t('À venir')}</Text>
+            <Text className="font-sans text-xs text-muted">{t('consultations')}</Text>
           </Card>
         </View>
 
         {/* Accès rapides */}
         <View className="px-5">
-          <Text className="font-sans-bold text-ink text-lg mb-3">Accès rapides</Text>
+          <Text className="font-sans-bold text-ink text-lg mb-3">{t('Accès rapides')}</Text>
           <View className="flex-row justify-between mb-6">
             {quick.map((q) => (
               <Pressable key={q.label} onPress={() => router.push(q.href)} className="items-center w-[23%]">
                 <View className={`w-16 h-16 rounded-3xl items-center justify-center mb-2 ${q.tint}`}>
                   <q.icon color={colors.ink} size={24} />
                 </View>
-                <Text className="font-sans-medium text-xs text-ink">{q.label}</Text>
+                <Text className="font-sans-medium text-xs text-ink">{t(q.label)}</Text>
               </Pressable>
             ))}
           </View>
@@ -133,11 +136,11 @@ export default function PatientDashboard() {
 
         {/* Récentes */}
         <View className="px-5">
-          <Text className="font-sans-bold text-ink text-lg mb-3">Récentes</Text>
+          <Text className="font-sans-bold text-ink text-lg mb-3">{t('Récentes')}</Text>
           {pastList.length === 0 ? (
             <Card>
               <Text className="font-sans text-sm text-muted text-center py-2">
-                Aucune consultation récente.
+                {t('Aucune consultation récente.')}
               </Text>
             </Card>
           ) : (
@@ -150,10 +153,10 @@ export default function PatientDashboard() {
                   </Text>
                   <Text className="font-sans text-xs text-muted mt-0.5">{c.doctor.specialty}</Text>
                   <Text className="font-sans text-xs text-clay mt-1">
-                    {c.dateLabel} · {c.durationMin} min
+                    {c.dateLabel} · {c.durationMin} {t('min')}
                   </Text>
                 </View>
-                <Badge label="Terminée" tone="slate" />
+                <Badge label={t('Terminée')} tone="slate" />
               </Card>
             ))
           )}

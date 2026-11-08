@@ -11,8 +11,10 @@ import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
 import { authErrorMessage } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
+import { useT } from '@/i18n';
 
 export default function RegisterProvider() {
+  const t = useT();
   const { registerProvider, loading } = useAuth();
   const [form, setForm] = useState({
     firstName: '',
@@ -58,28 +60,28 @@ export default function RegisterProvider() {
           <View className="w-14 h-14 rounded-3xl bg-accent items-center justify-center mb-4">
             <Stethoscope color={colors.white} size={28} />
           </View>
-          <ScreenTitle center>Inscription médecin</ScreenTitle>
-          <Text className="font-sans text-base text-muted mt-2">Prestataire de santé</Text>
+          <ScreenTitle center>{t('Inscription médecin')}</ScreenTitle>
+          <Text className="font-sans text-base text-muted mt-2">{t('Prestataire de santé')}</Text>
         </View>
 
         {done ? (
           <View className="bg-amber-50 border border-amber-200 rounded-3xl p-6 items-center">
             <Text className="font-sans-bold text-amber-700 text-center mb-1">
-              ⏳ Compte en cours de validation
+              {t('⏳ Compte en cours de validation')}
             </Text>
             <Text className="font-sans text-amber-700 text-sm text-center leading-5">
-              Notre équipe vérifie vos informations. Vous recevrez un email de confirmation sous 24-48h.
+              {t('Notre équipe vérifie vos informations. Vous recevrez un email de confirmation sous 24-48h.')}
             </Text>
             <Link href="/(auth)/login-provider" className="font-sans-bold text-accent mt-4">
-              ← Aller à la connexion
+              {t('← Aller à la connexion')}
             </Link>
           </View>
         ) : (
           <>
-            <Field label="Prénom" placeholder="Amara" value={form.firstName} onChangeText={set('firstName')} />
-            <Field label="Nom" placeholder="Diallo" value={form.lastName} onChangeText={set('lastName')} />
+            <Field label={t('Prénom')} placeholder="Amara" value={form.firstName} onChangeText={set('firstName')} />
+            <Field label={t('Nom')} placeholder="Diallo" value={form.lastName} onChangeText={set('lastName')} />
             <Field
-              label="Email professionnel"
+              label={t('Email professionnel')}
               placeholder="a.diallo@clinic.sn"
               autoCapitalize="none"
               keyboardType="email-address"
@@ -87,27 +89,27 @@ export default function RegisterProvider() {
               onChangeText={set('email')}
             />
             <Field
-              label="Téléphone"
+              label={t('Téléphone')}
               placeholder={`${getAfricanCountry(countryCode)?.dialCode ?? ''} 81 234 5678`}
               keyboardType="phone-pad"
               value={form.phone}
               onChangeText={set('phone')}
             />
-            <CountryPicker label="Pays" value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
+            <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
             <Autocomplete
-              label="Spécialisation"
+              label={t('Spécialisation')}
               value={form.specialization}
               onChangeText={set('specialization')}
               options={SPECIALIZATIONS}
-              placeholder="Ex : Cardiologie"
+              placeholder={t('Ex : Cardiologie')}
             />
             <Field
-              label="N° Licence"
+              label={t('N° Licence')}
               placeholder="SN-MG-2019-0042"
               value={form.licenseNumber}
               onChangeText={set('licenseNumber')}
             />
-            <Field label="Mot de passe" placeholder="••••••••" secureTextEntry value={form.password} onChangeText={set('password')} />
+            <Field label={t('Mot de passe')} placeholder="••••••••" secureTextEntry value={form.password} onChangeText={set('password')} />
 
             {errorMsg ? (
               <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
@@ -115,15 +117,15 @@ export default function RegisterProvider() {
               </View>
             ) : null}
 
-            <Button label="Créer mon compte" variant="accent" loading={loading} onPress={onSubmit} className="mt-2" />
+            <Button label={t('Créer mon compte')} variant="accent" loading={loading} onPress={onSubmit} className="mt-2" />
             <Text className="text-center font-sans text-xs text-muted mt-3">
-              ⏳ Validation par l'administrateur requise
+              {t("⏳ Validation par l'administrateur requise")}
             </Text>
 
             <View className="flex-row justify-center mt-5">
-              <Text className="font-sans text-muted">Déjà inscrit ? </Text>
+              <Text className="font-sans text-muted">{t('Déjà inscrit ?')} </Text>
               <Link href="/(auth)/login-provider" className="font-sans-bold text-accent">
-                Se connecter
+                {t('Se connecter')}
               </Link>
             </View>
           </>

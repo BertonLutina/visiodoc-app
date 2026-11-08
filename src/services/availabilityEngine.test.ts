@@ -64,6 +64,16 @@ describe('effectiveRangesForDate', () => {
     const ranges = effectiveRangesForDate(thursday, weekly, overrides);
     expect(ranges).toEqual([{ startTime: '09:00', endTime: '12:00' }]);
   });
+
+  it('ignores a weekly rule outside its inclusive period', () => {
+    const weekly: WeeklyRule[] = [
+      { dayOfWeek: 3, startTime: '09:00', endTime: '12:00', validFrom: '2026-10-01', validTo: '2026-10-31' },
+    ];
+    expect(effectiveRangesForDate(thursday, weekly, [])).toEqual([{ startTime: '09:00', endTime: '12:00' }]);
+    // 2026-11-05 is the next Thursday
+    expect(effectiveRangesForDate(new Date(2026, 10, 5), weekly, [])).toEqual([]);
+    expect(effectiveRangesForDate(new Date(2026, 8, 24), weekly, [])).toEqual([]);
+  });
 });
 
 describe('generateSlots', () => {
@@ -114,7 +124,7 @@ describe('generateSlots', () => {
     expect(slots.map((s) => s.available)).toEqual([true, false, true]); // 9:00, 9:30, 10:00
   });
 
-  it('applies buffer before/after around existing bookings', () => {
+  it('blocks only the slot that overlaps a booking', () => {
     const booked: BookedRange[] = [
       { start: new Date(2026, 9, 15, 10, 0), end: new Date(2026, 9, 15, 10, 30) },
     ];
@@ -131,24 +141,31 @@ describe('generateSlots', () => {
       booked,
       now,
     );
-    // booking occupies 10:00-10:30, buffered to 09:45-10:45.
-    // 9:00 slot (9:00-9:30) does not overlap -> available.
-    // 9:30 slot (9:30-10:00) overlaps buffered window (starts before 09:45 ends, ends after) -> unavailable.
-    // 10:00 slot -> unavailable (the booking itself).
-    // 10:30 slot (10:30-11:00) overlaps buffered window (10:30 < 10:45) -> unavailable.
-    expect(slots.map((s) => s.available)).toEqual([true, false, false, false]);
+    // 09:00, 09:30, 10:00, 10:30 — seul 10:00 chevauche 10:00-10:30.
+    expect(slots.map((s) => s.available)).toEqual([true, true, false, true]);
   });
 
-  it('excludes slots starting before now + minimum notice', () => {
-    const today = new Date(2026, 9, 15, 8, 0);
+  it('keeps same-day slots that have not started yet, without a minimum notice', () => {
+    const today = new Date(2026, 9, 15, 9, 15);
     const slots = generateSlots(
       today,
       [{ startTime: '08:30', endTime: '11:00' }],
       { ...DEFAULT_SETTINGS, appointmentDurationMinutes: 30, slotIntervalMinutes: 30, minimumNoticeMinutes: 120 },
       [],
-      today, // now = 08:00, so anything before 10:00 is excluded
+      today,
     );
-    expect(slots.map((s) => `${s.start.getHours()}:${s.start.getMinutes()}`)).toEqual(['10:0', '10:30']);
+    expect(slots.map((s) => `${s.start.getHours()}:${s.start.getMinutes()}`)).toEqual(['9:30', '10:0', '10:30']);
+  });
+
+  it('treats a 0-minute interval as back-to-back slots', () => {
+    const slots = generateSlots(
+      day,
+      [{ startTime: '09:00', endTime: '10:30' }],
+      { ...DEFAULT_SETTINGS, appointmentDurationMinutes: 30, slotIntervalMinutes: 0 },
+      [],
+      now,
+    );
+    expect(slots.map((s) => `${s.start.getHours()}:${s.start.getMinutes()}`)).toEqual(['9:0', '9:30', '10:0']);
   });
 
   it('excludes dates in the past', () => {
@@ -164,7 +181,7 @@ describe('generateSlots', () => {
     expect(slots).toEqual([]);
   });
 
-  it('excludes dates beyond the booking horizon', () => {
+  it('still offers slots past the former booking horizon', () => {
     const farFuture = new Date(now);
     farFuture.setDate(farFuture.getDate() + DEFAULT_SETTINGS.bookingHorizonDays + 5);
     const slots = generateSlots(
@@ -174,7 +191,7 @@ describe('generateSlots', () => {
       [],
       now,
     );
-    expect(slots).toEqual([]);
+    expect(slots.map((s) => s.start.getHours())).toEqual([9, 9]);
   });
 
   it('a cancelled booking (absent from bookedRanges) frees the slot again', () => {

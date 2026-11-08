@@ -24,8 +24,10 @@ import {
 import { RECORD_KIND_META, RECORD_KINDS } from '@/services/medicalRecordTaxonomy';
 import { currentProvider } from '@/data/mockProvider';
 import type { MedicalRecordKind, MedicalRecordSeverity } from '@/types';
+import { useT } from '@/i18n';
 
 export default function RecordForm() {
+  const t = useT();
   const { patientId, recordId } = useLocalSearchParams<{ patientId: string; recordId?: string }>();
   const { user } = useAuth();
   const doctorId = user?.id ?? currentProvider.id;
@@ -98,14 +100,14 @@ export default function RecordForm() {
 
   const onSave = async () => {
     if (!title.trim()) {
-      setError('Le titre est obligatoire.');
+      setError(t('Le titre est obligatoire.'));
       return;
     }
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       if (!Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && end < start) {
-        setError('La date de fin ne peut pas précéder la date de début.');
+        setError(t('La date de fin ne peut pas précéder la date de début.'));
         return;
       }
     }
@@ -154,7 +156,7 @@ export default function RecordForm() {
       }
       router.back();
     } catch (e: any) {
-      setError(e?.message ?? "Impossible d'enregistrer cette entrée. Réessayez.");
+      setError(e?.message ?? t("Impossible d'enregistrer cette entrée. Réessayez."));
     } finally {
       setSaving(false);
     }
@@ -166,23 +168,23 @@ export default function RecordForm() {
       if (!url) return; // pas de chemin Storage (mode démo) : rien à ouvrir
       await Linking.openURL(url);
     } catch (e: any) {
-      setError(e?.message ?? "Impossible d'ouvrir cette pièce jointe.");
+      setError(e?.message ?? t("Impossible d'ouvrir cette pièce jointe."));
     }
   };
 
   const onArchive = () => {
     if (!recordId) return;
-    Alert.alert('Archiver cette entrée ?', 'Elle restera visible mais masquée par défaut.', [
-      { text: 'Annuler', style: 'cancel' },
+    Alert.alert(t('Archiver cette entrée ?'), t('Elle restera visible mais masquée par défaut.'), [
+      { text: t('Annuler'), style: 'cancel' },
       {
-        text: 'Archiver',
+        text: t('Archiver'),
         style: 'destructive',
         onPress: async () => {
           try {
             await archiveMedicalRecord(recordId, { doctorId, patientId, kind });
             router.back();
           } catch (e: any) {
-            setError(e?.message ?? "Impossible d'archiver cette entrée.");
+            setError(e?.message ?? t("Impossible d'archiver cette entrée."));
           }
         },
       },
@@ -195,17 +197,17 @@ export default function RecordForm() {
         <Pressable onPress={() => router.back()} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">{isEdit ? "Modifier l'entrée" : 'Nouvelle entrée'}</Text>
+        <Text className="font-sans-bold text-lg text-ink">{isEdit ? t("Modifier l'entrée") : t('Nouvelle entrée')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
         {recordsError ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-4">
-            <Text className="font-sans-semibold text-ink text-center">Erreur de chargement. Réessayez.</Text>
+            <Text className="font-sans-semibold text-ink text-center">{t('Erreur de chargement. Réessayez.')}</Text>
           </View>
         ) : null}
 
-        <SectionTitle>Type</SectionTitle>
+        <SectionTitle>{t('Type')}</SectionTitle>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
           {RECORD_KINDS.map((k) => {
             const on = k === kind;
@@ -216,25 +218,25 @@ export default function RecordForm() {
                 className={`px-4 py-2 rounded-full mr-2 ${on ? 'bg-primary' : 'bg-surface border border-line'}`}
               >
                 <Text className={`text-sm font-sans-semibold ${on ? 'text-white' : 'text-muted'}`}>
-                  {RECORD_KIND_META[k].label}
+                  {t(RECORD_KIND_META[k].label)}
                 </Text>
               </Pressable>
             );
           })}
         </ScrollView>
 
-        <Field label="Titre" value={title} onChangeText={setTitle} placeholder="Ex: Paracétamol 1g" />
-        <Field label="Description" value={description} onChangeText={setDescription} placeholder="Détails (optionnel)" multiline />
-        <Field label="Catégorie" value={category} onChangeText={setCategory} placeholder="Optionnel" />
+        <Field label={t('Titre')} value={title} onChangeText={setTitle} placeholder={t('Ex: Paracétamol 1g')} />
+        <Field label={t('Description')} value={description} onChangeText={setDescription} placeholder={t('Détails (optionnel)')} multiline />
+        <Field label={t('Catégorie')} value={category} onChangeText={setCategory} placeholder={t('Optionnel')} />
 
-        <Text className="text-sm font-sans-semibold text-ink mb-2">Gravité (optionnel)</Text>
+        <Text className="text-sm font-sans-semibold text-ink mb-2">{t('Gravité (optionnel)')}</Text>
         <View className="flex-row mb-4">
           {(
             [
-              { key: undefined, label: 'Aucune' },
-              { key: 'mild', label: 'Légère' },
-              { key: 'moderate', label: 'Modérée' },
-              { key: 'severe', label: 'Sévère' },
+              { key: undefined, label: t('Aucune') },
+              { key: 'mild', label: t('Légère') },
+              { key: 'moderate', label: t('Modérée') },
+              { key: 'severe', label: t('Sévère') },
             ] as { key: MedicalRecordSeverity | undefined; label: string }[]
           ).map((opt) => {
             const on = opt.key === severity;
@@ -252,24 +254,24 @@ export default function RecordForm() {
 
         {kind === 'prescription' ? (
           <>
-            <SectionTitle>Détails de l'ordonnance</SectionTitle>
-            <Field label="Médicament" value={medicationName} onChangeText={setMedicationName} />
-            <Field label="Dosage" value={dosage} onChangeText={setDosage} placeholder="Ex: 500mg" />
-            <Field label="Fréquence" value={frequency} onChangeText={setFrequency} placeholder="Ex: 3x/jour" />
+            <SectionTitle>{t("Détails de l'ordonnance")}</SectionTitle>
+            <Field label={t('Médicament')} value={medicationName} onChangeText={setMedicationName} />
+            <Field label={t('Dosage')} value={dosage} onChangeText={setDosage} placeholder={t('Ex: 500mg')} />
+            <Field label={t('Fréquence')} value={frequency} onChangeText={setFrequency} placeholder={t('Ex: 3x/jour')} />
           </>
         ) : null}
 
         <View className="flex-row">
-          <Field label="Date de début" value={startDate} onChangeText={setStartDate} placeholder="AAAA-MM-JJ" className="flex-1 mr-2" />
-          <Field label="Date de fin" value={endDate} onChangeText={setEndDate} placeholder="AAAA-MM-JJ" className="flex-1 ml-2" />
+          <Field label={t('Date de début')} value={startDate} onChangeText={setStartDate} placeholder={t('AAAA-MM-JJ')} className="flex-1 mr-2" />
+          <Field label={t('Date de fin')} value={endDate} onChangeText={setEndDate} placeholder={t('AAAA-MM-JJ')} className="flex-1 ml-2" />
         </View>
 
-        <SectionTitle>Pièce jointe</SectionTitle>
+        <SectionTitle>{t('Pièce jointe')}</SectionTitle>
         <View className="flex-row mb-4">
-          <Button label="Photo" variant="outline" onPress={pickPhoto} className="flex-1 mr-2" />
-          <Button label="Fichier PDF" variant="outline" onPress={pickDocument} className="flex-1 ml-2" />
+          <Button label={t('Photo')} variant="outline" onPress={pickPhoto} className="flex-1 mr-2" />
+          <Button label={t('Fichier PDF')} variant="outline" onPress={pickDocument} className="flex-1 ml-2" />
         </View>
-        {pickedFile ? <Text className="font-sans text-sm text-muted mb-4">Sélectionné : {pickedFile.name}</Text> : null}
+        {pickedFile ? <Text className="font-sans text-sm text-muted mb-4">{t('Sélectionné :')} {pickedFile.name}</Text> : null}
         {(existing?.attachments ?? []).map((a) => (
           <Pressable key={a.path} onPress={() => openAttachment(a.path)} className="mb-1">
             <Text className="font-sans text-sm text-accent underline">📎 {a.name}</Text>
@@ -278,8 +280,8 @@ export default function RecordForm() {
 
         {error ? <Text className="font-sans-semibold text-sm text-danger mb-4">{error}</Text> : null}
 
-        <Button label="Enregistrer" onPress={onSave} loading={saving} className="mb-3" />
-        {isEdit ? <Button label="Archiver" variant="outline" onPress={onArchive} /> : null}
+        <Button label={t('Enregistrer')} onPress={onSave} loading={saving} className="mb-3" />
+        {isEdit ? <Button label={t('Archiver')} variant="outline" onPress={onArchive} /> : null}
       </ScrollView>
     </SafeAreaView>
   );

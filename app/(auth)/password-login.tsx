@@ -7,6 +7,7 @@ import { Button, Field, ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { authErrorMessage, isProviderPending, PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
 import { useAuth, type OAuthProvider } from '@/contexts/AuthContext';
+import { useT } from '@/i18n';
 
 function SocialButton({
   label,
@@ -39,6 +40,7 @@ function SocialButton({
 }
 
 export default function PasswordLogin() {
+  const t = useT();
   const { loginPatient, signInWithProvider, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -46,7 +48,7 @@ export default function PasswordLogin() {
   const [busy, setBusy] = useState(false);
 
   const handleError = (e: any) => {
-    if (isProviderPending(e)) Alert.alert('Compte en attente de validation', PROVIDER_PENDING_MESSAGE);
+    if (isProviderPending(e)) Alert.alert(t('Compte en attente de validation'), t(PROVIDER_PENDING_MESSAGE));
     else setErrorMsg(authErrorMessage(e));
   };
 
@@ -79,7 +81,7 @@ export default function PasswordLogin() {
         <Pressable onPress={() => router.back()} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">Email et mot de passe</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Email et mot de passe')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 16 }} keyboardShouldPersistTaps="handled">
@@ -92,14 +94,14 @@ export default function PasswordLogin() {
           <Text className="font-serif-bold text-primary" style={{ fontSize: 22, letterSpacing: -0.2 }}>
             VisioDoc
           </Text>
-          <ScreenTitle center className="mt-4">Content de vous revoir</ScreenTitle>
+          <ScreenTitle center className="mt-4">{t('Content de vous revoir')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
-            Accédez à votre espace santé
+            {t('Accédez à votre espace santé')}
           </Text>
         </View>
 
         <Field
-          label="Adresse email"
+          label={t('Adresse email')}
           placeholder="marie.konate@gmail.com"
           autoCapitalize="none"
           keyboardType="email-address"
@@ -108,7 +110,7 @@ export default function PasswordLogin() {
           valid={email.includes('@') && email.includes('.')}
         />
         <Field
-          label="Mot de passe"
+          label={t('Mot de passe')}
           placeholder="••••••••"
           secureTextEntry
           value={password}
@@ -116,7 +118,7 @@ export default function PasswordLogin() {
         />
 
         <Pressable className="self-end mb-6" onPress={() => router.push('/(auth)/forgot-password')}>
-          <Text className="font-sans-semibold text-sm text-primary">Mot de passe oublié ?</Text>
+          <Text className="font-sans-semibold text-sm text-primary">{t('Mot de passe oublié ?')}</Text>
         </Pressable>
 
         {errorMsg ? (
@@ -126,13 +128,13 @@ export default function PasswordLogin() {
         ) : null}
 
         <Button
-          label="Se connecter"
+          label={t('Se connecter')}
           loading={loading && !busy}
           disabled={!(email.includes('@') && email.includes('.')) || password.length === 0}
           onPress={onSubmit}
         />
         <Button
-          label="Créer un compte patient"
+          label={t('Créer un compte patient')}
           variant="outline"
           className="mt-3"
           onPress={() => router.push('/(auth)/register')}
@@ -140,19 +142,19 @@ export default function PasswordLogin() {
 
         <View className="flex-row items-center my-7">
           <View className="h-px bg-line flex-1" />
-          <Text className="font-sans-medium text-xs text-muted mx-3">ou continuer avec</Text>
+          <Text className="font-sans-medium text-xs text-muted mx-3">{t('ou continuer avec')}</Text>
           <View className="h-px bg-line flex-1" />
         </View>
 
         <SocialButton
-          label="Continuer avec Google"
+          label={t('Continuer avec Google')}
           badge="G"
           badgeBg="#4285F4"
           disabled={busy}
           onPress={() => onSocial('google')}
         />
         <SocialButton
-          label="Continuer avec Outlook"
+          label={t('Continuer avec Outlook')}
           badge="O"
           badgeBg="#0F6CBD"
           disabled={busy}

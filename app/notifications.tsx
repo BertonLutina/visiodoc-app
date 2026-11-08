@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChevronLeft } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
+import { useT } from '@/i18n';
 
 const STORAGE_KEY = 'visiodoc.notifications';
 
@@ -23,6 +24,7 @@ const ITEMS: { key: keyof Prefs; label: string; desc: string }[] = [
 ];
 
 export default function NotificationsSettings() {
+  const t = useT();
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export default function NotificationsSettings() {
         <Pressable onPress={() => router.back()} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">Notifications</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Notifications')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 12 }}>
@@ -62,8 +64,8 @@ export default function NotificationsSettings() {
               className={`flex-row items-center px-4 py-4 ${i < ITEMS.length - 1 ? 'border-b border-line' : ''}`}
             >
               <View className="flex-1 pr-3">
-                <Text className="text-ink font-sans-semibold">{it.label}</Text>
-                <Text className="font-sans text-xs text-muted mt-0.5">{it.desc}</Text>
+                <Text className="text-ink font-sans-semibold">{t(it.label)}</Text>
+                <Text className="font-sans text-xs text-muted mt-0.5">{t(it.desc)}</Text>
               </View>
               <Switch
                 value={prefs[it.key]}
@@ -77,7 +79,7 @@ export default function NotificationsSettings() {
         </View>
 
         <Text className="font-sans text-xs text-muted mt-4 text-center">
-          Vos préférences sont enregistrées sur cet appareil.
+          {t('Vos préférences sont enregistrées sur cet appareil.')}
         </Text>
       </ScrollView>
     </SafeAreaView>

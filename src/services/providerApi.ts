@@ -3,6 +3,8 @@ import * as mock from '@/data/mockProvider';
 import * as patientMock from '@/data/mock';
 import { logMedicalRecordEvent } from './auditLog';
 import { mapMedicalRecordRow } from './patientApi';
+import { normalizeConsultationStatus } from '@/utils/format';
+import { parseSpecializations, dedupeSpecializations, joinSpecializations } from './specializations';
 import type { ConsultationType } from '@/types';
 import type {
   AvailabilitySlot,
@@ -10,7 +12,11 @@ import type {
   ProviderConsultation,
   ProviderPatient,
   ProviderStats,
+  DashboardOverview,
+  ReviewSummary,
 } from '@/types/provider';
+import { computeDashboardOverview, weeklyCapacity, type DashboardRow } from './dashboardMetrics';
+import { getSchedulingSettings, isMissingColumnError } from './availabilityApi';
 import type {
   MedicalRecord,
   MedicalRecordAttachment,
@@ -18,6 +24,7 @@ import type {
   MedicalRecordKind,
   MedicalRecordSeverity,
 } from '@/types';
+import { appLocale, translate } from '@/i18n/core';
 
 const useMock = () => !supabaseConfigured || !supabase;
 const initials = (a?: string, b?: string) =>
@@ -43,9 +50,9 @@ export async function getDashboardStats(doctorId: string): Promise<ProviderStats
       .gte('scheduled_at', monthStart.toISOString()),
     supabase!
       .from('healthcare_professionals')
-      .select('rating')
+      .select('rating, average_rating')
       .eq('user_id', doctorId)
-      .single(),
+      .maybeSingle(),
   ]);
 
   return {
@@ -54,7 +61,107 @@ export async function getDashboardStats(doctorId: string): Promise<ProviderStats
     consultationsThisMonth: consultMonth ?? 0,
     consultationsTrend: '',
     netRevenue: 0,
-    averageRating: hp.data?.rating ?? 0,
+    averageRating: hp.data?.average_rating ?? hp.data?.rating ?? 0,
+  };
+}
+
+/* ---------- Dashboard enrichi ---------- */
+export async function getDashboardOverview(doctorId: string): Promise<DashboardOverview> {
+  if (useMock()) return mock.dashboardOverview;
+
+  const [{ data, error }, fee, rules, settings] = await Promise.all([
+    supabase!
+      .from('consultations')
+      .select('id, patient_id, scheduled_at, duration, status, payment_status, payment_amount')
+      .eq('doctor_id', doctorId)
+      .gte('scheduled_at', new Date(Date.now() - 200 * 86_400_000).toISOString()),
+    getFeeConfig(),
+    getAvailability(doctorId),
+    getSchedulingSettings(doctorId),
+  ]);
+  if (error) throw error;
+
+  const slotMinutes = settings.appointmentDurationMinutes;
+  const { nextRowId, ...rest } = computeDashboardOverview((data ?? []) as DashboardRow[], {
+    now: new Date(),
+    feeRate: fee.platformFeeRate,
+    weeklyCapacity: weeklyCapacity(rules, slotMinutes),
+  });
+
+  let next: ProviderConsultation | null = null;
+  if (nextRowId) {
+    const { data: row } = await supabase!
+      .from('consultations')
+      .select(`*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name )`)
+      .eq('id', nextRowId)
+      .maybeSingle();
+    if (row) next = mapConsultation(row);
+  }
+  return { ...rest, next };
+}
+
+/** Statut de validation du compte prestataire (`provider_profiles.status`), `null` si inconnu. */
+export async function getValidationStatus(doctorId: string): Promise<string | null> {
+  if (useMock()) return 'VALIDATED';
+  const { data } = await supabase!
+    .from('provider_profiles')
+    .select('status')
+    .eq('user_id', doctorId)
+    .maybeSingle();
+  return (data?.status as string | undefined) ?? null;
+}
+
+/** Avis patients : note moyenne dénormalisée + derniers commentaires (table `consultation_reviews`). */
+export async function getReviewSummary(doctorId: string, limit = 5): Promise<ReviewSummary> {
+  if (useMock()) return mock.reviewSummary;
+
+  const [{ data, error }, hp] = await Promise.all([
+    supabase!
+      .from('consultation_reviews')
+      .select('id, patient_id, rating, comment, created_at')
+      .eq('doctor_id', doctorId)
+      .order('created_at', { ascending: false })
+      .limit(200),
+    supabase!
+      .from('healthcare_professionals')
+      .select('average_rating, review_count')
+      .eq('user_id', doctorId)
+      .maybeSingle(),
+  ]);
+  if (error) throw error;
+  const rows = data ?? [];
+
+  const distribution = [0, 0, 0, 0, 0];
+  for (const r of rows) {
+    const n = Number(r.rating);
+    if (n >= 1 && n <= 5) distribution[n - 1] += 1;
+  }
+
+  // Prénoms des auteurs : best-effort, la RLS de `users` peut les masquer.
+  const names = new Map<string, string>();
+  const ids = [...new Set(rows.filter((r) => r.comment).slice(0, limit).map((r) => r.patient_id as string))];
+  if (ids.length) {
+    const { data: users } = await supabase!.from('users').select('id, first_name, last_name').in('id', ids);
+    for (const u of users ?? []) {
+      const last = (u.last_name ?? '').charAt(0);
+      names.set(u.id, `${u.first_name ?? ''}${last ? ` ${last}.` : ''}`.trim());
+    }
+  }
+
+  return {
+    average: hp.data?.average_rating != null ? Number(hp.data.average_rating) : null,
+    count: hp.data?.review_count ?? rows.length,
+    distribution,
+    recent: rows
+      .filter((r) => r.comment)
+      .slice(0, limit)
+      .map((r) => ({
+        id: r.id,
+        author: names.get(r.patient_id) || 'Patient',
+        rating: Number(r.rating) || 0,
+        comment: r.comment as string,
+        date: new Date(r.created_at).toLocaleDateString(appLocale(), { day: 'numeric', month: 'short', year: 'numeric' }),
+      })),
   };
 }
 
@@ -70,7 +177,7 @@ function mapConsultation(row: any): ProviderConsultation {
       initials: initials(p.first_name, p.last_name),
     },
     reason: row.reason ?? '',
-    dateLabel: new Date(row.scheduled_at).toLocaleString('fr-FR', {
+    dateLabel: new Date(row.scheduled_at).toLocaleString(appLocale(), {
       day: 'numeric',
       month: 'short',
       hour: '2-digit',
@@ -78,7 +185,9 @@ function mapConsultation(row: any): ProviderConsultation {
     }),
     type: (row.consultation_type as ConsultationType) ?? 'video',
     durationMin: row.duration ?? 30,
-    status: row.status,
+    status: normalizeConsultationStatus(row.status),
+    rawStatus: row.status,
+    scheduledAt: row.scheduled_at,
     roomId: row.video_room_id ?? undefined,
   };
 }
@@ -318,15 +427,35 @@ export async function archiveMedicalRecord(id: string, context: MedicalRecordCon
 }
 
 /* ---------- Disponibilités hebdomadaires ---------- */
+const WEEKLY_COLUMNS = 'id, day_of_week, start_time, end_time';
+const WEEKLY_COLUMNS_WITH_PERIOD = `${WEEKLY_COLUMNS}, valid_from, valid_to`;
+let weeklyPeriodColumns: boolean | null = null;
+
+async function selectWeeklyAvailability(doctorId: string) {
+  const run = (columns: string) =>
+    supabase!
+      .from('doctor_availability')
+      .select(columns)
+      .eq('doctor_id', doctorId)
+      .eq('recurrence_type', 'weekly')
+      .eq('is_available', true)
+      .order('day_of_week', { ascending: true });
+
+  if (weeklyPeriodColumns !== false) {
+    const first = await run(WEEKLY_COLUMNS_WITH_PERIOD);
+    if (!first.error) {
+      weeklyPeriodColumns = true;
+      return first;
+    }
+    if (!isMissingColumnError(first.error)) return first;
+    weeklyPeriodColumns = false;
+  }
+  return run(WEEKLY_COLUMNS);
+}
+
 export async function getAvailability(doctorId: string): Promise<AvailabilitySlot[]> {
   if (useMock()) return mock.providerAvailability;
-  const { data, error } = await supabase!
-    .from('doctor_availability')
-    .select('id, day_of_week, start_time, end_time')
-    .eq('doctor_id', doctorId)
-    .eq('recurrence_type', 'weekly')
-    .eq('is_available', true)
-    .order('day_of_week', { ascending: true });
+  const { data, error } = await selectWeeklyAvailability(doctorId);
   if (error) throw error;
   return (data ?? []).map((a: any) => ({
     id: a.id,
@@ -335,6 +464,8 @@ export async function getAvailability(doctorId: string): Promise<AvailabilitySlo
     endTime: a.end_time,
     slotDuration: 30, // vestige non lu par le nouveau moteur (voir provider_scheduling_settings)
     count: 0,
+    validFrom: a.valid_from ? String(a.valid_from).slice(0, 10) : null,
+    validTo: a.valid_to ? String(a.valid_to).slice(0, 10) : null,
   }));
 }
 
@@ -344,19 +475,24 @@ export type AvailabilityInput = {
   endTime: string;
 };
 
-/** Remplace les disponibilités hebdomadaires du médecin (ne touche jamais aux overrides). */
+/**
+ * Remplace les disponibilités hebdomadaires du médecin (ne touche jamais aux overrides).
+ * `period` borne ces règles (inclusif). Si les colonnes ne sont pas encore en base,
+ * les horaires sont quand même enregistrés et `periodSynced` vaut false.
+ */
 export async function saveAvailability(
   doctorId: string,
   ranges: AvailabilityInput[],
-): Promise<void> {
-  if (useMock()) return; // mode mock : persistance locale côté écran (AsyncStorage)
+  period?: { validFrom: string; validTo: string } | null,
+): Promise<{ periodSynced: boolean }> {
+  if (useMock()) return { periodSynced: true }; // mode mock : persistance locale côté écran (AsyncStorage)
   const { error: delErr } = await supabase!
     .from('doctor_availability')
     .delete()
     .eq('doctor_id', doctorId)
     .eq('recurrence_type', 'weekly');
   if (delErr) throw delErr;
-  if (ranges.length === 0) return;
+  if (ranges.length === 0) return { periodSynced: true };
   const rows = ranges.map((r) => ({
     doctor_id: doctorId,
     recurrence_type: 'weekly',
@@ -365,8 +501,18 @@ export async function saveAvailability(
     end_time: r.endTime,
     is_available: true,
   }));
-  const { error } = await supabase!.from('doctor_availability').insert(rows);
-  if (error) throw error;
+  if (!period) {
+    const { error } = await supabase!.from('doctor_availability').insert(rows);
+    if (error) throw error;
+    return { periodSynced: true };
+  }
+  const windowed = rows.map((row) => ({ ...row, valid_from: period.validFrom, valid_to: period.validTo }));
+  const { error } = await supabase!.from('doctor_availability').insert(windowed);
+  if (!error) return { periodSynced: true };
+  if (!isMissingColumnError(error)) throw error;
+  const retry = await supabase!.from('doctor_availability').insert(rows);
+  if (retry.error) throw retry.error;
+  return { periodSynced: false };
 }
 
 /* ---------- Dates spécifiques (overrides) ---------- */
@@ -487,4 +633,43 @@ export async function appendMedicalRecordAttachment(
   if (useMock()) return;
   const { error } = await supabase!.from('medical_records').update({ attachments: [...existing, attachment] }).eq('id', id);
   if (error) throw error;
+}
+
+/* ---------- Spécialisations ---------- */
+// `specialization` peut être un text[] ou une chaîne selon la table : on écrit dans le même
+// format que celui lu (tableau si la valeur existante est un tableau, sinon chaîne « A · B »).
+export async function getMySpecializations(userId: string): Promise<string[]> {
+  if (useMock()) return parseSpecializations(mock.currentProvider.specialization);
+  const [{ data: u }, { data: hp }] = await Promise.all([
+    supabase!.from('users').select('specialization').eq('id', userId).maybeSingle(),
+    supabase!.from('healthcare_professionals').select('specialization').eq('user_id', userId).maybeSingle(),
+  ]);
+  const fromHp = parseSpecializations(hp?.specialization);
+  return fromHp.length ? fromHp : parseSpecializations(u?.specialization);
+}
+
+export async function saveMySpecializations(userId: string, list: string[]): Promise<string[]> {
+  const clean = dedupeSpecializations(list);
+  if (clean.length === 0) {
+    throw Object.assign(new Error(translate('Choisissez au moins une spécialisation.')), { userFacing: true });
+  }
+  if (useMock()) return clean;
+  const [{ data: u }, { data: hp }] = await Promise.all([
+    supabase!.from('users').select('specialization').eq('id', userId).maybeSingle(),
+    supabase!.from('healthcare_professionals').select('specialization').eq('user_id', userId).maybeSingle(),
+  ]);
+  const valueFor = (existing: unknown) => (Array.isArray(existing) ? clean : joinSpecializations(clean));
+  const { error: e1 } = await supabase!
+    .from('users')
+    .update({ specialization: valueFor(u?.specialization) })
+    .eq('id', userId);
+  if (e1) throw e1;
+  if (hp) {
+    const { error: e2 } = await supabase!
+      .from('healthcare_professionals')
+      .update({ specialization: valueFor(hp.specialization) })
+      .eq('user_id', userId);
+    if (e2) throw e2;
+  }
+  return clean;
 }

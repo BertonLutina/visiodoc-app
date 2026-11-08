@@ -186,6 +186,20 @@ policies calquées sur le même modèle de cercle de soins ("Circle of care can 
 les deux segments `[1]` (patient) et `[2]` (dossier) sont vérifiés, pas seulement le second (une
 lacune trouvée et corrigée pendant la revue finale, avant exécution).
 
+## Photos de profil — bucket public `avatars` (2026-10-14)
+
+Colonne existante `users.avatar_url` (nullable) ; aucun bucket n'existait pour les photos.
+Nouveau bucket **public** `avatars` (5 Mo max, jpeg/png/webp), chemin
+`{user_id}/avatar-{timestamp}.{ext}`. Policies sur `storage.objects` : chaque utilisateur
+authentifié ne peut lire/écrire/supprimer que dans son propre dossier (`[1] = auth.uid()`).
+La lecture passe par l'URL publique (nécessaire pour afficher les photos de médecins aux
+patients et aux visiteurs anonymes). Script : `docs/sql/avatars-bucket.sql` — **à exécuter
+une fois dans le SQL Editor** (pas encore appliqué en prod au moment de l'écriture).
+Côté app : `src/services/avatar.ts`, `src/components/AvatarPicker.tsx`, écriture via
+`updateProfile({ avatarUrl })` (policy existante « Users can update own profile »).
+Le catalogue des médecins sélectionne `avatar_url` et retombe sur l'ancienne requête si les
+droits colonne de `users` ne l'exposent pas à `anon`.
+
 ## Structure de `users` (inchangée dans ses grandes lignes)
 `id` · `email` · `first_name` · `last_name` · `phone` · `role` · `is_active` ·
 `doctor_status` (vocabulaire étendu, voir plus haut) · `specialization` ·

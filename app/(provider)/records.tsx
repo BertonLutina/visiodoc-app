@@ -10,8 +10,11 @@ import { useAsync } from '@/hooks/useAsync';
 import { getPatients, getLatestRecordByPatient } from '@/services/providerApi';
 import { RECORD_KIND_META } from '@/services/medicalRecordTaxonomy';
 import { currentProvider } from '@/data/mockProvider';
+import { useLanguage, useT } from '@/i18n';
 
 export default function ProviderRecords() {
+  const t = useT();
+  const { code: lang } = useLanguage();
   const { user } = useAuth();
   const doctorId = user?.id ?? currentProvider.id;
   const [query, setQuery] = useState('');
@@ -21,7 +24,7 @@ export default function ProviderRecords() {
   const { data: patients, error: patientsError } = useAsync(() => getPatients(doctorId), [doctorId]);
   const { data: latestByPatient, error: latestError } = useAsync(
     () => getLatestRecordByPatient(doctorId),
-    [doctorId],
+    [doctorId, lang],
   );
 
   const list = useMemo(
@@ -33,12 +36,12 @@ export default function ProviderRecords() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="px-5 pt-2">
         <Text className="font-serif-bold text-3xl text-ink mb-4" style={{ letterSpacing: -0.3 }}>
-          Dossiers médicaux
+          {t('Dossiers médicaux')}
         </Text>
         <View className="flex-row items-center border border-line rounded-2xl px-4 py-1 bg-surface">
           <Search color={colors.muted} size={18} />
           <TextInput
-            placeholder="Rechercher un dossier..."
+            placeholder={t('Rechercher un dossier...')}
             placeholderTextColor={colors.muted}
             value={query}
             onChangeText={setQuery}
@@ -51,16 +54,16 @@ export default function ProviderRecords() {
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 12 }}>
         {patientsError ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center">
-            <Text className="font-sans-semibold text-ink text-center">Erreur de chargement. Réessayez.</Text>
+            <Text className="font-sans-semibold text-ink text-center">{t('Erreur de chargement. Réessayez.')}</Text>
           </View>
         ) : null}
         {list.map((p) => {
           const last = latestByPatient?.get(p.id);
           const lastLabel = latestError
-            ? 'Dernier acte indisponible'
+            ? t('Dernier acte indisponible')
             : last
-              ? `${RECORD_KIND_META[last.kind].label} · ${last.date}`
-              : 'Aucun dossier pour le moment';
+              ? `${t(RECORD_KIND_META[last.kind].label)} · ${last.date}`
+              : t('Aucun dossier pour le moment');
           return (
             <Pressable key={p.id} onPress={() => router.push(`/patient/${p.id}`)}>
               <Card className="mb-3 flex-row items-center">
@@ -77,7 +80,7 @@ export default function ProviderRecords() {
         })}
         {!patientsError && list.length === 0 ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center">
-            <Text className="font-sans-semibold text-ink text-center">Aucun patient pour le moment</Text>
+            <Text className="font-sans-semibold text-ink text-center">{t('Aucun patient pour le moment')}</Text>
           </View>
         ) : null}
       </ScrollView>

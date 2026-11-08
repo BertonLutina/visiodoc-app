@@ -3,7 +3,8 @@ import { Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { WebView } from 'react-native-webview';
+// TODO: réactiver quand react-native-webview sera de nouveau installé
+// import { WebView } from 'react-native-webview';
 import { ChevronLeft } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { useT } from '@/i18n';
@@ -34,11 +35,11 @@ export default function PaymentScreen() {
         </Pressable>
         <Text className="font-sans-bold text-lg text-ink">{t('Paiement')}</Text>
       </View>
+      {/* WebView désactivée temporairement (react-native-webview) :
       {html ? (
         <WebView
           originWhitelist={['*']}
           source={{ html }}
-          // La passerelle redirige vers callbackUrl (schéma de l'app) : on intercepte et on revient.
           onShouldStartLoadWithRequest={(req) => {
             if (req.url.startsWith(returnUrl) || req.url.startsWith('visiodoc://')) {
               done();
@@ -47,11 +48,11 @@ export default function PaymentScreen() {
             return true;
           }}
         />
-      ) : (
-        <View className="flex-1 items-center justify-center px-6">
-          <Text className="font-sans text-muted text-center">{t('Paiement indisponible.')}</Text>
-        </View>
-      )}
+      ) : null}
+      */}
+      <View className="flex-1 items-center justify-center px-6">
+        <Text className="font-sans text-muted text-center">{t('Paiement indisponible.')}</Text>
+      </View>
     </SafeAreaView>
   );
 }

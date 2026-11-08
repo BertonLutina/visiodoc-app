@@ -7,6 +7,8 @@ import type {
   ProviderReview,
   ProviderStats,
   SubscriptionPlan,
+  DashboardOverview,
+  ReviewSummary,
 } from '@/types/provider';
 
 export const currentProvider: ProviderProfile = {
@@ -122,3 +124,41 @@ export const subscriptionPlans: SubscriptionPlan[] = [
 export const providerReviews: ProviderReview[] = [
   { id: 'rv1', author: 'Marie K.', rating: 5, comment: 'Très professionnel et à l\'écoute.', date: '10 juin 2026' },
 ];
+
+export const dashboardOverview: DashboardOverview = {
+  patientsTotal: 124,
+  patientsNew: 8,
+  consultationsThisMonth: 38,
+  consultationsTrend: '+12% vs mois préc.',
+  netRevenue: 450000,
+  revenueSeries: [
+    { label: 'mai', amount: 280000 },
+    { label: 'juin', amount: 310000 },
+    { label: 'juil.', amount: 350000 },
+    { label: 'août', amount: 330000 },
+    { label: 'sept.', amount: 410000 },
+    { label: 'oct.', amount: 450000 },
+  ],
+  cancellationRate: 12,
+  noShowRate: 5,
+  weekAgenda: ['Mer', 'Jeu', 'Ven', 'Sam', 'Dim', 'Lun', 'Mar'].map((label, i) => ({
+    date: `2026-10-${14 + i}`,
+    label,
+    dayNumber: 14 + i,
+    count: [3, 2, 4, 0, 0, 3, 1][i],
+    isToday: i === 0,
+  })),
+  weekBooked: 13,
+  weekCapacity: 20,
+  fillRate: 65,
+  patientsToRecall: 3,
+  pendingPayment: 1,
+  next: providerTodayConsultations[0] ?? null,
+};
+
+export const reviewSummary: ReviewSummary = {
+  average: 4.9,
+  count: 1,
+  distribution: [0, 0, 0, 0, 1],
+  recent: providerReviews,
+};

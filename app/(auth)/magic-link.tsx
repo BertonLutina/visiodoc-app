@@ -7,8 +7,10 @@ import { Button, Field, ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { authErrorMessage, isProviderPending, PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
+import { useT } from '@/i18n';
 
 export default function MagicLinkLogin() {
+  const t = useT();
   const { sendEmailOtp, verifyEmailOtp, loading } = useAuth();
   const { role } = useLocalSearchParams<{ role?: string }>();
   const isProvider = role === 'provider';
@@ -25,7 +27,7 @@ export default function MagicLinkLogin() {
   const emailValid = email.includes('@') && email.includes('.');
 
   const handleError = (e: any) => {
-    if (isProviderPending(e)) Alert.alert('Compte en attente de validation', PROVIDER_PENDING_MESSAGE);
+    if (isProviderPending(e)) Alert.alert(t('Compte en attente de validation'), t(PROVIDER_PENDING_MESSAGE));
     else setErrorMsg(authErrorMessage(e));
   };
 
@@ -61,7 +63,7 @@ export default function MagicLinkLogin() {
         >
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">Connexion sans mot de passe</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Connexion sans mot de passe')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 24 }} keyboardShouldPersistTaps="handled">
@@ -69,18 +71,18 @@ export default function MagicLinkLogin() {
           <View className={`w-14 h-14 rounded-3xl items-center justify-center mb-4 ${tileBg}`}>
             <MailCheck color={tint} size={28} />
           </View>
-          <ScreenTitle center>{step === 'email' ? 'Recevez un lien magique' : 'Entrez le code'}</ScreenTitle>
+          <ScreenTitle center>{step === 'email' ? t('Recevez un lien magique') : t('Entrez le code')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
             {step === 'email'
-              ? 'On vous envoie un lien et un code de connexion par email.'
-              : `Code envoyé à ${email}. Regardez votre boîte mail.`}
+              ? t('On vous envoie un lien et un code de connexion par email.')
+              : t('Code envoyé à {email}. Regardez votre boîte mail.', { email })}
           </Text>
         </View>
 
         {step === 'email' ? (
           <>
             <Field
-              label="Adresse email"
+              label={t('Adresse email')}
               placeholder="marie.konate@gmail.com"
               autoCapitalize="none"
               keyboardType="email-address"
@@ -93,12 +95,12 @@ export default function MagicLinkLogin() {
                 <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
               </View>
             ) : null}
-            <Button label="Envoyer le lien" variant={variant} loading={sending} disabled={!emailValid} onPress={onSend} />
+            <Button label={t('Envoyer le lien')} variant={variant} loading={sending} disabled={!emailValid} onPress={onSend} />
           </>
         ) : (
           <>
             <Field
-              label="Code de connexion"
+              label={t('Code de connexion')}
               placeholder="123456"
               keyboardType="number-pad"
               maxLength={6}
@@ -110,10 +112,10 @@ export default function MagicLinkLogin() {
                 <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
               </View>
             ) : null}
-            <Button label="Se connecter" variant={variant} loading={loading} disabled={code.length < 6} onPress={onVerify} />
+            <Button label={t('Se connecter')} variant={variant} loading={loading} disabled={code.length < 6} onPress={onVerify} />
             <Pressable onPress={onSend} disabled={sending} className="mt-4 items-center">
               <Text className="font-sans-semibold text-sm" style={{ color: tint }}>
-                {sending ? 'Envoi…' : 'Renvoyer le code'}
+                {sending ? t('Envoi…') : t('Renvoyer le code')}
               </Text>
             </Pressable>
           </>

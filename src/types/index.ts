@@ -20,6 +20,8 @@ export interface User {
   phone?: string;
   avatarUrl?: string;
   countryCode?: string;
+  /** Langue choisie par le patient (parmi celles de son pays), ex: 'Lingala'. */
+  preferredLanguage?: string;
   /** Compte actif (médecin validé par l'admin). */
   isActive?: boolean;
   /** Statut médecin, ex: 'VALIDE_ABO_ACTIF', 'PENDING_VALIDATION'… */
@@ -39,6 +41,8 @@ export interface Doctor {
   patientsCount: number;
   availabilityLabel: string; // ex: "Dispo auj."
   initials: string;
+  /** Photo de profil publique (users.avatar_url). */
+  avatarUrl?: string;
 }
 
 export interface TimeSlot {

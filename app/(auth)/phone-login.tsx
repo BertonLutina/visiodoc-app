@@ -9,8 +9,10 @@ import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
 import { authErrorMessage, isProviderPending, PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
+import { useT } from '@/i18n';
 
 export default function PhoneLogin() {
+  const t = useT();
   const { sendPhoneOtp, verifyPhoneOtp, loading } = useAuth();
   const { role } = useLocalSearchParams<{ role?: string }>();
   const isProvider = role === 'provider';
@@ -30,7 +32,7 @@ export default function PhoneLogin() {
   const phoneValid = local.replace(/\D/g, '').length >= 8;
 
   const handleError = (e: any) => {
-    if (isProviderPending(e)) Alert.alert('Compte en attente de validation', PROVIDER_PENDING_MESSAGE);
+    if (isProviderPending(e)) Alert.alert(t('Compte en attente de validation'), t(PROVIDER_PENDING_MESSAGE));
     else setErrorMsg(authErrorMessage(e));
   };
 
@@ -66,7 +68,7 @@ export default function PhoneLogin() {
         >
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">Connexion par téléphone</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Connexion par téléphone')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 24 }} keyboardShouldPersistTaps="handled">
@@ -74,36 +76,36 @@ export default function PhoneLogin() {
           <View className={`w-14 h-14 rounded-3xl items-center justify-center mb-4 ${tileBg}`}>
             <Smartphone color={tint} size={28} />
           </View>
-          <ScreenTitle center>{step === 'phone' ? 'Votre numéro' : 'Entrez le code'}</ScreenTitle>
+          <ScreenTitle center>{step === 'phone' ? t('Votre numéro') : t('Entrez le code')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
             {step === 'phone'
-              ? 'On vous envoie un code de vérification par SMS.'
-              : `Code envoyé au ${fullPhone}.`}
+              ? t('On vous envoie un code de vérification par SMS.')
+              : t('Code envoyé au {phone}.', { phone: fullPhone })}
           </Text>
         </View>
 
         {step === 'phone' ? (
           <>
-            <CountryPicker label="Pays" value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
+            <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
             <Field
-              label="Numéro de téléphone"
+              label={t('Numéro de téléphone')}
               placeholder={`${country?.dialCode ?? ''} 81 234 5678`}
               keyboardType="phone-pad"
               value={local}
               onChangeText={setLocal}
-              hint={local ? `Sera envoyé au ${fullPhone}` : undefined}
+              hint={local ? t('Sera envoyé au {phone}', { phone: fullPhone }) : undefined}
             />
             {errorMsg ? (
               <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
                 <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
               </View>
             ) : null}
-            <Button label="Recevoir le code" variant={variant} loading={sending} disabled={!phoneValid} onPress={onSend} />
+            <Button label={t('Recevoir le code')} variant={variant} loading={sending} disabled={!phoneValid} onPress={onSend} />
           </>
         ) : (
           <>
             <Field
-              label="Code SMS"
+              label={t('Code SMS')}
               placeholder="123456"
               keyboardType="number-pad"
               maxLength={6}
@@ -115,10 +117,10 @@ export default function PhoneLogin() {
                 <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
               </View>
             ) : null}
-            <Button label="Se connecter" variant={variant} loading={loading} disabled={code.length < 6} onPress={onVerify} />
+            <Button label={t('Se connecter')} variant={variant} loading={loading} disabled={code.length < 6} onPress={onVerify} />
             <Pressable onPress={onSend} disabled={sending} className="mt-4 items-center">
               <Text className="font-sans-semibold text-sm" style={{ color: tint }}>
-                {sending ? 'Envoi…' : 'Renvoyer le code'}
+                {sending ? t('Envoi…') : t('Renvoyer le code')}
               </Text>
             </Pressable>
           </>

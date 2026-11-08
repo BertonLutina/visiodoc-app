@@ -28,6 +28,38 @@ describe('saveAvailability', () => {
 
     expect(eq1).toHaveBeenCalledWith('doctor_id', 'doc-1');
     expect(eq2).toHaveBeenCalledWith('recurrence_type', 'weekly');
+    expect(insertMock).toHaveBeenCalledWith([
+      expect.objectContaining({ day_of_week: 0, start_time: '09:00', end_time: '12:00' }),
+    ]);
+    const row = insertMock.mock.calls[0][0][0];
+    expect(row.valid_from).toBeUndefined();
+  });
+
+  it('stores the inclusive period on weekly rows and retries without it if the columns are missing', async () => {
+    const eq2 = jest.fn().mockResolvedValue({ error: null });
+    const eq1 = jest.fn(() => ({ eq: eq2 }));
+    const deleteMock = jest.fn(() => ({ eq: eq1 }));
+    const insertMock = jest
+      .fn()
+      .mockResolvedValueOnce({ error: { code: 'PGRST204', message: "Could not find the 'valid_from' column" } })
+      .mockResolvedValueOnce({ error: null });
+    const fromMock = jest.fn(() => ({ delete: deleteMock, insert: insertMock }));
+
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: fromMock },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+
+    const { saveAvailability: saveAvailabilityFresh } = require('./providerApi');
+    const result = await saveAvailabilityFresh('doc-1', [{ dayOfWeek: 0, startTime: '09:00', endTime: '12:00' }], {
+      validFrom: '2026-10-01',
+      validTo: '2026-10-31',
+    });
+
+    expect(result).toEqual({ periodSynced: false });
+    expect(insertMock.mock.calls[0][0][0]).toMatchObject({ valid_from: '2026-10-01', valid_to: '2026-10-31' });
+    expect(insertMock.mock.calls[1][0][0].valid_from).toBeUndefined();
   });
 });
 

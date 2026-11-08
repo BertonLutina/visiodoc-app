@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { colors } from '@/theme/colors';
+import { useT } from '@/i18n';
 
 /**
  * Tab bar « liquid glass » custom, dessinée en React Native → rendu IDENTIQUE
@@ -16,6 +17,7 @@ export function GlassTabBar({
   tint = colors.primary,
 }: BottomTabBarProps & { tint?: string }) {
   const insets = useSafeAreaInsets();
+  const t = useT();
 
   return (
     <BlurView
@@ -33,7 +35,7 @@ export function GlassTabBar({
       <View style={{ flexDirection: 'row' }}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const label = (options.title ?? route.name) as string;
+          const label = t((options.title ?? route.name) as string);
           const focused = state.index === index;
           const color = focused ? tint : colors.muted;
 

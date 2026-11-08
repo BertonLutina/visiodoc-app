@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stethoscope, Mail, Smartphone, Lock, ChevronRight } from 'lucide-react-native';
 import { ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
+import { useT } from '@/i18n';
 
 type Method = {
   icon: typeof Mail;
@@ -20,6 +21,7 @@ const methods: Method[] = [
 ];
 
 export default function LoginProvider() {
+  const t = useT();
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 56 }}>
@@ -27,9 +29,9 @@ export default function LoginProvider() {
           <View className="w-14 h-14 rounded-3xl bg-accent items-center justify-center mb-4">
             <Stethoscope color={colors.white} size={28} />
           </View>
-          <ScreenTitle center>Connexion médecin</ScreenTitle>
+          <ScreenTitle center>{t('Connexion médecin')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
-            Portail prestataire — choisissez votre méthode
+            {t('Portail prestataire — choisissez votre méthode')}
           </Text>
         </View>
 
@@ -43,22 +45,22 @@ export default function LoginProvider() {
               <m.icon color={colors.accent} size={22} />
             </View>
             <View className="flex-1">
-              <Text className="font-sans-bold text-ink text-base">{m.label}</Text>
-              <Text className="font-sans text-sm text-muted mt-0.5">{m.sub}</Text>
+              <Text className="font-sans-bold text-ink text-base">{t(m.label)}</Text>
+              <Text className="font-sans text-sm text-muted mt-0.5">{t(m.sub)}</Text>
             </View>
             <ChevronRight color={colors.muted} size={20} />
           </Pressable>
         ))}
 
         <View className="flex-row justify-center mt-6">
-          <Text className="font-sans text-muted">Pas encore inscrit ? </Text>
+          <Text className="font-sans text-muted">{t('Pas encore inscrit ?')} </Text>
           <Link href="/(auth)/register-provider" className="font-sans-bold text-accent">
-            Créer un compte médecin
+            {t('Créer un compte médecin')}
           </Link>
         </View>
 
         <Link href="/" className="text-center font-sans-medium text-muted mt-8">
-          ← Retour à l'accueil
+          {t("← Retour à l'accueil")}
         </Link>
       </ScrollView>
     </SafeAreaView>

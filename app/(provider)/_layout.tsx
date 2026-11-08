@@ -5,33 +5,35 @@ import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { Home, Users, CalendarClock, FolderHeart, User } from 'lucide-react-native';
 import { GlassTabBar } from '@/components/GlassTabBar';
 import { colors } from '@/theme/colors';
+import { useT } from '@/i18n';
 
 /**
  * Espace médecin (accent orange).
  * iOS → NativeTabs (Liquid Glass iOS 26) ; Android / web → tab bar custom « glass ».
  */
 export default function ProviderTabsLayout() {
+  const t = useT();
   if (Platform.OS === 'ios') {
     return (
       <NativeTabs tintColor={colors.accent}>
         <NativeTabs.Trigger name="index">
-          <NativeTabs.Trigger.Label>Accueil</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('Accueil')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="house.fill" />
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="patients">
-          <NativeTabs.Trigger.Label>Patients</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('Patients')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="person.2.fill" />
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="consultations">
-          <NativeTabs.Trigger.Label>Consult.</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('Consult.')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="calendar.badge.clock" />
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="records">
-          <NativeTabs.Trigger.Label>Dossiers</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('Dossiers')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="folder.fill" />
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="profile">
-          <NativeTabs.Trigger.Label>Profil</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('Profil')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="person.crop.circle" />
         </NativeTabs.Trigger>
       </NativeTabs>

@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   Text,
   TextInput,
@@ -10,6 +11,7 @@ import {
 } from 'react-native';
 import { Check, AlertCircle, Eye, EyeOff } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
+import { useT } from '@/i18n';
 
 /* ---------- ScreenTitle (serif éditorial — signature Bloom) ---------- */
 export function ScreenTitle({
@@ -115,13 +117,28 @@ export function Avatar({
   initials,
   size = 48,
   tone = 'primary',
+  uri,
 }: {
   initials: string;
   size?: number;
   tone?: 'primary' | 'light' | 'clay';
+  /** Photo de profil ; sans elle (ou si elle ne charge pas), les initiales s'affichent. */
+  uri?: string | null;
 }) {
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => setFailed(false), [uri]);
   const bg = tone === 'primary' ? colors.primary : tone === 'clay' ? colors.clay : colors.primaryLight;
   const fg = tone === 'light' ? colors.primaryDark : colors.white;
+  if (uri && !failed) {
+    return (
+      <Image
+        source={{ uri }}
+        onError={() => setFailed(true)}
+        style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg }}
+        accessibilityIgnoresInvertColors
+      />
+    );
+  }
   return (
     <View
       style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: bg }}
@@ -163,6 +180,7 @@ export function Field({
   const borderColor = error ? colors.danger : colors.line;
   const isPassword = !!secureTextEntry;
   const [show, setShow] = React.useState(false);
+  const t = useT();
   const hasTrailing = isPassword || valid || (!!error && !isPassword);
   return (
     <View className={`mb-4 ${className}`}>
@@ -185,7 +203,7 @@ export function Field({
             onPress={() => setShow((s) => !s)}
             hitSlop={10}
             accessibilityRole="button"
-            accessibilityLabel={show ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+            accessibilityLabel={show ? t('Masquer le mot de passe') : t('Afficher le mot de passe')}
             className="absolute right-3.5 p-1"
           >
             {show ? (

@@ -275,9 +275,86 @@ export async function getMedicalRecords(patientId: string): Promise<MedicalRecor
 }
 
 /* ---------- Portefeuille ----------
- * Note : pas de table de solde patient confirmée dans le backend web
- * (les paiements passent par payment_transactions / escrows).
- * On garde le mock ; à câbler en Phase 2+ quand la table sera définie. */
-export async function getWallet(_patientId: string): Promise<Wallet> {
-  return mock.wallet;
+ * Pas de solde prépayé côté patient : l'argent passe par `payment_transactions_v2`
+ * (montant en plus petite unité, ×100). `balance` est le total des paiements réussis. */
+
+const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  SUCCESS: 'Paiement réussi',
+  PENDING: 'Paiement en attente',
+  FAILED: 'Paiement échoué',
+  REFUNDED: 'Paiement remboursé',
+  EXPIRED: 'Paiement expiré',
+};
+
+export function mapPaymentRow(row: {
+  id: string;
+  amount?: number | null;
+  status?: string | null;
+  created_at?: string | null;
+  provider?: { first_name?: string | null; last_name?: string | null } | null;
+}): WalletTransaction {
+  const major = (Number(row.amount) || 0) / 100;
+  const status = row.status ?? '';
+  const provider = row.provider ?? {};
+  const who = [provider.first_name, provider.last_name].filter(Boolean).join(' ').trim();
+  return {
+    id: row.id,
+    label: PAYMENT_STATUS_LABEL[status] ?? 'Paiement',
+    date: row.created_at
+      ? new Date(row.created_at).toLocaleDateString(appLocale(), {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        })
+      : '',
+    amount: status === 'REFUNDED' ? major : -major,
+    method: who || undefined,
+  };
+}
+
+const emptyWallet = (): Wallet => ({
+  balance: 0,
+  currency: '',
+  countryLabel: '',
+  aiCreditsLeft: 0,
+  transactions: [],
+});
+
+export async function getWallet(patientId: string): Promise<Wallet> {
+  if (useMock() || !patientId) return emptyWallet();
+  const { data, error } = await supabase!
+    .from('payment_transactions_v2')
+    .select(
+      `id, amount, status, created_at,
+       provider:users!provider_id ( first_name, last_name )`,
+    )
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false })
+    .limit(30);
+  if (error) throw error;
+  const rows = data ?? [];
+  const transactions = rows.map(mapPaymentRow);
+  const balance = rows
+    .filter((row: { status?: string | null }) => row.status === 'SUCCESS')
+    .reduce((sum: number, row: { amount?: number | null }) => sum + (Number(row.amount) || 0) / 100, 0);
+  return { ...emptyWallet(), balance, transactions };
+}
+
+const safeRoomId = (room: string) => /^[A-Za-z0-9_-]+$/.test(room);
+
+/** Médecin de l'appel, à partir de l'id de consultation ou du salon vidéo. */
+export async function getCallSession(room: string): Promise<{ doctorName: string; initials: string } | null> {
+  if (useMock() || !room || !safeRoomId(room)) return null;
+  const { data, error } = await supabase!
+    .from('consultations')
+    .select('id, doctor:users!consultations_doctor_id_fkey ( first_name, last_name )')
+    .or(`id.eq.${room},video_room_id.eq.${room}`)
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const doctor = (data as { doctor?: { first_name?: string | null; last_name?: string | null } | null }).doctor;
+  const first = doctor?.first_name ?? '';
+  const last = doctor?.last_name ?? '';
+  if (!first && !last) return null;
+  return { doctorName: `Dr. ${first} ${last}`.trim(), initials: initials(first, last) || 'VD' };
 }

@@ -7,8 +7,10 @@ import { CountryPicker } from '@/components/CountryPicker';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { authErrorMessage } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
+import { useT } from '@/i18n';
 
 export default function RegisterPatient() {
+  const t = useT();
   const { registerPatient, loading } = useAuth();
   const [form, setForm] = useState({
     firstName: '',
@@ -45,14 +47,14 @@ export default function RegisterPatient() {
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
         <View className="items-center mb-7 mt-2">
           <Text className="font-serif-bold text-3xl text-primary mb-4">visiodoc</Text>
-          <ScreenTitle center>Créons votre compte</ScreenTitle>
-          <Text className="font-sans text-base text-muted mt-2">Quelques détails pour commencer</Text>
+          <ScreenTitle center>{t('Créons votre compte')}</ScreenTitle>
+          <Text className="font-sans text-base text-muted mt-2">{t('Quelques détails pour commencer')}</Text>
         </View>
 
-        <Field label="Prénom" placeholder="Marie" value={form.firstName} onChangeText={set('firstName')} />
-        <Field label="Nom" placeholder="Konaté" value={form.lastName} onChangeText={set('lastName')} />
+        <Field label={t('Prénom')} placeholder="Marie" value={form.firstName} onChangeText={set('firstName')} />
+        <Field label={t('Nom')} placeholder="Konaté" value={form.lastName} onChangeText={set('lastName')} />
         <Field
-          label="Email"
+          label={t('Email')}
           placeholder="marie.konate@gmail.com"
           autoCapitalize="none"
           keyboardType="email-address"
@@ -60,20 +62,20 @@ export default function RegisterPatient() {
           onChangeText={set('email')}
         />
         <Field
-          label="Téléphone"
+          label={t('Téléphone')}
           placeholder={`${country?.dialCode ?? ''} 81 234 5678`}
           keyboardType="phone-pad"
           value={form.phone}
           onChangeText={set('phone')}
         />
         <Field
-          label="Mot de passe"
+          label={t('Mot de passe')}
           placeholder="••••••••"
           secureTextEntry
           value={form.password}
           onChangeText={set('password')}
         />
-        <CountryPicker label="Pays" value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
+        <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
 
         {errorMsg ? (
           <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
@@ -81,12 +83,12 @@ export default function RegisterPatient() {
           </View>
         ) : null}
 
-        <Button label="Créer mon compte" loading={loading} onPress={onSubmit} className="mt-2" />
+        <Button label={t('Créer mon compte')} loading={loading} onPress={onSubmit} className="mt-2" />
 
         <View className="flex-row justify-center mt-5">
-          <Text className="font-sans text-muted">Déjà inscrit ? </Text>
+          <Text className="font-sans text-muted">{t('Déjà inscrit ?')} </Text>
           <Link href="/(auth)/login" className="font-sans-bold text-primary">
-            Se connecter
+            {t('Se connecter')}
           </Link>
         </View>
       </ScrollView>

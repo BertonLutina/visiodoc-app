@@ -147,7 +147,7 @@ describe('bookConsultation', () => {
   });
 });
 
-import { mapMedicalRecordRow } from './patientApi';
+import { mapMedicalRecordRow, mapPaymentRow } from './patientApi';
 
 describe('mapMedicalRecordRow', () => {
   it('maps a full row to the app MedicalRecord shape', () => {
@@ -199,5 +199,82 @@ describe('mapMedicalRecordRow', () => {
     const mapped = mapMedicalRecordRow(row);
     expect(mapped.attachments).toEqual([]);
     expect(mapped.metadata).toEqual({});
+  });
+});
+
+describe('mapPaymentRow', () => {
+  it('converts the smallest currency unit and marks a successful payment as a debit', () => {
+    const tx = mapPaymentRow({
+      id: 't1',
+      amount: 1_500_000,
+      status: 'SUCCESS',
+      created_at: '2026-06-10T10:00:00.000Z',
+      provider: { first_name: 'Amara', last_name: 'Diallo' },
+    });
+    expect(tx.amount).toBe(-15000);
+    expect(tx.label).toBe('Paiement réussi');
+    expect(tx.method).toBe('Amara Diallo');
+    expect(tx.date).toBe(new Date('2026-06-10T10:00:00.000Z').toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    }));
+  });
+
+  it('marks a refund as a credit and omits a missing doctor', () => {
+    const tx = mapPaymentRow({
+      id: 't2',
+      amount: 500_000,
+      status: 'REFUNDED',
+      created_at: '2026-06-11T10:00:00.000Z',
+      provider: null,
+    });
+    expect(tx.amount).toBe(5000);
+    expect(tx.label).toBe('Paiement remboursé');
+    expect(tx.method).toBeUndefined();
+  });
+});
+
+describe('getWallet', () => {
+  const limitMock = jest.fn();
+  const orderMock = jest.fn();
+  const eqMock = jest.fn();
+  const selectMock = jest.fn();
+  const fromMock = jest.fn();
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    limitMock.mockResolvedValue({
+      data: [
+        { id: 'ok', amount: 2_000_000, status: 'SUCCESS', created_at: '2026-06-10T10:00:00.000Z', provider: { first_name: 'A', last_name: 'B' } },
+        { id: 'no', amount: 500_000, status: 'FAILED', created_at: '2026-06-11T10:00:00.000Z', provider: null },
+      ],
+      error: null,
+    });
+    orderMock.mockReturnValue({ limit: limitMock });
+    eqMock.mockReturnValue({ order: orderMock });
+    selectMock.mockReturnValue({ eq: eqMock });
+    fromMock.mockReturnValue({ select: selectMock });
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: fromMock },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+  });
+
+  afterEach(() => {
+    jest.dontMock('@/lib/supabase');
+  });
+
+  it('reads the patient payment history and sums only successful payments', async () => {
+    const { getWallet: getWalletFresh } = require('./patientApi');
+    const wallet = await getWalletFresh('patient-real');
+    expect(fromMock).toHaveBeenCalledWith('payment_transactions_v2');
+    expect(eqMock).toHaveBeenCalledWith('patient_id', 'patient-real');
+    expect(wallet.balance).toBe(20000);
+    expect(wallet.transactions).toHaveLength(2);
+    expect(wallet.transactions[0].amount).toBe(-20000);
+    expect(wallet.aiCreditsLeft).toBe(0);
   });
 });

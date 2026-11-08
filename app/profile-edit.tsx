@@ -4,12 +4,15 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { Button, Field } from '@/components/ui';
+import { AvatarPicker } from '@/components/AvatarPicker';
 import { CountryPicker } from '@/components/CountryPicker';
 import { colors } from '@/theme/colors';
 import { authErrorMessage } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
+import { useT } from '@/i18n';
 
 export default function ProfileEdit() {
+  const t = useT();
   const { user, updateProfile, loading } = useAuth();
   const [firstName, setFirstName] = useState(user?.firstName ?? '');
   const [lastName, setLastName] = useState(user?.lastName ?? '');
@@ -33,23 +36,31 @@ export default function ProfileEdit() {
         <Pressable onPress={() => router.back()} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">Modifier le profil</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Modifier le profil')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 12 }}>
-        <Field label="Prénom" placeholder="Marie" value={firstName} onChangeText={setFirstName} />
-        <Field label="Nom" placeholder="Konaté" value={lastName} onChangeText={setLastName} />
+        <View className="items-center mb-6">
+          <AvatarPicker
+            initials={`${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || 'VD'}
+            size={96}
+            tone={user?.role === 'provider' ? 'clay' : 'primary'}
+          />
+          <Text className="font-sans text-xs text-muted mt-3">{t('Touchez la photo pour la modifier')}</Text>
+        </View>
+        <Field label={t('Prénom')} placeholder="Marie" value={firstName} onChangeText={setFirstName} />
+        <Field label={t('Nom')} placeholder="Konaté" value={lastName} onChangeText={setLastName} />
         <Field
-          label="Téléphone"
+          label={t('Téléphone')}
           placeholder="+243 81 234 5678"
           keyboardType="phone-pad"
           value={phone}
           onChangeText={setPhone}
         />
-        <CountryPicker label="Pays" value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
+        <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
 
         {user?.email ? (
-          <Field label="Email" value={user.email} editable={false} hint="L'email ne peut pas être modifié ici." />
+          <Field label={t('Email')} value={user.email} editable={false} hint={t("L'email ne peut pas être modifié ici.")} />
         ) : null}
 
         {errorMsg ? (
@@ -58,7 +69,7 @@ export default function ProfileEdit() {
           </View>
         ) : null}
 
-        <Button label="Enregistrer" loading={loading} onPress={onSave} className="mt-2" />
+        <Button label={t('Enregistrer')} loading={loading} onPress={onSave} className="mt-2" />
       </ScrollView>
     </SafeAreaView>
   );

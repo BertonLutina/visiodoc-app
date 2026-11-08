@@ -9,6 +9,7 @@ import { currentPatient } from '@/data/mock';
 import { currentProvider } from '@/data/mockProvider';
 import * as biometrics from '@/services/biometrics';
 import { logAuthEvent, type AuthEventMethod } from '@/services/auditLog';
+import { translate } from '@/i18n/core';
 
 // Termine proprement une session OAuth ouverte dans le navigateur système.
 WebBrowser.maybeCompleteAuthSession();
@@ -70,7 +71,7 @@ interface AuthContextType {
   registerPatient: (input: RegisterPatientInput) => Promise<void>;
   registerProvider: (input: RegisterProviderInput) => Promise<void>;
   updateProfile: (
-    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode'>>,
+    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage' | 'avatarUrl'>>,
   ) => Promise<void>;
   /** Vrai au lancement si la session restaurée attend la biométrie. */
   locked: boolean;
@@ -116,6 +117,7 @@ function mapUserRow(row: any): User {
     avatarUrl: row.avatar_url ?? undefined,
     // `users.country_id` est une FK → table `countries` ; le code pays vit dans countries.code
     countryCode: row.countries?.code ?? undefined,
+    preferredLanguage: row.preferred_language ?? undefined,
     isActive: typeof row.is_active === 'boolean' ? row.is_active : undefined,
     doctorStatus: row.doctor_status ?? undefined,
   };
@@ -249,7 +251,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch {
             /* ignore */
           }
-          throw new Error('Profil introuvable pour ce compte. Contacte le support.');
+          throw new Error(translate('Profil introuvable pour ce compte. Contacte le support.'));
         }
         await guardProvider(profile);
         signedIn(profile, 'password');
@@ -361,7 +363,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /* ---------- Connexion sociale (OAuth) ---------- */
   const signInWithProvider = async (provider: OAuthProvider): Promise<User | null> => {
     if (!supabaseConfigured || !supabase) {
-      throw new Error('Backend non configuré.');
+      throw new Error(translate('Backend non configuré.'));
     }
     setLoading(true);
     const oauthMethod: AuthEventMethod = provider === 'google' ? 'oauth_google' : 'oauth_azure';
@@ -372,7 +374,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         options: { redirectTo, skipBrowserRedirect: true },
       });
       if (error) throw error;
-      if (!data?.url) throw new Error("La connexion avec ce fournisseur n'est pas disponible.");
+      if (!data?.url) throw new Error(translate("La connexion avec ce fournisseur n'est pas disponible."));
 
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
       if (result.type !== 'success' || !result.url) return null; // annulé par l'utilisateur
@@ -430,7 +432,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
         if (error) throw error;
         const authUser = data.user;
-        if (!authUser) throw new Error('Inscription impossible. Réessaie.');
+        if (!authUser) throw new Error(translate('Inscription impossible. Réessaie.'));
 
         // 2. Création de la ligne profil dans public.users (aucun trigger côté DB).
         //    `public_id` est obligatoire et sans valeur par défaut → on le génère.
@@ -507,7 +509,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateProfile = async (
-    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode'>>,
+    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage' | 'avatarUrl'>>,
   ) => {
     setLoading(true);
     try {
@@ -517,6 +519,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (partial.lastName !== undefined) patch.last_name = partial.lastName;
         if (partial.phone !== undefined) patch.phone = partial.phone || null;
         if (partial.countryCode !== undefined) patch.country_id = countryIdForCode(partial.countryCode);
+        if (partial.preferredLanguage !== undefined) patch.preferred_language = partial.preferredLanguage || null;
+        if (partial.avatarUrl !== undefined) patch.avatar_url = partial.avatarUrl || null;
         if (Object.keys(patch).length) {
           const { error } = await supabase.from('users').update(patch).eq('id', user.id);
           if (error) throw error;

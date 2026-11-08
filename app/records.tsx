@@ -10,12 +10,15 @@ import { useAsync } from '@/hooks/useAsync';
 import { getMedicalRecords } from '@/services/patientApi';
 import { RECORD_KIND_META, RECORD_KINDS } from '@/services/medicalRecordTaxonomy';
 import type { MedicalRecordKind } from '@/types';
+import { useLanguage, useT } from '@/i18n';
 
 export default function MedicalRecords() {
+  const t = useT();
+  const { code: lang } = useLanguage();
   const { user } = useAuth();
   const uid = user?.id ?? 'patient-1';
   const [active, setActive] = useState('Tout');
-  const { data: records } = useAsync(() => getMedicalRecords(uid), [uid]);
+  const { data: records } = useAsync(() => getMedicalRecords(uid), [uid, lang]);
 
   const filters = useMemo(
     () => [
@@ -41,7 +44,7 @@ export default function MedicalRecords() {
         <Pressable onPress={() => router.back()} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">Dossier médical</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Dossier médical')}</Text>
       </View>
 
       <View className="px-5 pb-2">
@@ -54,7 +57,7 @@ export default function MedicalRecords() {
                 onPress={() => setActive(f.key)}
                 className={`px-4 py-2 rounded-full mr-2 ${on ? 'bg-primary' : 'bg-surface border border-line'}`}
               >
-                <Text className={`text-sm font-sans-semibold ${on ? 'text-white' : 'text-muted'}`}>{f.key}</Text>
+                <Text className={`text-sm font-sans-semibold ${on ? 'text-white' : 'text-muted'}`}>{t(f.key)}</Text>
               </Pressable>
             );
           })}
@@ -74,7 +77,7 @@ export default function MedicalRecords() {
               </View>
               <View className="flex-1">
                 <Text className="text-xs font-sans-bold" style={{ color: meta.color }}>
-                  {meta.label}
+                  {t(meta.label)}
                 </Text>
                 <Text className="font-sans-bold text-ink mt-0.5">{r.title}</Text>
                 <Text className="font-sans text-xs text-muted mt-0.5">{r.date}</Text>

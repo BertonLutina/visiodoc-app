@@ -3,11 +3,13 @@ import { Switch, Text, View } from 'react-native';
 import { Fingerprint, ScanFace } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { useT } from '@/i18n';
 
 /** Section « Sécurité » : active / désactive le déverrouillage biométrique. */
 export function BiometricToggleRow({ tone = 'primary' }: { tone?: 'primary' | 'accent' }) {
   const { biometricAvailable, biometricLabel, biometricEnabled, setBiometricEnabled } = useAuth();
   const [busy, setBusy] = useState(false);
+  const t = useT();
 
   if (!biometricAvailable) return null;
 
@@ -26,15 +28,15 @@ export function BiometricToggleRow({ tone = 'primary' }: { tone?: 'primary' | 'a
 
   return (
     <>
-      <Text className="font-sans-bold text-ink text-lg mb-3 mt-4 ml-1">Sécurité</Text>
+      <Text className="font-sans-bold text-ink text-lg mb-3 mt-4 ml-1">{t('Sécurité')}</Text>
       <View className="bg-surface rounded-3xl border border-line overflow-hidden">
         <View className="flex-row items-center px-4 py-4">
           <View className={`w-10 h-10 rounded-2xl ${bg} items-center justify-center mr-3`}>
             <Icon color={tint} size={18} />
           </View>
           <View className="flex-1">
-            <Text className="text-ink font-sans-semibold">Déverrouillage par {biometricLabel}</Text>
-            <Text className="font-sans text-xs text-muted mt-0.5">Demandé à chaque ouverture de l'app</Text>
+            <Text className="text-ink font-sans-semibold">{t('Déverrouillage par {method}', { method: biometricLabel })}</Text>
+            <Text className="font-sans text-xs text-muted mt-0.5">{t("Demandé à chaque ouverture de l'app")}</Text>
           </View>
           <Switch
             value={biometricEnabled}

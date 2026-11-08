@@ -6,11 +6,14 @@ import { ChevronLeft, Check } from 'lucide-react-native';
 import { Button } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { activeCountry } from '@/config/countries';
+import { appLocale } from '@/i18n';
 import { subscriptionPlans } from '@/data/mockProvider';
+import { useT } from '@/i18n';
 
 const cur = activeCountry.currency.symbol;
 
 export default function Subscription() {
+  const t = useT();
   const [selected, setSelected] = useState(subscriptionPlans[0].id);
 
   return (
@@ -19,15 +22,15 @@ export default function Subscription() {
         <Pressable onPress={() => router.back()} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">Abonnement</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Abonnement')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 8, paddingBottom: 32 }}>
         <Text className="font-serif-bold text-3xl text-ink text-center" style={{ letterSpacing: -0.3 }}>
-          Choisissez votre plan
+          {t('Choisissez votre plan')}
         </Text>
         <Text className="font-sans text-sm text-muted text-center mb-6 mt-1">
-          Accédez à toutes les fonctionnalités
+          {t('Accédez à toutes les fonctionnalités')}
         </Text>
 
         {subscriptionPlans.map((plan) => {
@@ -39,30 +42,30 @@ export default function Subscription() {
               className={`rounded-3xl border p-5 mb-4 ${on ? 'border-accent bg-accent-50' : 'border-line bg-surface'}`}
             >
               <View className="flex-row items-center justify-between mb-1">
-                <Text className="font-serif-bold text-xl text-ink">{plan.name}</Text>
+                <Text className="font-serif-bold text-xl text-ink">{t(plan.name)}</Text>
                 {plan.hint ? (
                   <View className="bg-accent px-3 py-1 rounded-full">
-                    <Text className="text-white text-xs font-sans-bold">{plan.hint}</Text>
+                    <Text className="text-white text-xs font-sans-bold">{t(plan.hint)}</Text>
                   </View>
                 ) : null}
               </View>
               <Text className="font-serif-bold text-2xl text-ink mb-1">
-                {plan.price.toLocaleString('fr-FR')} {cur} <Text className="font-sans text-sm text-muted">{plan.period}</Text>
+                {plan.price.toLocaleString(appLocale())} {cur} <Text className="font-sans text-sm text-muted">{t(plan.period)}</Text>
               </Text>
               {plan.id === 'annual' && (
-                <Text className="font-sans text-xs text-muted mb-2">= 7 492 {cur} / mois</Text>
+                <Text className="font-sans text-xs text-muted mb-2">= 7 492 {cur} / {t('mois')}</Text>
               )}
               {plan.features.map((f) => (
                 <View key={f} className="flex-row items-center py-1">
                   <Check color={colors.accent} size={16} />
-                  <Text className="font-sans text-sm text-ink ml-2">{f}</Text>
+                  <Text className="font-sans text-sm text-ink ml-2">{t(f)}</Text>
                 </View>
               ))}
             </Pressable>
           );
         })}
 
-        <Button label="S'abonner maintenant" variant="accent" onPress={() => router.back()} className="mt-2" />
+        <Button label={t("S'abonner maintenant")} variant="accent" onPress={() => router.back()} className="mt-2" />
       </ScrollView>
     </SafeAreaView>
   );

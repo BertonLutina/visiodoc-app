@@ -10,10 +10,12 @@ import { useAsync } from '@/hooks/useAsync';
 import { getProviderConsultations, getTodayConsultations, startConsultation } from '@/services/providerApi';
 import { currentProvider } from '@/data/mockProvider';
 import type { ProviderConsultation } from '@/types/provider';
+import { useLanguage, useT } from '@/i18n';
 
 type Tab = 'upcoming' | 'inprogress' | 'past';
 
 function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
+  const t = useT();
   return (
     <Card className="mb-3">
       <View className="flex-row items-center">
@@ -24,10 +26,10 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
           </Text>
           <Text className="font-sans text-xs text-muted mt-0.5">{c.reason}</Text>
         </View>
-        <Badge label={c.status === 'pending' ? 'En attente' : 'Confirmée'} tone={c.status === 'pending' ? 'amber' : 'green'} />
+        <Badge label={c.status === 'pending' ? t('En attente') : t('Confirmée')} tone={c.status === 'pending' ? 'amber' : 'green'} />
       </View>
       <Text className="font-sans-semibold text-sm text-clay mt-3">
-        {c.dateLabel} · {typeLabel(c.type)} · {c.durationMin} min
+        {c.dateLabel} · {typeLabel(c.type)} · {c.durationMin} {t('min')}
       </Text>
       {canStart && (
         <View className="flex-row mt-3">
@@ -38,10 +40,10 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
             }}
             className="flex-1 bg-accent rounded-2xl py-3.5 items-center mr-2"
           >
-            <Text className="text-white font-sans-bold">Démarrer</Text>
+            <Text className="text-white font-sans-bold">{t('Démarrer')}</Text>
           </Pressable>
           <Pressable className="flex-1 border border-line rounded-2xl py-3.5 items-center bg-surface">
-            <Text className="text-ink font-sans-bold">Notes</Text>
+            <Text className="text-ink font-sans-bold">{t('Notes')}</Text>
           </Pressable>
         </View>
       )}
@@ -50,6 +52,8 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
 }
 
 export default function ProviderConsultations() {
+  const t = useT();
+  const { code: lang } = useLanguage();
   const { user } = useAuth();
   const uid = user?.id ?? currentProvider.id;
   const [tab, setTab] = useState<Tab>('upcoming');
@@ -61,12 +65,12 @@ export default function ProviderConsultations() {
 
   const upcomingReq = useAsync(
     () => getProviderConsultations(uid, ['pending_payment', 'scheduled']),
-    [uid],
+    [uid, lang],
   );
-  const inProgressReq = useAsync(() => getTodayConsultations(uid), [uid]);
+  const inProgressReq = useAsync(() => getTodayConsultations(uid), [uid, lang]);
   const pastReq = useAsync(
     () => getProviderConsultations(uid, ['completed', 'cancelled']),
-    [uid],
+    [uid, lang],
   );
 
   const data =
@@ -83,17 +87,17 @@ export default function ProviderConsultations() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="px-5 pt-2">
         <Text className="font-serif-bold text-3xl text-ink mb-4" style={{ letterSpacing: -0.3 }}>
-          Mes consultations
+          {t('Mes consultations')}
         </Text>
         <View className="flex-row bg-surface border border-line rounded-2xl p-1">
-          {tabs.map((t) => (
+          {tabs.map((tb) => (
             <Pressable
-              key={t.key}
-              onPress={() => setTab(t.key)}
-              className={`flex-1 py-2.5 rounded-xl items-center ${tab === t.key ? 'bg-accent' : ''}`}
+              key={tb.key}
+              onPress={() => setTab(tb.key)}
+              className={`flex-1 py-2.5 rounded-xl items-center ${tab === tb.key ? 'bg-accent' : ''}`}
             >
-              <Text className={`text-sm font-sans-bold ${tab === t.key ? 'text-white' : 'text-muted'}`}>
-                {t.label}
+              <Text className={`text-sm font-sans-bold ${tab === tb.key ? 'text-white' : 'text-muted'}`}>
+                {t(tb.label)}
               </Text>
             </Pressable>
           ))}
@@ -109,7 +113,7 @@ export default function ProviderConsultations() {
         {data.map((c) => (
           <Row key={c.id} c={c} canStart={tab !== 'past'} />
         ))}
-        {data.length === 0 && <Text className="text-center font-sans text-muted mt-10">Aucune consultation.</Text>}
+        {data.length === 0 && <Text className="text-center font-sans text-muted mt-10">{t('Aucune consultation.')}</Text>}
       </ScrollView>
     </SafeAreaView>
   );

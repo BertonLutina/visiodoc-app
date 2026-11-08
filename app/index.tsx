@@ -6,8 +6,10 @@ import { Stethoscope, FolderHeart, Wallet, Brain, ArrowRight, User, X, ChevronRi
 import { Eyebrow } from '@/components/ui';
 import { DoctorCard } from '@/components/DoctorCard';
 import { colors } from '@/theme/colors';
-import { doctors } from '@/data/mock';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAsync } from '@/hooks/useAsync';
+import { getDoctors } from '@/services/patientApi';
+import { useT } from '@/i18n';
 
 const services = [
   { icon: Stethoscope, title: 'Consulter', subtitle: 'Médecins dispo.', tint: 'bg-sage' },
@@ -17,8 +19,11 @@ const services = [
 ];
 
 export default function PublicHome() {
+  const t = useT();
   const { user, initializing } = useAuth();
   const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const { data: doctors, loading: doctorsLoading } = useAsync(getDoctors, []);
+  const featured = (doctors ?? []).slice(0, 2);
 
   const chooseRole = (href: '/(auth)/login' | '/(auth)/login-provider') => {
     setRoleModalVisible(false);
@@ -47,7 +52,7 @@ export default function PublicHome() {
         <View className="flex-row items-center justify-between px-5 pt-3 pb-5">
           <Text className="font-serif-bold text-2xl text-primary">visiodoc</Text>
           <Pressable onPress={() => setRoleModalVisible(true)}>
-            <Text className="font-sans-bold text-primary">Connexion</Text>
+            <Text className="font-sans-bold text-primary">{t('Connexion')}</Text>
           </Pressable>
         </View>
 
@@ -62,43 +67,49 @@ export default function PublicHome() {
             style={{ backgroundColor: '#2E9B79', opacity: 0.45 }}
           />
           <Eyebrow className="bg-white/20 mb-4">
-            <Text className="font-sans-bold text-white text-xs">Télémédecine · Afrique</Text>
+            <Text className="font-sans-bold text-white text-xs">{t('Télémédecine · Afrique')}</Text>
           </Eyebrow>
           <Text className="font-serif-bold text-white" style={{ fontSize: 32, lineHeight: 38, letterSpacing: -0.4 }}>
-            Votre médecin,{'\n'}où que vous soyez
+            {t('Votre médecin,')}{'\n'}{t('où que vous soyez')}
           </Text>
           <Text className="font-sans text-white/80 text-base mt-3 mb-6">
-            Consultez des médecins qualifiés par vidéo, chat ou téléphone.
+            {t('Consultez des médecins qualifiés par vidéo, chat ou téléphone.')}
           </Text>
           <Pressable
             onPress={() => router.push('/(auth)/register')}
             className="bg-white rounded-2xl py-4 px-5 flex-row items-center justify-center"
           >
-            <Text className="font-sans-bold text-primary text-base mr-2">Trouver un médecin</Text>
+            <Text className="font-sans-bold text-primary text-base mr-2">{t('Trouver un médecin')}</Text>
             <ArrowRight color={colors.primary} size={18} />
           </Pressable>
         </View>
 
         {/* Services */}
-        <Text className="px-5 font-sans-bold text-ink text-lg mb-3">Services</Text>
+        <Text className="px-5 font-sans-bold text-ink text-lg mb-3">{t('Services')}</Text>
         <View className="px-5 flex-row flex-wrap justify-between mb-7">
           {services.map((s) => (
             <View key={s.title} className="w-[48%] bg-surface rounded-3xl border border-line p-4 mb-3">
               <View className={`w-11 h-11 rounded-2xl items-center justify-center mb-3 ${s.tint}`}>
                 <s.icon color={colors.ink} size={22} />
               </View>
-              <Text className="font-sans-bold text-base text-ink">{s.title}</Text>
-              <Text className="font-sans text-xs text-muted mt-0.5">{s.subtitle}</Text>
+              <Text className="font-sans-bold text-base text-ink">{t(s.title)}</Text>
+              <Text className="font-sans text-xs text-muted mt-0.5">{t(s.subtitle)}</Text>
             </View>
           ))}
         </View>
 
         {/* Médecins en vedette */}
-        <Text className="px-5 font-sans-bold text-ink text-lg mb-3">Médecins en vedette</Text>
+        <Text className="px-5 font-sans-bold text-ink text-lg mb-3">{t('Médecins en vedette')}</Text>
         <View className="px-5">
-          {doctors.slice(0, 2).map((d) => (
-            <DoctorCard key={d.id} doctor={d} onPress={() => router.push('/(auth)/login')} />
-          ))}
+          {doctorsLoading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : featured.length === 0 ? (
+            <Text className="font-sans text-muted">{t('Aucun médecin trouvé.')}</Text>
+          ) : (
+            featured.map((d) => (
+              <DoctorCard key={d.id} doctor={d} onPress={() => router.push('/(auth)/login')} />
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -118,12 +129,12 @@ export default function PublicHome() {
             className="w-full bg-surface rounded-[28px] p-6"
           >
             <View className="flex-row items-center justify-between mb-1">
-              <Text className="font-serif-bold text-xl text-ink">Connexion</Text>
+              <Text className="font-serif-bold text-xl text-ink">{t('Connexion')}</Text>
               <Pressable onPress={() => setRoleModalVisible(false)} hitSlop={10} className="p-1">
                 <X color={colors.muted} size={22} />
               </Pressable>
             </View>
-            <Text className="font-sans text-sm text-muted mb-5">Choisissez votre profil</Text>
+            <Text className="font-sans text-sm text-muted mb-5">{t('Choisissez votre profil')}</Text>
 
             <Pressable
               onPress={() => chooseRole('/(auth)/login')}
@@ -133,8 +144,8 @@ export default function PublicHome() {
                 <User color={colors.ink} size={22} />
               </View>
               <View className="flex-1">
-                <Text className="font-sans-bold text-ink text-base">Patient</Text>
-                <Text className="font-sans text-sm text-muted mt-0.5">Consulter un médecin</Text>
+                <Text className="font-sans-bold text-ink text-base">{t('Patient')}</Text>
+                <Text className="font-sans text-sm text-muted mt-0.5">{t('Consulter un médecin')}</Text>
               </View>
               <ChevronRight color={colors.muted} size={20} />
             </Pressable>
@@ -147,8 +158,8 @@ export default function PublicHome() {
                 <Stethoscope color={colors.accent} size={22} />
               </View>
               <View className="flex-1">
-                <Text className="font-sans-bold text-ink text-base">Médecin / Prestataire</Text>
-                <Text className="font-sans text-sm text-muted mt-0.5">Espace professionnel</Text>
+                <Text className="font-sans-bold text-ink text-base">{t('Médecin / Prestataire')}</Text>
+                <Text className="font-sans text-sm text-muted mt-0.5">{t('Espace professionnel')}</Text>
               </View>
               <ChevronRight color={colors.muted} size={20} />
             </Pressable>

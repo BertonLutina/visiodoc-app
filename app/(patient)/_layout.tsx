@@ -5,33 +5,35 @@ import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { Home, Stethoscope, Calendar, Wallet, User } from 'lucide-react-native';
 import { GlassTabBar } from '@/components/GlassTabBar';
 import { colors } from '@/theme/colors';
+import { useT } from '@/i18n';
 
 /**
  * iOS  → NativeTabs (UITabBar natif, Liquid Glass sur iOS 26).
  * Android / web → tab bar custom « glass » (rendu maîtrisé, identique).
  */
 export default function PatientTabsLayout() {
+  const t = useT();
   if (Platform.OS === 'ios') {
     return (
       <NativeTabs tintColor={colors.primary}>
         <NativeTabs.Trigger name="index">
-          <NativeTabs.Trigger.Label>Accueil</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('Accueil')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="house.fill" />
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="doctors">
-          <NativeTabs.Trigger.Label>Médecins</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('Médecins')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="stethoscope" />
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="appointments">
-          <NativeTabs.Trigger.Label>RDV</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('RDV')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="calendar" />
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="wallet">
-          <NativeTabs.Trigger.Label>Wallet</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('Wallet')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="creditcard.fill" />
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="profile">
-          <NativeTabs.Trigger.Label>Profil</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('Profil')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="person.fill" />
         </NativeTabs.Trigger>
       </NativeTabs>

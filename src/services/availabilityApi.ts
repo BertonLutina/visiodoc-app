@@ -20,21 +20,52 @@ function monthBounds(year: number, month: number): { first: Date; last: Date } {
   return { first: new Date(year, month - 1, 1), last: new Date(year, month, 0) };
 }
 
-async function fetchWeeklyRules(providerId: string): Promise<WeeklyRule[]> {
-  const client = readClient();
-  if (!client) return [];
-  const { data, error } = await client
-    .from('doctor_availability')
-    .select('day_of_week, start_time, end_time')
-    .eq('doctor_id', providerId)
-    .eq('recurrence_type', 'weekly')
-    .eq('is_available', true);
-  if (error) throw error;
-  return (data ?? []).map((r: any) => ({
+/** Vrai quand PostgREST ne connaît pas encore `valid_from` / `valid_to`. */
+export function isMissingColumnError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  return /valid_from|valid_to/i.test(error.message ?? '');
+}
+
+let weeklyPeriodColumns: boolean | null = null;
+
+function mapWeeklyRow(r: any, withWindow: boolean): WeeklyRule {
+  return {
     dayOfWeek: r.day_of_week,
     startTime: String(r.start_time).slice(0, 5),
     endTime: String(r.end_time).slice(0, 5),
-  }));
+    ...(withWindow
+      ? {
+          validFrom: r.valid_from ? String(r.valid_from).slice(0, 10) : null,
+          validTo: r.valid_to ? String(r.valid_to).slice(0, 10) : null,
+        }
+      : {}),
+  };
+}
+
+async function fetchWeeklyRules(providerId: string): Promise<WeeklyRule[]> {
+  const client = readClient();
+  if (!client) return [];
+  const query = (columns: string) =>
+    client
+      .from('doctor_availability')
+      .select(columns)
+      .eq('doctor_id', providerId)
+      .eq('recurrence_type', 'weekly')
+      .eq('is_available', true);
+
+  if (weeklyPeriodColumns !== false) {
+    const first = await query('day_of_week, start_time, end_time, valid_from, valid_to');
+    if (!first.error) {
+      weeklyPeriodColumns = true;
+      return (first.data ?? []).map((r: any) => mapWeeklyRow(r, true));
+    }
+    if (!isMissingColumnError(first.error)) throw first.error;
+    weeklyPeriodColumns = false;
+  }
+
+  const { data, error } = await query('day_of_week, start_time, end_time');
+  if (error) throw error;
+  return (data ?? []).map((r: any) => mapWeeklyRow(r, false));
 }
 
 async function fetchOverrides(providerId: string, from: Date, to: Date): Promise<OverrideRule[]> {

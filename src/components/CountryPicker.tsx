@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronDown, Search, X, Check } from 'lucide-react-native';
 import { AFRICAN_COUNTRIES, getAfricanCountry, type AfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
+import { useT } from '@/i18n';
 
 type Props = {
   label?: string;
@@ -15,6 +16,7 @@ type Props = {
 export function CountryPicker({ label, value, onSelect }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const t = useT();
   const selected = getAfricanCountry(value) ?? AFRICAN_COUNTRIES[0];
 
   const list = useMemo(() => {
@@ -40,7 +42,7 @@ export function CountryPicker({ label, value, onSelect }: Props) {
       <Pressable
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel={`Pays : ${selected.name}. Appuyez pour changer.`}
+        accessibilityLabel={t('Pays : {name}. Appuyez pour changer.', { name: selected.name })}
         className="flex-row items-center rounded-2xl px-4 py-3.5 bg-surface"
         style={{ borderWidth: 1, borderColor: colors.line }}
       >
@@ -58,7 +60,7 @@ export function CountryPicker({ label, value, onSelect }: Props) {
         <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
           {/* Header */}
           <View className="flex-row items-center justify-between px-5 pt-2 pb-3">
-            <Text className="font-serif-bold text-2xl text-ink">Choisir un pays</Text>
+            <Text className="font-serif-bold text-2xl text-ink">{t('Choisir un pays')}</Text>
             <Pressable onPress={() => setOpen(false)} hitSlop={10} className="p-1">
               <X color={colors.ink} size={24} />
             </Pressable>
@@ -72,7 +74,7 @@ export function CountryPicker({ label, value, onSelect }: Props) {
             >
               <Search color={colors.muted} size={18} />
               <TextInput
-                placeholder="Rechercher un pays…"
+                placeholder={t('Rechercher un pays…')}
                 placeholderTextColor={colors.muted}
                 value={query}
                 onChangeText={setQuery}
@@ -89,7 +91,7 @@ export function CountryPicker({ label, value, onSelect }: Props) {
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 24 }}
             ListEmptyComponent={
-              <Text className="text-center font-sans text-muted mt-10">Aucun pays trouvé.</Text>
+              <Text className="text-center font-sans text-muted mt-10">{t('Aucun pays trouvé.')}</Text>
             }
             renderItem={({ item }) => {
               const active = item.code === selected.code;
