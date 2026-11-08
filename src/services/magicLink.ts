@@ -5,7 +5,9 @@ import { resendCooldownRemaining } from '@/services/registration';
 
 /**
  * Lien magique patient, identique au web :
- *   POST /functions/v1/magic-link-request  { email }   → e-mail avec `<FRONTEND>/auth/verify?token=<64 hex>`
+ *   POST /functions/v1/magic-link-request  { email, platform: 'mobile' }
+ *        → e-mail dont le lien ouvre l'app : `visiodoc://auth/verify?token=<64 hex>` (le web, sans `platform`,
+ *          reçoit `<FRONTEND>/auth/verify?token=…`)
  *   POST /functions/v1/magic-link-verify   { token }   → { success, session: { access_token, refresh_token }, user }
  * Réservé aux patients (le serveur refuse les autres rôles). Le jeton est à usage unique, 15 min.
  */
@@ -98,7 +100,7 @@ export function resetMagicLinkCooldowns(): void {
 export async function requestMagicLink(email: string): Promise<void> {
   if (!supabase) return;
   const clean = normalizeEmail(email);
-  const { data, error } = await supabase.functions.invoke('magic-link-request', { body: { email: clean } });
+  const { data, error } = await supabase.functions.invoke('magic-link-request', { body: { email: clean, platform: 'mobile' } });
   if (error) throw await toMagicLinkError(error);
   if (typeof data?.error === 'string') {
     throw new MagicLinkError('unknown', data.error, data.error);

@@ -45,17 +45,17 @@ Avant `eas build -p production`, vérifier que l'environnement EAS `production` 
 `EXPO_PUBLIC_APP_ENV` vient de `eas.json` ; une valeur absente ou inconnue vaut `production`
 (`src/config/appEnv.ts`). L'application n'a pas de sélecteur d'environnement : un build est lié à un seul projet.
 
-## Lien magique patient (comme le web)
+## Lien magique patient
 
-L'écran `app/(auth)/magic-link.tsx` appelle l'Edge Function `magic-link-request` ; l'e-mail contient
-`https://app.visiodoc.online/auth/verify?token=<64 hex>` (domaine = `FRONTEND_BASE_URL` côté serveur). L'écran
-`app/auth/verify.tsx` échange le jeton via `magic-link-verify` puis ouvre la session. Réservé aux patients.
+Deux liens, un par plateforme, générés par la même Edge Function `magic-link-request` :
+- web (sans `platform`) : `https://app.visiodoc.online/auth/verify?token=<64 hex>` (`FRONTEND_BASE_URL`) ;
+- mobile (`platform: 'mobile'`, envoyé par `src/services/magicLink.ts`) : `visiodoc://auth/verify?token=<64 hex>`
+  (schéma `visiodoc` de `app.json` ; surchargeable côté serveur par `MOBILE_MAGIC_LINK_BASE`).
 
-Pour que le lien ouvre l'app (et non le navigateur), le domaine doit servir, **à la racine `/.well-known/`** :
-`apple-app-site-association` (iOS, `applinks` pour `<TEAM_ID>.com.visiodoc.app`, chemin `/auth/verify*`) et
-`assetlinks.json` (Android, package `com.visiodoc.app` + empreinte SHA-256 du certificat de signature). Les liens
-universels ne fonctionnent pas dans Expo Go : il faut un build de développement ou de production. Test sans ces
-fichiers : `npx uri-scheme open "visiodoc://auth/verify?token=<64 hex>" --ios` (ou `--android`).
+Dans l'app, `app/(auth)/magic-link.tsx` demande l'e-mail et `app/auth/verify.tsx` échange le jeton via
+`magic-link-verify` puis ouvre la session. Réservé aux patients. Test sans e-mail :
+`npx uri-scheme open "visiodoc://auth/verify?token=<64 hex>" --ios` (ou `--android`). Ne fonctionne pas dans
+Expo Go (autre schéma) : build de développement ou de production.
 
 ## Avancement (4 phases)
 

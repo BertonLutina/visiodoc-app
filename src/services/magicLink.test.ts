@@ -47,10 +47,12 @@ describe('parseMagicLinkToken', () => {
 });
 
 describe('requestMagicLink', () => {
-  it('posts the normalised email to magic-link-request and starts the 60 s cooldown', async () => {
+  it('posts the normalised email and the mobile platform to magic-link-request and starts the 60 s cooldown', async () => {
     mockInvoke.mockResolvedValue({ data: { message: 'ok' }, error: null });
     await requestMagicLink('  Marie@Example.com ');
-    expect(mockInvoke).toHaveBeenCalledWith('magic-link-request', { body: { email: 'marie@example.com' } });
+    expect(mockInvoke).toHaveBeenCalledWith('magic-link-request', {
+      body: { email: 'marie@example.com', platform: 'mobile' },
+    });
     expect(magicLinkCooldownRemaining('MARIE@example.com')).toBeGreaterThan(0);
     expect(magicLinkCooldownRemaining('autre@example.com')).toBe(0);
   });
