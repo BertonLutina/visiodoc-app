@@ -447,3 +447,160 @@ describe('public doctor catalog (public_provider_listing)', () => {
     expect(doctor).toBeNull();
   });
 });
+
+describe('patient-side doctor identity goes through provider_identity', () => {
+  const orderMock = jest.fn();
+  const inMock = jest.fn();
+  const eqMock = jest.fn();
+  const selectMock = jest.fn();
+  const fromMock = jest.fn();
+  const maybeSingleMock = jest.fn();
+  const limitMock = jest.fn();
+  const orMock = jest.fn();
+
+  const consultationRow = {
+    id: 'c1',
+    doctor_id: 'd1',
+    scheduled_at: '2026-10-15T09:00:00.000Z',
+    status: 'scheduled',
+    payment_status: 'paid',
+    consultation_type: 'video',
+    duration: 30,
+    payment_amount: 5000,
+    video_room_id: 'room-1',
+    doctor: { id: 'd1', first_name: 'Amara', last_name: 'Diallo', avatar_url: 'https://cdn/a.png', specialization: 'Pédiatrie' },
+  };
+
+  const selectArg = (): string => String(selectMock.mock.calls[0][0]);
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    orderMock.mockResolvedValue({ data: [consultationRow], error: null });
+    inMock.mockReturnValue({ order: orderMock });
+    eqMock.mockReturnValue({ in: inMock, order: orderMock });
+    maybeSingleMock.mockResolvedValue({ data: { id: 'c1', doctor: { first_name: 'Amara', last_name: 'Diallo' } }, error: null });
+    limitMock.mockReturnValue({ maybeSingle: maybeSingleMock });
+    orMock.mockReturnValue({ limit: limitMock });
+    selectMock.mockReturnValue({ eq: eqMock, or: orMock });
+    fromMock.mockReturnValue({ select: selectMock });
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: fromMock },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+  });
+
+  afterEach(() => {
+    jest.dontMock('@/lib/supabase');
+  });
+
+  it('selects the consultation doctor from provider_identity with only public columns', async () => {
+    const { getUpcomingConsultations } = require('./patientApi');
+    await getUpcomingConsultations('patient-1');
+    expect(fromMock).toHaveBeenCalledWith('consultations');
+    const select = selectArg();
+    expect(select).toContain('doctor:provider_identity!doctor_id');
+    expect(select).toContain('specialization');
+    expect(select).not.toContain('doctor:users');
+    expect(select).not.toContain('healthcare_professionals');
+    expect(select).not.toContain('email');
+    expect(select).not.toContain('phone');
+  });
+
+  it('uses the same identity join for past consultations', async () => {
+    const { getPastConsultations } = require('./patientApi');
+    await getPastConsultations('patient-1');
+    expect(selectArg()).toContain('doctor:provider_identity!doctor_id');
+  });
+
+  it('maps the doctor name, avatar and specialization from the view row', async () => {
+    const { getUpcomingConsultations } = require('./patientApi');
+    const [consultation] = await getUpcomingConsultations('patient-1');
+    expect(consultation.doctor).toEqual({
+      id: 'd1',
+      firstName: 'Amara',
+      lastName: 'Diallo',
+      specialty: 'Pédiatrie',
+      initials: 'AD',
+      avatarUrl: 'https://cdn/a.png',
+    });
+  });
+
+  it('keeps empty specialty and no avatar when the view returns nulls', async () => {
+    const { mapConsultation } = require('./patientApi');
+    const c = mapConsultation({
+      ...consultationRow,
+      doctor: { id: 'd1', first_name: 'Amara', last_name: 'Diallo', avatar_url: null, specialization: null },
+    });
+    expect(c.doctor.specialty).toBe('');
+    expect(c.doctor.avatarUrl).toBeUndefined();
+  });
+
+  it('joins a text[] specialization with " · "', () => {
+    const { mapConsultation } = require('./patientApi');
+    const c = mapConsultation({ ...consultationRow, doctor: { ...consultationRow.doctor, specialization: ['Pédiatrie', 'Nutrition'] } });
+    expect(c.doctor.specialty).toBe('Pédiatrie · Nutrition');
+  });
+
+  it('accepts the embed as a one-element array', () => {
+    const { mapConsultation } = require('./patientApi');
+    const c = mapConsultation({ ...consultationRow, doctor: [consultationRow.doctor] });
+    expect(c.doctor).toMatchObject({ id: 'd1', firstName: 'Amara', lastName: 'Diallo', specialty: 'Pédiatrie', avatarUrl: 'https://cdn/a.png' });
+  });
+
+  it('falls back to doctor_id when the embed is empty', () => {
+    const { mapConsultation } = require('./patientApi');
+    const c = mapConsultation({ ...consultationRow, doctor: null });
+    expect(c.doctor).toMatchObject({ id: 'd1', firstName: '', lastName: '', specialty: '' });
+  });
+
+  it('reads the wallet payment provider from provider_identity, never users', async () => {
+    const limit = jest.fn().mockResolvedValue({ data: [], error: null });
+    orderMock.mockReturnValue({ limit });
+    const { getWallet } = require('./patientApi');
+    await getWallet('patient-1');
+    expect(fromMock).toHaveBeenCalledWith('payment_transactions_v2');
+    const select = selectArg();
+    expect(select).toContain('provider:provider_identity!provider_id');
+    expect(select).not.toContain('users');
+    expect(select).not.toContain('email');
+    expect(select).not.toContain('phone');
+  });
+
+  it('reads the call doctor from provider_identity and builds the display name', async () => {
+    const { getCallSession } = require('./patientApi');
+    const session = await getCallSession('room-1');
+    expect(fromMock).toHaveBeenCalledWith('consultations');
+    const select = selectArg();
+    expect(select).toContain('doctor:provider_identity!doctor_id');
+    expect(select).not.toContain('doctor:users');
+    expect(select).not.toContain('email');
+    expect(select).not.toContain('phone');
+    expect(session).toEqual({ doctorName: 'Dr. Amara Diallo', initials: 'AD' });
+  });
+
+  it('accepts the call doctor embed as an array', async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: 'c1', doctor: [{ first_name: 'Amara', last_name: 'Diallo' }] }, error: null });
+    const { getCallSession } = require('./patientApi');
+    expect(await getCallSession('room-1')).toEqual({ doctorName: 'Dr. Amara Diallo', initials: 'AD' });
+  });
+});
+
+describe('patient service source guard', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const source: string = require('fs').readFileSync(require('path').resolve(process.cwd(), 'src/services/patientApi.ts'), 'utf8');
+
+  it('never embeds a provider through the users table', () => {
+    expect(source).not.toMatch(/\b(doctor|provider)\s*:\s*users\b/);
+    expect(source).not.toMatch(/healthcare_professionals/);
+  });
+
+  it('never selects email or phone inside a provider_identity embed', () => {
+    const embeds = source.match(/provider_identity![a-z_]+\s*\([^)]*\)/g) ?? [];
+    expect(embeds.length).toBeGreaterThanOrEqual(3);
+    for (const embed of embeds) {
+      expect(embed).not.toMatch(/\b(email|phone)\b/);
+    }
+  });
+});

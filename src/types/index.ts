@@ -57,7 +57,7 @@ export interface TimeSlot {
 
 export interface Consultation {
   id: string;
-  doctor: Pick<Doctor, 'id' | 'firstName' | 'lastName' | 'specialty' | 'initials'>;
+  doctor: Pick<Doctor, 'id' | 'firstName' | 'lastName' | 'specialty' | 'initials' | 'avatarUrl'>;
   date: string; // ISO ou libellé court
   dateLabel: string; // ex: "Jeu 20 juin · 14h30"
   type: ConsultationType;

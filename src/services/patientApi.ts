@@ -101,16 +101,23 @@ export async function getDoctor(id: string, options: CatalogOptions = {}): Promi
 }
 
 /* ---------- Consultations ---------- */
-function mapConsultation(row: any): Consultation {
-  const d = row.doctor ?? {};
+/* Identité médecin vue par un patient : vue `provider_identity` (id, first_name, last_name, post_nom,
+ * avatar_url, specialization, country_id). La RLS de `users` ne renvoie plus rien à un patient pour un
+ * prestataire ; jamais `email` ni `phone`. L'embed many-to-one est un objet à l'exécution, mais
+ * supabase-js (sans types générés) peut le typer en tableau. */
+const oneEmbed = <T>(v: T | T[] | null | undefined): T | undefined => (Array.isArray(v) ? v[0] : v) ?? undefined;
+
+export function mapConsultation(row: any): Consultation {
+  const d = oneEmbed<any>(row.doctor) ?? {};
   return {
     id: row.id,
     doctor: {
       id: d.id ?? row.doctor_id,
       firstName: d.first_name ?? '',
       lastName: d.last_name ?? '',
-      specialty: specLabel(d.healthcare_professionals?.specialization),
+      specialty: specLabel(d.specialization),
       initials: initials(d.first_name, d.last_name),
+      avatarUrl: d.avatar_url ?? undefined,
     },
     date: row.scheduled_at,
     dateLabel: new Date(row.scheduled_at).toLocaleString(appLocale(), {
@@ -135,8 +142,8 @@ async function fetchConsultations(patientId: string, statuses: string[]): Promis
   const { data, error } = await supabase!
     .from('consultations')
     .select(
-      `*, doctor:users!consultations_doctor_id_fkey (
-         id, first_name, last_name, healthcare_professionals ( specialization )
+      `*, doctor:provider_identity!doctor_id (
+         id, first_name, last_name, avatar_url, specialization
        )`,
     )
     .eq('patient_id', patientId)
@@ -351,7 +358,7 @@ export async function getWallet(patientId: string): Promise<Wallet> {
     .from('payment_transactions_v2')
     .select(
       `id, amount, status, created_at,
-       provider:users!provider_id ( first_name, last_name )`,
+       provider:provider_identity!provider_id ( first_name, last_name )`,
     )
     .eq('patient_id', patientId)
     .order('created_at', { ascending: false })
@@ -372,12 +379,13 @@ export async function getCallSession(room: string): Promise<{ doctorName: string
   if (useMock() || !room || !safeRoomId(room)) return null;
   const { data, error } = await supabase!
     .from('consultations')
-    .select('id, doctor:users!consultations_doctor_id_fkey ( first_name, last_name )')
+    .select('id, doctor:provider_identity!doctor_id ( first_name, last_name )')
     .or(`id.eq.${room},video_room_id.eq.${room}`)
     .limit(1)
     .maybeSingle();
   if (error || !data) return null;
-  const doctor = (data as { doctor?: { first_name?: string | null; last_name?: string | null } | null }).doctor;
+  type DoctorName = { first_name?: string | null; last_name?: string | null };
+  const doctor = oneEmbed((data as { doctor?: DoctorName | DoctorName[] | null }).doctor);
   const first = doctor?.first_name ?? '';
   const last = doctor?.last_name ?? '';
   if (!first && !last) return null;
