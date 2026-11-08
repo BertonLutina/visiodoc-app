@@ -16,12 +16,17 @@ import {
   buildRegisterPrestaBody,
   registerPatientAccount,
   resolveSpecialty,
-  shouldAskLoginCredentials,
+  requireLoginCredentialsStep,
   submitLoginCredentials,
   LoginCredentialsError,
   type LoginCredentialsOutcome,
   type Gender,
 } from '@/services/registration';
+import {
+  clearCredentialsPending,
+  pendingCredentialsUserIds,
+  shouldDropOnRestore,
+} from '@/services/loginCredentialsFlag';
 import { getServiceTypeCatalog } from '@/services/specializationCatalog';
 import { isSessionExpiry, onSessionExpired, reportSessionExpiry } from '@/services/sessionExpiry';
 import { createSessionExpiryTracker } from '@/services/sessionExpiryTracker';
@@ -296,6 +301,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (active && isSessionExpiry(error)) {
           // Jeton de rafraîchissement refusé au démarrage : jamais de restauration, message unique.
           handleSessionExpired();
+        } else if (
+          active &&
+          data.session?.user &&
+          shouldDropOnRestore(data.session.user.id, await pendingCredentialsUserIds())
+        ) {
+          // Inscription par téléphone interrompue avant l'e-mail + mot de passe (app fermée sur l'étape) :
+          // jamais restaurée, session fermée sans message ; elle refait le code puis l'étape.
+          await clearCredentialsPending(data.session.user.id);
+          dropForbiddenSession();
         } else if (active && data.session?.user) {
           const result = await loadProfile(data.session.user.id);
           const refusal = result.status === 'ok' ? providerRefusalReason(result.user) : null;
@@ -505,9 +519,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         type: 'sms',
       });
       if (error) throw error;
-      // Étape demandée seulement juste après un code (jamais à la restauration de session) : compte sans
-      // e-mail de connexion (règle `hasNoLoginEmail` du backend) et étape pas déjà envoyée.
-      if (await shouldAskLoginCredentials(data.user)) {
+      // Étape demandée juste après un code : compte sans e-mail de connexion (règle `hasNoLoginEmail` du
+      // backend) et étape pas déjà envoyée. Le marqueur `credentialsPending:<userId>` est posé ICI, avant de
+      // rendre la main (la session est déjà persistée) ; une restauration le lira pour fermer la session.
+      if (await requireLoginCredentialsStep(data.user)) {
         // Rôle et statut vérifiés d'abord (refus = session fermée), mais l'app ne s'ouvre pas encore :
         // l'étape e-mail + mot de passe est obligatoire pour un compte créé par téléphone.
         const profile = await resolveOtpProfile(data.user);
@@ -539,6 +554,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (e instanceof LoginCredentialsError && e.kind === 'session_expired') {
           // Session de l'OTP expirée : voie Task 6 (purge + message unique), l'étape est abandonnée.
           awaitingCredentialsRef.current = null;
+          await clearCredentialsPending(userId);
           reportSessionExpiry(e);
         }
         throw e;
@@ -561,8 +577,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const cancelLoginCredentials = () => {
-    if (!awaitingCredentialsRef.current) return;
+    const userId = awaitingCredentialsRef.current;
+    if (!userId) return;
     awaitingCredentialsRef.current = null;
+    clearCredentialsPending(userId).catch(() => {
+      /* ignore */
+    });
     localSignOut().catch(() => {
       /* ignore : aucun état utilisateur n'a été posé */
     });

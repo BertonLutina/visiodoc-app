@@ -6,7 +6,12 @@ import { supabase } from '@/lib/supabase';
 import { specKey } from '@/services/specializationCatalog';
 import { edgeFunctionError, pwnedPasswordMessage, authErrorMessage, readHttpError } from '@/utils/authError';
 import { passwordIssue, passwordIssueMessage } from '@/services/passwordPolicy';
-import { hasSubmittedCredentials, markCredentialsSubmitted } from '@/services/loginCredentialsFlag';
+import {
+  clearCredentialsPending,
+  hasSubmittedCredentials,
+  markCredentialsPending,
+  markCredentialsSubmitted,
+} from '@/services/loginCredentialsFlag';
 
 /** `users.gender` : uniquement `male` ou `female` (guide). `other` est interdit. */
 export type Gender = 'male' | 'female';
@@ -297,6 +302,21 @@ export async function shouldAskLoginCredentials(
   return needsLoginCredentials(authUser, await hasSubmittedCredentials(authUser.id ?? ''));
 }
 
+/**
+ * À appeler juste après un code valide : si l'étape e-mail + mot de passe est due, pose le marqueur
+ * `credentialsPending:<userId>` AVANT de rendre la main (la session est déjà persistée : sans marqueur,
+ * un redémarrage l'ouvrirait sans identifiants). Sinon efface un marqueur périmé. Renvoie « étape due ».
+ */
+export async function requireLoginCredentialsStep(
+  authUser: { id?: string; phone?: string | null; email?: string | null } | null | undefined,
+): Promise<boolean> {
+  const id = authUser?.id ?? '';
+  const needed = await shouldAskLoginCredentials(authUser);
+  if (needed) await markCredentialsPending(id);
+  else await clearCredentialsPending(id);
+  return needed;
+}
+
 export type LoginCredentialsErrorKind =
   | 'invalid_email'
   | 'weak_password'
@@ -315,13 +335,20 @@ export class LoginCredentialsError extends Error {
   /** `code` du corps `{ success: false, code, error }` du backend (ex. `EMAIL_TAKEN`). */
   code?: string;
   error_code?: string;
+  /** Texte `error` du corps de la réponse, s'il y en a un (sinon `message` est un texte de repli). */
+  serverMessage?: string;
 
-  constructor(kind: LoginCredentialsErrorKind, message: string, extra?: { code?: string; error_code?: string }) {
+  constructor(
+    kind: LoginCredentialsErrorKind,
+    message: string,
+    extra?: { code?: string; error_code?: string; serverMessage?: string },
+  ) {
     super(message);
     this.name = 'LoginCredentialsError';
     this.kind = kind;
     if (extra?.code) this.code = extra.code;
     if (extra?.error_code) this.error_code = extra.error_code;
+    if (extra?.serverMessage) this.serverMessage = extra.serverMessage;
   }
 }
 
@@ -359,10 +386,15 @@ export function loginCredentialsErrorMessage(error: any): string {
     case 'password_mismatch':
       return translate('Les mots de passe ne correspondent pas.');
     case 'weak_password':
-      // `WEAK_PASSWORD` du serveur (liste noire, e-mail, nom…) → message commun ; contrôle client → règle précise.
-      return error.code === 'WEAK_PASSWORD'
-        ? translate('Le mot de passe doit comporter au moins 10 caractères et inclure au moins une lettre et un chiffre.')
-        : error.message;
+      // `WEAK_PASSWORD` du serveur (liste noire, e-mail, nom… que le client ne peut pas connaître) : son texte
+      // français tel quel, sinon le message commun. Contrôle client : la règle précise.
+      if (error.code === 'WEAK_PASSWORD') {
+        return (
+          error.serverMessage ??
+          translate('Le mot de passe doit comporter au moins 10 caractères et inclure au moins une lettre et un chiffre.')
+        );
+      }
+      return error.message;
     case 'unknown':
       return translate('Une erreur est survenue. Réessaie.');
     default:
@@ -408,6 +440,7 @@ export async function setLoginCredentials(
     const base = edgeFunctionError(body);
     throw new LoginCredentialsError(kind, base.message, {
       code,
+      serverMessage: typeof body?.error === 'string' && body.error ? body.error : undefined,
       // 401 : toujours traité comme session expirée (voie Task 6, `isSessionExpiry`).
       error_code: kind === 'session_expired' ? 'session_expired' : base.error_code,
     });
@@ -441,10 +474,12 @@ export async function submitLoginCredentials(
   try {
     const result = await setLoginCredentials(email, newPassword, confirmPassword);
     await markCredentialsSubmitted(userId);
+    await clearCredentialsPending(userId);
     return { status: 'pending_confirmation', email: result.email };
   } catch (e) {
     if (e instanceof LoginCredentialsError && e.kind === 'already_has_login_email') {
       await markCredentialsSubmitted(userId);
+      await clearCredentialsPending(userId);
       return { status: 'already_has_login_email', email: email.trim().toLowerCase() };
     }
     throw e;

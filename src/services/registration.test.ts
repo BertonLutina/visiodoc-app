@@ -15,11 +15,20 @@ import {
   loginCredentialsErrorMessage,
   needsLoginCredentials,
   shouldAskLoginCredentials,
+  requireLoginCredentialsStep,
   markCodeSent,
   codeCooldownRemaining,
   resetCodeCooldowns,
 } from './registration';
-import { hasSubmittedCredentials, markCredentialsSubmitted } from './loginCredentialsFlag';
+import {
+  hasSubmittedCredentials,
+  markCredentialsSubmitted,
+  hasCredentialsPending,
+  markCredentialsPending,
+  clearCredentialsPending,
+  pendingCredentialsUserIds,
+  shouldDropOnRestore,
+} from './loginCredentialsFlag';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authErrorMessage, edgeFunctionError, isEmailNotConfirmed } from '@/utils/authError';
 import { isSessionExpiry } from '@/services/sessionExpiry';
@@ -596,7 +605,14 @@ describe('setLoginCredentials', () => {
     expect(mockInvoke).toHaveBeenCalledTimes(2);
   });
 
-  it('400 WEAK_PASSWORD → the shared weak-password message, not the server text', async () => {
+  it('400 WEAK_PASSWORD without a server text → the shared weak-password message', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(400, { success: false, code: 'WEAK_PASSWORD' }) });
+    const err = await run();
+    expect(err.kind).toBe('weak_password');
+    expect(loginCredentialsErrorMessage(err)).toBe(SHARED_WEAK_PASSWORD);
+  });
+
+  it('400 WEAK_PASSWORD → the server French text as is (blacklist, e-mail or name rules the client cannot know)', async () => {
     mockInvoke.mockResolvedValue({
       data: null,
       error: httpError(400, {
@@ -607,7 +623,9 @@ describe('setLoginCredentials', () => {
     });
     const err = await run();
     expect(err.kind).toBe('weak_password');
-    expect(loginCredentialsErrorMessage(err)).toBe(SHARED_WEAK_PASSWORD);
+    expect(loginCredentialsErrorMessage(err)).toBe(
+      'Le mot de passe ne peut pas être identique à votre adresse e-mail.',
+    );
   });
 
   it('400 INVALID_EMAIL → the existing invalid e-mail message', async () => {
@@ -893,5 +911,99 @@ describe('code resend cooldown per phone number (E.164, in-memory)', () => {
 
   it('is 0 for an empty number', () => {
     expect(codeCooldownRemaining('', 1000)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Étape inachevée : marqueur `credentialsPending:<userId>` (anti-contournement à la restauration)
+// ---------------------------------------------------------------------------------------------
+
+describe('credentialsPending marker', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue({ data: CREDENTIALS_OK, error: null });
+  });
+  const newPhoneUser = { id: 'u1', phone: '243899999999', email: '' };
+
+  it('requireLoginCredentialsStep sets credentialsPending:<userId> when the step is needed', async () => {
+    await expect(requireLoginCredentialsStep(newPhoneUser)).resolves.toBe(true);
+    expect(await AsyncStorage.getAllKeys()).toEqual(['credentialsPending:u1']);
+    expect(await hasCredentialsPending('u1')).toBe(true);
+    expect(await pendingCredentialsUserIds()).toEqual(['u1']);
+  });
+
+  it('requireLoginCredentialsStep sets nothing for a user with a real e-mail, and clears a stale marker', async () => {
+    await markCredentialsPending('u1');
+    await expect(requireLoginCredentialsStep({ id: 'u1', phone: '243899999999', email: 'a@b.cd' })).resolves.toBe(false);
+    expect(await hasCredentialsPending('u1')).toBe(false);
+  });
+
+  it('requireLoginCredentialsStep sets nothing for a user whose step was already submitted', async () => {
+    await markCredentialsSubmitted('u1');
+    await expect(requireLoginCredentialsStep(newPhoneUser)).resolves.toBe(false);
+    expect(await hasCredentialsPending('u1')).toBe(false);
+  });
+
+  it('a successful submit clears the marker (and sets the submitted flag)', async () => {
+    await requireLoginCredentialsStep(newPhoneUser);
+    await submitLoginCredentials('u1', GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD);
+    expect(await hasCredentialsPending('u1')).toBe(false);
+    expect(await hasSubmittedCredentials('u1')).toBe(true);
+  });
+
+  it('ALREADY_HAS_LOGIN_EMAIL clears the marker too', async () => {
+    await requireLoginCredentialsStep(newPhoneUser);
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(409, { success: false, code: 'ALREADY_HAS_LOGIN_EMAIL', error: 'Ce compte a déjà un e-mail de connexion.' }),
+    });
+    await submitLoginCredentials('u1', GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD);
+    expect(await hasCredentialsPending('u1')).toBe(false);
+  });
+
+  it('a failed submit keeps the marker (the step is still owed)', async () => {
+    await requireLoginCredentialsStep(newPhoneUser);
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(409, { success: false, code: 'EMAIL_TAKEN', error: 'Cette adresse e-mail est déjà utilisée.' }),
+    });
+    await expect(submitLoginCredentials('u1', GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD)).rejects.toBeInstanceOf(
+      LoginCredentialsError,
+    );
+    expect(await hasCredentialsPending('u1')).toBe(true);
+  });
+
+  it('clearCredentialsPending removes only that user and ignores an empty id', async () => {
+    await markCredentialsPending('u1');
+    await markCredentialsPending('u2');
+    await markCredentialsPending('');
+    await clearCredentialsPending('u1');
+    expect(await pendingCredentialsUserIds()).toEqual(['u2']);
+  });
+
+  it('never throws on storage errors', async () => {
+    jest.spyOn(AsyncStorage, 'getAllKeys').mockRejectedValueOnce(new Error('boom'));
+    await expect(pendingCredentialsUserIds()).resolves.toEqual([]);
+  });
+});
+
+describe('shouldDropOnRestore (restored session of an unfinished phone signup)', () => {
+  it('is true only for a matching marker', () => {
+    expect(shouldDropOnRestore('u1', ['u1'])).toBe(true);
+    expect(shouldDropOnRestore('u1', ['u2', 'u1'])).toBe(true);
+  });
+
+  it('is false for a legacy user without any marker (restored normally)', () => {
+    expect(shouldDropOnRestore('u1', [])).toBe(false);
+  });
+
+  it("is false when only another user's marker exists", () => {
+    expect(shouldDropOnRestore('u1', ['u2'])).toBe(false);
+  });
+
+  it('is false without a user id', () => {
+    expect(shouldDropOnRestore('', ['u1', ''])).toBe(false);
+    expect(shouldDropOnRestore(undefined, ['u1'])).toBe(false);
   });
 });
