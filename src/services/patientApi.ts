@@ -9,6 +9,7 @@ import type {
   WalletTransaction,
 } from '@/types';
 import { isMedicalRecordKind } from './medicalRecordTaxonomy';
+import { videoRoomId } from './videoToken';
 import { normalizeConsultationStatus } from '@/utils/format';
 import { appLocale, translate } from '@/i18n/core';
 import {
@@ -425,12 +426,17 @@ export async function getWallet(patientId: string): Promise<Wallet> {
 
 const safeRoomId = (room: string) => /^[A-Za-z0-9_-]+$/.test(room);
 
-/** Médecin de l'appel, à partir de l'id de consultation ou du salon vidéo. */
-export async function getCallSession(room: string): Promise<{ doctorName: string; initials: string } | null> {
+/**
+ * Médecin de l'appel, à partir de l'id de consultation ou du salon vidéo. `roomId` est l'identifiant du contrat
+ * `get-video-token` : `consultations.video_room_id` si présent, sinon `consultations.id`.
+ */
+export async function getCallSession(
+  room: string,
+): Promise<{ doctorName: string; initials: string; roomId: string } | null> {
   if (useMock() || !room || !safeRoomId(room)) return null;
   const { data, error } = await supabase!
     .from('consultations')
-    .select('id, doctor:provider_identity!doctor_id ( first_name, last_name )')
+    .select('id, video_room_id, doctor:provider_identity!doctor_id ( first_name, last_name )')
     .or(`id.eq.${room},video_room_id.eq.${room}`)
     .limit(1)
     .maybeSingle();
@@ -440,5 +446,10 @@ export async function getCallSession(room: string): Promise<{ doctorName: string
   const first = doctor?.first_name ?? '';
   const last = doctor?.last_name ?? '';
   if (!first && !last) return null;
-  return { doctorName: `Dr. ${first} ${last}`.trim(), initials: initials(first, last) || 'VD' };
+  const { id, video_room_id } = data as { id: string; video_room_id?: string | null };
+  return {
+    doctorName: `Dr. ${first} ${last}`.trim(),
+    initials: initials(first, last) || 'VD',
+    roomId: videoRoomId({ id, video_room_id }),
+  };
 }

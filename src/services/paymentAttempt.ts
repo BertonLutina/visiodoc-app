@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { translate } from '@/i18n/core';
-import { edgeFunctionError } from '@/utils/authError';
+import { edgeFunctionError, readHttpError } from '@/utils/authError';
 import { reportSessionExpiry } from './sessionExpiry';
 import {
   clearPendingAttempt,
@@ -92,19 +92,6 @@ export const generateTxnRef = (): string => {
 
 const isNotPayableCode = (code: unknown): code is PaymentNotPayableCode =>
   code === 'NOT_PAYABLE' || code === 'TXN_ALREADY_USED';
-
-/** Statut HTTP + corps JSON d'une `FunctionsHttpError` (la `Response` est dans `error.context`). */
-async function readHttpError(error: any): Promise<{ status: number | undefined; body: any }> {
-  const response = error?.context;
-  const status: number | undefined = typeof response?.status === 'number' ? response.status : undefined;
-  let body: any = null;
-  try {
-    body = await response?.json?.();
-  } catch {
-    /* corps absent ou illisible */
-  }
-  return { status, body };
-}
 
 type InvokeResult = { data: any; error: any };
 

@@ -782,13 +782,23 @@ describe('patient-side doctor identity goes through provider_identity', () => {
     expect(select).not.toContain('doctor:users');
     expect(select).not.toContain('email');
     expect(select).not.toContain('phone');
-    expect(session).toEqual({ doctorName: 'Dr. Amara Diallo', initials: 'AD' });
+    expect(select).toContain('video_room_id');
+    expect(session).toEqual({ doctorName: 'Dr. Amara Diallo', initials: 'AD', roomId: 'c1' });
+  });
+
+  it('returns video_room_id as the call roomId when the consultation has one', async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: { id: 'c1', video_room_id: 'room-1', doctor: { first_name: 'Amara', last_name: 'Diallo' } },
+      error: null,
+    });
+    const { getCallSession } = require('./patientApi');
+    expect((await getCallSession('c1')).roomId).toBe('room-1');
   });
 
   it('accepts the call doctor embed as an array', async () => {
     maybeSingleMock.mockResolvedValue({ data: { id: 'c1', doctor: [{ first_name: 'Amara', last_name: 'Diallo' }] }, error: null });
     const { getCallSession } = require('./patientApi');
-    expect(await getCallSession('room-1')).toEqual({ doctorName: 'Dr. Amara Diallo', initials: 'AD' });
+    expect(await getCallSession('room-1')).toEqual({ doctorName: 'Dr. Amara Diallo', initials: 'AD', roomId: 'c1' });
   });
 });
 

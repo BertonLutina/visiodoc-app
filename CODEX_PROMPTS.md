@@ -78,10 +78,8 @@ contexte d'auth mock (`src/contexts/AuthContext.tsx`). Rien à refaire — sert 
 
 ---
 
-## Lot F — Visio Jitsi réelle (transverse)
+## Lot F — Visio réelle (transverse) — FAIT (Task 12)
 
-> Dans `app/call/[room].tsx`, remplace le placeholder vidéo par `<JitsiMeeting>` de `@jitsi/react-native-sdk` :
-> domaine `EXPO_PUBLIC_JITSI_DOMAIN`, room = param `room`, displayName = utilisateur courant, audio/vidéo on.
-> Gère permissions caméra/micro (déjà déclarées dans `app.json`). Garde le panneau IA branché sur
-> l'Edge Function `ai-symptom-analysis`. Nécessite un dev build (le SDK Jitsi a du code natif —
-> `npx expo prebuild` puis build EAS ou local).
+> `app/call/[room].tsx` appelle l'Edge Function `get-video-token` avec `{ roomId }` uniquement (identité et rôle
+> construits par le serveur) puis ouvre `${serverUrl}/${roomName}?jwt=${jwt}` dans une WebView (caméra + micro).
+> Aucun domaine Jitsi public ni `EXPO_PUBLIC_JITSI_DOMAIN`. Le SDK natif `@jitsi/react-native-sdk` est un POC séparé.

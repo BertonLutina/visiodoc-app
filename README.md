@@ -7,7 +7,7 @@ App mobile de télémédecine VisioDoc (patient + médecin). Même backend Supab
 - **Expo SDK 51** + **Expo Router v3** (navigation par fichiers)
 - **TypeScript**, **NativeWind v4** (Tailwind) — thème repris de la maquette
 - **Supabase** (`@supabase/supabase-js`) — auth, données, Edge Functions
-- **Jitsi** (`@jitsi/react-native-sdk`) — consultations vidéo
+- **Visio** — Edge Function `get-video-token` (JaaS / 8x8) ouverte dans une WebView (`react-native-webview`) ; SDK natif `@jitsi/react-native-sdk` = POC séparé, non installé
 - Icônes : `lucide-react-native`
 
 ## Démarrage
@@ -19,8 +19,8 @@ cp .env.example .env        # renseigner les clés Supabase (mêmes que le web)
 npx expo start
 ```
 
-Ouvrir avec **Expo Go** (Android/iOS) pour l'UI. La visio Jitsi nécessite un **dev build**
-(`npx expo prebuild` + EAS/local) car elle embarque du code natif.
+Ouvrir avec **Expo Go** (Android/iOS) pour l'UI. La visio (WebView + caméra/micro) et le paiement
+nécessitent un **dev build** (`npx expo prebuild` + EAS/local) ; Expo Go ne suffit pas pour tester les permissions.
 
 ## Avancement (4 phases)
 

@@ -97,6 +97,19 @@ export function edgeFunctionError(
   return err;
 }
 
+/** Statut HTTP + corps JSON d'une `FunctionsHttpError` (la `Response` est dans `error.context`). */
+export async function readHttpError(error: any): Promise<{ status: number | undefined; body: any }> {
+  const response = error?.context;
+  const status: number | undefined = typeof response?.status === 'number' ? response.status : undefined;
+  let body: any = null;
+  try {
+    body = await response?.json?.();
+  } catch {
+    /* corps absent ou illisible */
+  }
+  return { status, body };
+}
+
 /**
  * Erreur GoTrue `email_not_confirmed` (« Email not confirmed ») : connexion par mot de passe d'un
  * compte dont l'adresse n'a pas encore été confirmée (confirmation obligatoire, guide MOB-0612-1).
