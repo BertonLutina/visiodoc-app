@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,7 +36,12 @@ export default function PaymentScreen() {
     }
   }, [pending]);
 
+  // Idempotent : plusieurs `onShouldStartLoadWithRequest`, deux `onMessage` ou un double appui sur le chevron ne
+  // doivent faire qu'UN seul `router.back()` ; la demande est réglée AVANT de quitter l'écran.
+  const doneRef = useRef(false);
   const finish = (message: WidgetMessage) => {
+    if (doneRef.current) return;
+    doneRef.current = true;
     if (txnRef) settlePaymentWidget(txnRef, message);
     router.back();
   };
@@ -49,13 +54,17 @@ export default function PaymentScreen() {
   // Fermeture par un retour système / geste sans réponse du widget = écran quitté (`dismissed`, tentative
   // conservée : on ne sait pas si le patient a été débité). Sans effet si déjà réglé.
   const navigation = useNavigation();
-  useEffect(
-    () =>
-      navigation.addListener('beforeRemove', () => {
-        if (txnRef) settlePaymentWidget(txnRef, { kind: 'dismissed', reason: 'user_left' });
-      }),
-    [navigation, txnRef],
-  );
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      if (txnRef) settlePaymentWidget(txnRef, { kind: 'dismissed', reason: 'user_left' });
+    });
+    return () => {
+      unsubscribe();
+      // Démontage sans `beforeRemove` : la promesse ne reste jamais pendante (verrou « en cours » tenu, entrée
+      // de la table fuitée). No-op si la demande est déjà réglée.
+      if (txnRef) settlePaymentWidget(txnRef, { kind: 'dismissed', reason: 'user_left' });
+    };
+  }, [navigation, txnRef]);
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
@@ -87,7 +96,8 @@ export default function PaymentScreen() {
               finish({ kind: 'dismissed', reason: 'gateway_returned' });
               return false;
             }
-            return isAllowedWidgetUrl(req.url); // https + about:blank ; http / schémas inconnus bloqués
+            // https + about: ; blob:/data: pour les cadres non principaux ; http / schémas inconnus bloqués
+            return isAllowedWidgetUrl(req.url, req.isTopFrame !== false);
           }}
         />
       ) : (

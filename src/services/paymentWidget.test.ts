@@ -143,6 +143,15 @@ describe('createOpenPaymentWidget (injected openPaymentWidget bridge)', () => {
     }
   });
 
+  it('settling an already-settled txnRef is a no-op (unmount cleanup after finish cannot change the outcome)', async () => {
+    const promise = open('VDC-1');
+    settlePaymentWidget('VDC-1', { kind: 'success', payRef: 'PAY-1' });
+    settlePaymentWidget('VDC-1', { kind: 'dismissed', reason: 'user_left' });
+    settlePaymentWidget('VDC-1', { kind: 'cancelled' });
+    await expect(promise).resolves.toEqual({ status: 'success', payRef: 'PAY-1' });
+    expect(getPendingPaymentWidget('VDC-1')).toBeNull();
+  });
+
   it('dismissed keeps its reason and resolves { status: "dismissed" } (never "cancelled")', async () => {
     for (const reason of ['user_left', 'gateway_returned', 'timeout'] as const) {
       const promise = open('VDC-1');

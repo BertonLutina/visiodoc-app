@@ -562,4 +562,5 @@ export const ln: Record<string, string> = {
   "Oui": "Iyo",
   "Non": "Te",
   "Ton paiement a été reçu mais ta consultation n'est pas encore confirmée. Ne paie pas une seconde fois : contacte le support si cela dure.": "Kofuta mbongo na yo ezwami kasi consultation na yo endimisami naino te. Kofuta mbala ya mibale te: benga support soki ezali kokoba.",
+  "Paiement reçu mais consultation non confirmée : contacte le support avec la référence": "Kofuta ezwami kasi consultation endimisami te: benga support na référence",
 };

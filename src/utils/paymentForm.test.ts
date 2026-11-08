@@ -97,6 +97,13 @@ describe('parseWidgetMessage', () => {
     });
   });
 
+  it('any other resp code is NOT a definitive refusal: dismissed (attempt kept), never cancelled', () => {
+    for (const resp of ['Z1', 'T0', '99', '', 'WHATEVER']) {
+      expect(parseWidgetMessage(complete({ resp, desc: 'x' }), TXN)).toEqual({ kind: 'dismissed', reason: 'gateway_returned' });
+    }
+    expect(parseWidgetMessage(complete({}), TXN)).toEqual({ kind: 'dismissed', reason: 'gateway_returned' });
+  });
+
   it('TO (gateway timeout) is NOT definitive: a timeout can still succeed, so it is "dismissed/timeout"', () => {
     expect(parseWidgetMessage(complete({ resp: 'TO' }), TXN)).toEqual({ kind: 'dismissed', reason: 'timeout' });
   });
@@ -115,6 +122,22 @@ describe('isAllowedWidgetUrl (WebView navigation policy: never block a bank / 3-
     expect(isAllowedWidgetUrl('https://secure.mybank.example/3ds?x=1')).toBe(true);
     expect(isAllowedWidgetUrl('https://pay.mobile-money.example:8443/otp')).toBe(true);
     expect(isAllowedWidgetUrl('HTTPS://UPPER.EXAMPLE/')).toBe(true);
+  });
+  it('allows any about: URL', () => {
+    expect(isAllowedWidgetUrl('about:srcdoc')).toBe(true);
+    expect(isAllowedWidgetUrl('ABOUT:blank#x')).toBe(true);
+  });
+  it('allows blob: and data: for NON-top frames only', () => {
+    expect(isAllowedWidgetUrl('blob:https://pay.example/uuid', false)).toBe(true);
+    expect(isAllowedWidgetUrl('data:text/html;base64,AAAA', false)).toBe(true);
+    expect(isAllowedWidgetUrl('blob:https://pay.example/uuid', true)).toBe(false);
+    expect(isAllowedWidgetUrl('data:text/html;base64,AAAA', true)).toBe(false);
+    expect(isAllowedWidgetUrl('data:text/html;base64,AAAA')).toBe(false); // top-level by default
+  });
+  it('still blocks http, javascript:, intent: and custom schemes in sub-frames too', () => {
+    expect(isAllowedWidgetUrl('http://x.example/', false)).toBe(false);
+    expect(isAllowedWidgetUrl('javascript:alert(1)', false)).toBe(false);
+    expect(isAllowedWidgetUrl('myapp://x', false)).toBe(false);
   });
   it('blocks plain http, unknown custom schemes, javascript:, intent: and empty URLs', () => {
     expect(isAllowedWidgetUrl('http://webpay-ui.k8.isw.la/')).toBe(false);

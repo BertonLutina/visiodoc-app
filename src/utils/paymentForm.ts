@@ -85,7 +85,7 @@ export type WidgetMessage =
   | { kind: 'paid_unconfirmed' }
   /** Le widget a EXPLICITEMENT rapporté une annulation (X1) : définitif, la tentative peut être oubliée. */
   | { kind: 'cancelled' }
-  /** Refus explicite de la banque (Z6…) : définitif. */
+  /** Refus explicite de la banque (Z6) : définitif. */
   | { kind: 'declined'; code: string; desc: string }
   /**
    * Aucune issue définitive : l'utilisateur a quitté l'écran (`user_left`), la passerelle est revenue sur
@@ -119,18 +119,22 @@ export function parseWidgetMessage(raw: unknown, expectedTxnRef: string): Widget
     return payRef ? { kind: 'success', payRef } : { kind: 'paid_unconfirmed' };
   }
   if (resp === 'X1') return { kind: 'cancelled' };
+  if (resp === 'Z6') return { kind: 'declined', code: resp, desc: String(msg.desc ?? '') };
   if (resp === 'TO') return { kind: 'dismissed', reason: 'timeout' };
-  return { kind: 'declined', code: resp, desc: String(msg.desc ?? '') };
+  // Tout autre code n'est PAS un refus explicite : on ne sait pas si le patient a été débité → tentative conservée.
+  return { kind: 'dismissed', reason: 'gateway_returned' };
 }
 
 /**
  * Politique de navigation de la WebView de paiement : TOUT `https:` (pages de banque, 3-DS, mobile money, sur
- * n'importe quel domaine, y compris les iframes) et `about:blank` ; `http:`, `javascript:`, `intent:`, `tel:`,
- * `mailto:` et les schémas personnalisés sont bloqués. L'usurpation d'un résultat est déjà couverte par la
- * correspondance exacte du `txnref` et la vérification serveur : bloquer un paiement légitime serait pire.
+ * n'importe quel domaine, y compris les iframes), TOUT `about:`, et `blob:` / `data:` pour les cadres NON
+ * principaux uniquement (iframes du widget) ; `http:`, `javascript:`, `intent:`, `tel:`, `mailto:` et les schémas
+ * personnalisés sont bloqués. L'usurpation d'un résultat est déjà couverte par la correspondance exacte du
+ * `txnref` et la vérification serveur : bloquer un paiement légitime serait pire.
  */
-export function isAllowedWidgetUrl(url: string): boolean {
-  return url === 'about:blank' || /^https:\/\//i.test(url);
+export function isAllowedWidgetUrl(url: string, isTopFrame = true): boolean {
+  if (/^about:/i.test(url) || /^https:\/\//i.test(url)) return true;
+  return !isTopFrame && /^(blob|data):/i.test(url);
 }
 
 /** `site_redirect_url` atteinte : la passerelle est revenue, issue inconnue (à traiter, jamais à charger). */

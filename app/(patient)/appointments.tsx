@@ -96,7 +96,8 @@ export default function Appointments() {
   const data = (tab === 'upcoming' ? up.data : pastReq.data) ?? [];
 
   // Tentatives de paiement mémorisées (AsyncStorage) : débit possible sans confirmation reçue.
-  const attempts = useAsync(() => listPendingAttempts(), []);
+  // Filtrées par utilisateur : rien n'est effacé à la déconnexion, on ne voit que celles du compte courant.
+  const attempts = useAsync(() => (user?.id ? listPendingAttempts(user.id) : Promise.resolve([])), [user?.id]);
   const attemptIds = new Set((attempts.data ?? []).map((a) => a.consultationId));
 
   // Au retour sur l'écran : rejoue `confirm` pour un paiement resté non confirmé (même txnRef / payRef), puis
@@ -105,7 +106,16 @@ export default function Appointments() {
     useCallback(() => {
       let active = true;
       (async () => {
-        await reconcilePendingPayments();
+        const supportCases = await reconcilePendingPayments();
+        if (supportCases.length > 0 && active) {
+          // Payé mais consultation expirée / annulée : on garde la référence et on oriente vers le support.
+          Alert.alert(
+            t('Paiement en cours de confirmation'),
+            `${t('Paiement reçu mais consultation non confirmée : contacte le support avec la référence')} ${supportCases
+              .map((c) => c.txnRef)
+              .join(', ')}`,
+          );
+        }
         if (!active) return;
         await Promise.all([up.refresh(), pastReq.refresh(), attempts.refresh()]);
       })();
