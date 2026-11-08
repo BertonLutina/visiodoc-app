@@ -587,4 +587,7 @@ export const en: Record<string, string> = {
   "Recevoir le code ({seconds} s)": "Receive the code ({seconds} s)",
   "Renvoyer le code ({seconds} s)": "Resend the code ({seconds} s)",
   "Les mots de passe ne correspondent pas.": "The passwords do not match.",
+  "Un e-mail de confirmation t'a été envoyé à {email}. Clique sur le lien pour pouvoir te connecter aussi avec ton e-mail.": "A confirmation email has been sent to {email}. Click the link to be able to sign in with your email too.",
+  "Un e-mail de connexion est déjà associé à ce compte.": "A sign-in email is already linked to this account.",
+  "On vous envoie un code de confirmation par WhatsApp.": "We send you a confirmation code by WhatsApp.",
 };

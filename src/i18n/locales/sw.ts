@@ -587,4 +587,7 @@ export const sw: Record<string, string> = {
   "Recevoir le code ({seconds} s)": "Pokea msimbo ({seconds} s)",
   "Renvoyer le code ({seconds} s)": "Tuma msimbo tena ({seconds} s)",
   "Les mots de passe ne correspondent pas.": "Manenosiri hayalingani.",
+  "Un e-mail de confirmation t'a été envoyé à {email}. Clique sur le lien pour pouvoir te connecter aussi avec ton e-mail.": "Barua pepe ya uthibitisho imetumwa kwa {email}. Bofya kiungo ili uweze kuingia pia kwa barua pepe yako.",
+  "Un e-mail de connexion est déjà associé à ce compte.": "Barua pepe ya kuingia tayari imeunganishwa na akaunti hii.",
+  "On vous envoie un code de confirmation par WhatsApp.": "Tunakutumia msimbo wa uthibitisho kupitia WhatsApp.",
 };

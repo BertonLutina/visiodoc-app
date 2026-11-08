@@ -10,10 +10,17 @@ import {
   RegisterPatientError,
   RESEND_COOLDOWN_SECONDS,
   setLoginCredentials,
+  submitLoginCredentials,
   LoginCredentialsError,
   loginCredentialsErrorMessage,
   needsLoginCredentials,
+  shouldAskLoginCredentials,
+  markCodeSent,
+  codeCooldownRemaining,
+  resetCodeCooldowns,
 } from './registration';
+import { hasSubmittedCredentials, markCredentialsSubmitted } from './loginCredentialsFlag';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authErrorMessage, edgeFunctionError, isEmailNotConfirmed } from '@/utils/authError';
 import { isSessionExpiry } from '@/services/sessionExpiry';
 import { setCurrentLangCode } from '@/i18n/core';
@@ -495,12 +502,19 @@ describe('isEmailNotConfirmed (GoTrue email_not_confirmed)', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// Étape 8 : `set-login-credentials` après l'OTP WhatsApp (e-mail + mot de passe obligatoires)
+// Étape 8 : `set-login-credentials` après l'OTP WhatsApp (e-mail + mot de passe obligatoires).
+// Corps d'erreur RÉELS de la fonction (backend ce92d3b) : `{ success: false, code, error }`.
+// Succès : `{ success: true, pending: true, email }` (pas de `message`).
 // ---------------------------------------------------------------------------------------------
 
-const CREDENTIALS_OK = { success: true, message: 'Identifiants mis à jour avec succès' };
+const CREDENTIALS_OK = { success: true, pending: true, email: 'patient.recup@exemple.com' };
 const GUIDE_EMAIL = 'patient.recup@exemple.com';
 const GUIDE_PASSWORD = 'NouveauMotDePasse123!';
+const SHARED_WEAK_PASSWORD =
+  'Le mot de passe doit comporter au moins 10 caractères et inclure au moins une lettre et un chiffre.';
+
+const run = (email = GUIDE_EMAIL, pw = GUIDE_PASSWORD, confirm = GUIDE_PASSWORD) =>
+  setLoginCredentials(email, pw, confirm).catch((e) => e) as Promise<LoginCredentialsError>;
 
 describe('setLoginCredentials', () => {
   beforeEach(() => {
@@ -526,25 +540,24 @@ describe('setLoginCredentials', () => {
   });
 
   it('trims and lowercases the e-mail but never touches the password', async () => {
-    await setLoginCredentials('  Patient.Recup@Exemple.com ', ' Abcdefghij12 ', ' Abcdefghij12 ');
+    await setLoginCredentials('  Patient.Recup@Exemple.com ', 'Abcdefghij12', 'Abcdefghij12');
     expect(mockInvoke.mock.calls[0][1].body).toEqual({
       email: GUIDE_EMAIL,
-      newPassword: ' Abcdefghij12 ',
-      confirmPassword: ' Abcdefghij12 ',
+      newPassword: 'Abcdefghij12',
+      confirmPassword: 'Abcdefghij12',
     });
   });
 
-  it('resolves the success shape of the guide on a 200', async () => {
+  it('resolves the real success body: { success: true, pending: true, email } (no message)', async () => {
     await expect(setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD)).resolves.toEqual({
       success: true,
-      message: 'Identifiants mis à jour avec succès',
+      pending: true,
+      email: GUIDE_EMAIL,
     });
   });
 
   it('newPassword !== confirmPassword → typed error, function NOT called', async () => {
-    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, 'AutreMotDePasse456').catch(
-      (e) => e,
-    );
+    const err = await run(GUIDE_EMAIL, GUIDE_PASSWORD, 'AutreMotDePasse456');
     expect(err).toBeInstanceOf(LoginCredentialsError);
     expect(err.kind).toBe('password_mismatch');
     expect(err.message).toBe('Les mots de passe ne correspondent pas.');
@@ -552,12 +565,12 @@ describe('setLoginCredentials', () => {
   });
 
   it.each([
-    ['short', 'Abc12345', 'too_short', 'Le mot de passe doit contenir au moins 10 caractères.'],
-    ['no digit', 'AbcdefghijKL', 'needs_letter_and_digit', 'Le mot de passe doit contenir au moins une lettre et un chiffre.'],
-    ['no letter', '1234567890123', 'needs_letter_and_digit', 'Le mot de passe doit contenir au moins une lettre et un chiffre.'],
-    ['73 chars', `a1${'b'.repeat(71)}`, 'too_long', 'Le mot de passe ne doit pas dépasser 72 caractères.'],
-  ])('weak password (%s) → typed error, function NOT called', async (_name, password, _issue, message) => {
-    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, password, password).catch((e) => e);
+    ['short', 'Abc12345', 'Le mot de passe doit contenir au moins 10 caractères.'],
+    ['no digit', 'AbcdefghijKL', 'Le mot de passe doit contenir au moins une lettre et un chiffre.'],
+    ['no letter', '1234567890123', 'Le mot de passe doit contenir au moins une lettre et un chiffre.'],
+    ['73 chars', `a1${'b'.repeat(71)}`, 'Le mot de passe ne doit pas dépasser 72 caractères.'],
+  ])('weak password (%s) → typed error, function NOT called', async (_name, password, message) => {
+    const err = await run(GUIDE_EMAIL, password, password);
     expect(err).toBeInstanceOf(LoginCredentialsError);
     expect(err.kind).toBe('weak_password');
     expect(err.message).toBe(message);
@@ -567,7 +580,7 @@ describe('setLoginCredentials', () => {
   it.each(['', '   ', 'pas-un-email', 'a@b', 'a b@c.cd', '@exemple.com'])(
     'invalid e-mail %p → typed error, function NOT called',
     async (email) => {
-      const err: LoginCredentialsError = await setLoginCredentials(email, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+      const err = await run(email);
       expect(err).toBeInstanceOf(LoginCredentialsError);
       expect(err.kind).toBe('invalid_email');
       expect(err.message).toBe('Adresse email invalide.');
@@ -583,71 +596,119 @@ describe('setLoginCredentials', () => {
     expect(mockInvoke).toHaveBeenCalledTimes(2);
   });
 
-  it('422 weak_password + pwned → the pwned message', async () => {
+  it('400 WEAK_PASSWORD → the shared weak-password message, not the server text', async () => {
     mockInvoke.mockResolvedValue({
       data: null,
-      error: httpError(422, { error: 'Password is known to be weak', error_code: 'weak_password', reasons: ['pwned'] }),
+      error: httpError(400, {
+        success: false,
+        code: 'WEAK_PASSWORD',
+        error: 'Le mot de passe ne peut pas être identique à votre adresse e-mail.',
+      }),
     });
-    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
-    expect(err).toBeInstanceOf(LoginCredentialsError);
-    expect(err.kind).toBe('validation');
-    expect(loginCredentialsErrorMessage(err)).toBe('Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.');
+    const err = await run();
+    expect(err.kind).toBe('weak_password');
+    expect(loginCredentialsErrorMessage(err)).toBe(SHARED_WEAK_PASSWORD);
   });
 
-  it('422 weak_password for another reason is not shown as pwned', async () => {
+  it('400 INVALID_EMAIL → the existing invalid e-mail message', async () => {
     mockInvoke.mockResolvedValue({
       data: null,
-      error: httpError(422, { error: 'Mot de passe trop courant.', error_code: 'weak_password', reasons: ['common'] }),
+      error: httpError(400, { success: false, code: 'INVALID_EMAIL', error: 'Adresse e-mail invalide.' }),
     });
-    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
-    expect(loginCredentialsErrorMessage(err)).toBe('Mot de passe trop courant.');
+    const err = await run();
+    expect(err.kind).toBe('invalid_email');
+    expect(loginCredentialsErrorMessage(err)).toBe('Adresse email invalide.');
   });
 
-  it('400 → validation error with the server message', async () => {
+  it('400 PASSWORD_MISMATCH → the mismatch message', async () => {
     mockInvoke.mockResolvedValue({
       data: null,
-      error: httpError(400, { error: 'Les mots de passe ne correspondent pas.' }),
+      error: httpError(400, {
+        success: false,
+        code: 'PASSWORD_MISMATCH',
+        error: 'La confirmation ne correspond pas au mot de passe.',
+      }),
     });
-    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
-    expect(err.kind).toBe('validation');
+    const err = await run();
+    expect(err.kind).toBe('password_mismatch');
     expect(loginCredentialsErrorMessage(err)).toBe('Les mots de passe ne correspondent pas.');
   });
 
-  it('409 → conflict error: e-mail already used (existing French message)', async () => {
-    mockInvoke.mockResolvedValue({ data: null, error: httpError(409, { error: 'Email already registered' }) });
-    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+  it('409 EMAIL_TAKEN → conflict: the existing "e-mail already used" message', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(409, { success: false, code: 'EMAIL_TAKEN', error: 'Cette adresse e-mail est déjà utilisée.' }),
+    });
+    const err = await run();
     expect(err.kind).toBe('conflict');
+    expect(err.code).toBe('EMAIL_TAKEN');
     expect(loginCredentialsErrorMessage(err)).toBe('Un compte existe déjà avec cet email.');
   });
 
-  it('429 → rate_limited error with a generic French message', async () => {
-    mockInvoke.mockResolvedValue({ data: null, error: httpError(429, { error: 'Too many requests' }) });
-    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+  it('409 ALREADY_HAS_LOGIN_EMAIL → dedicated kind and French message', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(409, {
+        success: false,
+        code: 'ALREADY_HAS_LOGIN_EMAIL',
+        error: 'Ce compte a déjà un e-mail de connexion. Utilisez « Changer le mot de passe ».',
+      }),
+    });
+    const err = await run();
+    expect(err.kind).toBe('already_has_login_email');
+    expect(loginCredentialsErrorMessage(err)).toBe('Un e-mail de connexion est déjà associé à ce compte.');
+  });
+
+  it('429 RATE_LIMITED → rate_limited with a clear French message', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(429, { error: 'Too many requests, please try again later.', code: 'RATE_LIMITED' }, { 'Retry-After': '3600' }),
+    });
+    const err = await run();
     expect(err.kind).toBe('rate_limited');
     expect(loginCredentialsErrorMessage(err)).toBe('Trop de tentatives. Réessaie dans quelques minutes.');
   });
 
-  it('401 (expired session) → session_expired error recognised by the Task 6 expiry path', async () => {
-    mockInvoke.mockResolvedValue({ data: null, error: httpError(401, { code: 401, message: 'Invalid JWT' }) });
-    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+  it('401 UNAUTHENTICATED → session_expired, recognised by the Task 6 expiry path', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(401, { success: false, code: 'UNAUTHENTICATED' }) });
+    const err = await run();
     expect(err.kind).toBe('session_expired');
     expect(isSessionExpiry(err)).toBe(true);
     expect(loginCredentialsErrorMessage(err)).toBe('Ta session a expiré, reconnecte-toi.');
   });
 
-  it('500 → unknown error with a generic French message (never the raw SDK text)', async () => {
-    mockInvoke.mockResolvedValue({ data: null, error: httpError(500, {}) });
-    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+  it('502 EMAIL_SEND_FAILED → the server French message as is', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(502, {
+        success: false,
+        code: 'EMAIL_SEND_FAILED',
+        error: "L'e-mail de confirmation n'a pas pu être envoyé. Vérifiez l'adresse et réessayez.",
+      }),
+    });
+    const err = await run();
+    expect(err.kind).toBe('email_failed');
+    expect(loginCredentialsErrorMessage(err)).toBe(
+      "L'e-mail de confirmation n'a pas pu être envoyé. Vérifiez l'adresse et réessayez.",
+    );
+  });
+
+  it('500 INTERNAL (e.g. a GoTrue pwned refusal) → generic message, never the pwned text', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(500, { success: false, code: 'INTERNAL', error: "Erreur lors de l'enregistrement." }),
+    });
+    const err = await run();
     expect(err.kind).toBe('unknown');
     expect(loginCredentialsErrorMessage(err)).toBe('Une erreur est survenue. Réessaie.');
   });
 
-  it('network failure → the usual connection message', async () => {
+  it('network failure → generic message', async () => {
     mockInvoke.mockResolvedValue({
       data: null,
       error: { name: 'FunctionsFetchError', message: 'Failed to send a request to the Edge Function' },
     });
-    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+    const err = await run();
     expect(err.kind).toBe('unknown');
     expect(loginCredentialsErrorMessage(err)).toBe('Une erreur est survenue. Réessaie.');
   });
@@ -667,28 +728,170 @@ describe('setLoginCredentials', () => {
   });
 });
 
-describe('needsLoginCredentials (phone account without e-mail yet)', () => {
-  it('is true for a phone account whose auth e-mail is empty', () => {
-    expect(needsLoginCredentials({ id: 'u1', phone: '243899999999', email: '' })).toBe(true);
+describe('submitLoginCredentials (flag persisted per user)', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    mockInvoke.mockReset();
+    mockInvoke.mockResolvedValue({ data: CREDENTIALS_OK, error: null });
   });
 
-  it('is true when the e-mail is null, missing or blank', () => {
-    expect(needsLoginCredentials({ id: 'u1', phone: '243899999999', email: null })).toBe(true);
+  it('200 pending → outcome pending_confirmation and the flag is set for that user only', async () => {
+    await expect(submitLoginCredentials('user-a', GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD)).resolves.toEqual({
+      status: 'pending_confirmation',
+      email: GUIDE_EMAIL,
+    });
+    expect(await hasSubmittedCredentials('user-a')).toBe(true);
+    expect(await hasSubmittedCredentials('user-b')).toBe(false);
+  });
+
+  it('409 ALREADY_HAS_LOGIN_EMAIL → success for the flow: flag set, outcome already_has_login_email', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(409, { success: false, code: 'ALREADY_HAS_LOGIN_EMAIL', error: 'Ce compte a déjà un e-mail de connexion.' }),
+    });
+    await expect(submitLoginCredentials('user-a', GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD)).resolves.toEqual({
+      status: 'already_has_login_email',
+      email: GUIDE_EMAIL,
+    });
+    expect(await hasSubmittedCredentials('user-a')).toBe(true);
+  });
+
+  it('other errors do not set the flag (EMAIL_TAKEN, validation, 429)', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(409, { success: false, code: 'EMAIL_TAKEN', error: 'Cette adresse e-mail est déjà utilisée.' }),
+    });
+    await expect(submitLoginCredentials('user-a', GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD)).rejects.toBeInstanceOf(
+      LoginCredentialsError,
+    );
+    await expect(submitLoginCredentials('user-a', GUIDE_EMAIL, GUIDE_PASSWORD, 'Different12345')).rejects.toBeInstanceOf(
+      LoginCredentialsError,
+    );
+    expect(await hasSubmittedCredentials('user-a')).toBe(false);
+  });
+});
+
+describe('loginCredentialsFlag (AsyncStorage)', () => {
+  beforeEach(() => AsyncStorage.clear());
+
+  it('stores credentialsSubmitted:<userId> and reads it back per user', async () => {
+    expect(await hasSubmittedCredentials('user-a')).toBe(false);
+    await markCredentialsSubmitted('user-a');
+    expect(await AsyncStorage.getAllKeys()).toEqual(['credentialsSubmitted:user-a']);
+    expect(await hasSubmittedCredentials('user-a')).toBe(true);
+    expect(await hasSubmittedCredentials('user-b')).toBe(false);
+  });
+
+  it('never throws on storage errors (reads as not submitted)', async () => {
+    jest.spyOn(AsyncStorage, 'getItem').mockRejectedValueOnce(new Error('boom'));
+    await expect(hasSubmittedCredentials('user-a')).resolves.toBe(false);
+  });
+
+  it('ignores an empty user id', async () => {
+    await markCredentialsSubmitted('');
+    expect(await AsyncStorage.getAllKeys()).toEqual([]);
+    expect(await hasSubmittedCredentials('')).toBe(false);
+  });
+});
+
+describe('needsLoginCredentials (mirrors backend hasNoLoginEmail)', () => {
+  it.each([
+    ['empty string', ''],
+    ['null', null],
+    ['undefined', undefined],
+    ['blank', '   '],
+    ['phone placeholder', '243899999999@phone.visiodoc.local'],
+    ['phone placeholder, upper case', '243899999999@PHONE.VISIODOC.LOCAL'],
+    ['phone placeholder with spaces', '  243899999999@phone.visiodoc.local '],
+  ])('is true when the auth e-mail is %s', (_name, email) => {
+    expect(needsLoginCredentials({ id: 'u1', phone: '243899999999', email })).toBe(true);
+  });
+
+  it('is true for a user without any e-mail field, with or without phone', () => {
     expect(needsLoginCredentials({ id: 'u1', phone: '243899999999' })).toBe(true);
-    expect(needsLoginCredentials({ id: 'u1', phone: '+243899999999', email: '   ' })).toBe(true);
+    expect(needsLoginCredentials({ id: 'u1' })).toBe(true);
   });
 
-  it('is false for a phone account that already has an e-mail (returning user)', () => {
+  it('is false for a real e-mail (returning user) and for a look-alike domain', () => {
     expect(needsLoginCredentials({ id: 'u1', phone: '243899999999', email: 'patient.recup@exemple.com' })).toBe(false);
+    expect(needsLoginCredentials({ id: 'u1', email: 'x@phone.visiodoc.local.example.com' })).toBe(false);
+    expect(needsLoginCredentials({ id: 'u1', email: 'x@visiodoc.local' })).toBe(false);
   });
 
-  it('is false for an e-mail account without phone (e-mail OTP, OAuth)', () => {
-    expect(needsLoginCredentials({ id: 'u1', email: 'a@b.cd' })).toBe(false);
-    expect(needsLoginCredentials({ id: 'u1', email: '', phone: '' })).toBe(false);
+  it('is false once the credentials were submitted for this user', () => {
+    expect(needsLoginCredentials({ id: 'u1', phone: '243899999999', email: '' }, true)).toBe(false);
   });
 
   it('is false for no user at all', () => {
     expect(needsLoginCredentials(null)).toBe(false);
     expect(needsLoginCredentials(undefined)).toBe(false);
+  });
+});
+
+describe('shouldAskLoginCredentials (rule + persisted flag)', () => {
+  beforeEach(() => AsyncStorage.clear());
+  const placeholderUser = { id: 'u1', phone: '243899999999', email: '243899999999@phone.visiodoc.local' };
+
+  it('asks a legacy placeholder-email user at OTP login', async () => {
+    await expect(shouldAskLoginCredentials(placeholderUser)).resolves.toBe(true);
+  });
+
+  it('asks a phone user with an empty e-mail', async () => {
+    await expect(shouldAskLoginCredentials({ id: 'u1', phone: '243899999999', email: '' })).resolves.toBe(true);
+  });
+
+  it('does not ask a user with a real e-mail', async () => {
+    await expect(shouldAskLoginCredentials({ id: 'u1', phone: '243899999999', email: 'a@b.cd' })).resolves.toBe(false);
+  });
+
+  it('does not ask again once this user submitted (the e-mail is still pending confirmation)', async () => {
+    await markCredentialsSubmitted('u1');
+    await expect(shouldAskLoginCredentials(placeholderUser)).resolves.toBe(false);
+  });
+
+  it("another user's flag does not skip the step", async () => {
+    await markCredentialsSubmitted('someone-else');
+    await expect(shouldAskLoginCredentials(placeholderUser)).resolves.toBe(true);
+  });
+});
+
+describe('code resend cooldown per phone number (E.164, in-memory)', () => {
+  beforeEach(() => resetCodeCooldowns());
+  const A = '+243899999999';
+  const B = '+243810000001';
+
+  it('is 0 for a number nothing was sent to', () => {
+    expect(codeCooldownRemaining(A, 5000)).toBe(0);
+  });
+
+  it('is 60 right after sending to a number and counts down', () => {
+    markCodeSent(A, 1000);
+    expect(codeCooldownRemaining(A, 1000)).toBe(60);
+    expect(codeCooldownRemaining(A, 31000)).toBe(30);
+    expect(codeCooldownRemaining(A, 61000)).toBe(0);
+  });
+
+  it('sending to A does not block B', () => {
+    markCodeSent(A, 1000);
+    expect(codeCooldownRemaining(B, 2000)).toBe(0);
+    expect(codeCooldownRemaining(A, 2000)).toBe(59);
+  });
+
+  it('a new send to A restarts only the clock of A', () => {
+    markCodeSent(A, 1000);
+    markCodeSent(B, 20000);
+    markCodeSent(A, 50000);
+    expect(codeCooldownRemaining(A, 50000)).toBe(60);
+    expect(codeCooldownRemaining(B, 50000)).toBe(30);
+  });
+
+  it('survives re-opening the screen (module-level state, not component state)', () => {
+    markCodeSent(A, 1000);
+    // « démontage / remontage » : seul le module est lu, la valeur persiste
+    expect(codeCooldownRemaining(A, 11000)).toBe(50);
+  });
+
+  it('is 0 for an empty number', () => {
+    expect(codeCooldownRemaining('', 1000)).toBe(0);
   });
 });

@@ -11,7 +11,12 @@ import { colors } from '@/theme/colors';
 import { toE164 } from '@/utils/phone';
 import { authErrorMessage, providerRefusal, providerRefusalMessage } from '@/utils/authError';
 import { providerHomeHref } from '@/services/accessPolicy';
-import { LoginCredentialsError, loginCredentialsErrorMessage, resendCooldownRemaining } from '@/services/registration';
+import {
+  LoginCredentialsError,
+  codeCooldownRemaining,
+  loginCredentialsErrorMessage,
+  markCodeSent,
+} from '@/services/registration';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -35,10 +40,13 @@ export default function PhoneLogin() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
-  // Temporisation de 60 s entre deux envois du code (guide, étape 8.3).
-  const [lastSentAt, setLastSentAt] = useState<number | null>(null);
+  // Temporisation de 60 s entre deux envois du code (guide, étape 8.3), par numéro E.164 et conservée
+  // hors de l'écran (module) : revenir en arrière puis rouvrir l'écran ne la contourne pas.
   const [now, setNow] = useState(() => Date.now());
-  const remaining = resendCooldownRemaining(lastSentAt, now);
+
+  const country = getAfricanCountry(countryCode);
+  const fullPhone = toE164(local, country?.dialCode) ?? '';
+  const remaining = codeCooldownRemaining(fullPhone, now);
 
   useEffect(() => {
     if (remaining <= 0) return;
@@ -57,8 +65,6 @@ export default function PhoneLogin() {
     setConfirmPassword('');
   };
 
-  const country = getAfricanCountry(countryCode);
-  const fullPhone = toE164(local, country?.dialCode) ?? '';
   const phoneValid = local.replace(/\D/g, '').length >= 8;
 
   const handleError = (e: any) => {
@@ -73,8 +79,8 @@ export default function PhoneLogin() {
     try {
       await sendPhoneOtp(fullPhone);
       const sentAt = Date.now();
+      markCodeSent(fullPhone, sentAt);
       setNow(sentAt);
-      setLastSentAt(sentAt);
       setStep('code');
     } catch (e: any) {
       handleError(e);
@@ -110,8 +116,16 @@ export default function PhoneLogin() {
     setErrorMsg(null);
     setSaving(true);
     try {
-      const u = await saveLoginCredentials(email, password, confirmPassword);
+      const { user: u, outcome } = await saveLoginCredentials(email, password, confirmPassword);
       clearCredentials();
+      // L'e-mail ne sert à se connecter qu'après le clic sur le lien de confirmation : on le dit avant d'entrer.
+      Alert.alert(
+        outcome.status === 'pending_confirmation'
+          ? t("Un e-mail de confirmation t'a été envoyé à {email}. Clique sur le lien pour pouvoir te connecter aussi avec ton e-mail.", {
+              email: outcome.email,
+            })
+          : t('Un e-mail de connexion est déjà associé à ce compte.'),
+      );
       router.replace(providerHomeHref(u));
     } catch (e: any) {
       if (e instanceof LoginCredentialsError && e.kind !== 'session_expired') {
@@ -150,7 +164,7 @@ export default function PhoneLogin() {
           </ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
             {step === 'phone'
-              ? t('On vous envoie un code de vérification par SMS.')
+              ? t('On vous envoie un code de confirmation par WhatsApp.')
               : step === 'code'
                 ? t('Votre code de confirmation vous a été envoyé par WhatsApp')
                 : t("Ajoutez un e-mail et un mot de passe pour pouvoir aussi vous connecter par e-mail.")}

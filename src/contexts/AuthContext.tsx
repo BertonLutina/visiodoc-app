@@ -16,9 +16,10 @@ import {
   buildRegisterPrestaBody,
   registerPatientAccount,
   resolveSpecialty,
-  needsLoginCredentials,
-  setLoginCredentials,
+  shouldAskLoginCredentials,
+  submitLoginCredentials,
   LoginCredentialsError,
+  type LoginCredentialsOutcome,
   type Gender,
 } from '@/services/registration';
 import { getServiceTypeCatalog } from '@/services/specializationCatalog';
@@ -102,7 +103,11 @@ interface AuthContextType {
    */
   verifyPhoneOtp: (phone: string, token: string) => Promise<PhoneOtpResult>;
   /** `set-login-credentials` après l'OTP, puis ouverture de la session (gardes de rôle et de statut incluses). */
-  saveLoginCredentials: (email: string, newPassword: string, confirmPassword: string) => Promise<User>;
+  saveLoginCredentials: (
+    email: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) => Promise<{ user: User; outcome: LoginCredentialsOutcome }>;
   /** Abandon de l'étape e-mail + mot de passe : la session créée par l'OTP est fermée. */
   cancelLoginCredentials: () => void;
   /** Connexion sociale (Google, Microsoft/Outlook…). Renvoie l'utilisateur connecté. */
@@ -291,10 +296,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (active && isSessionExpiry(error)) {
           // Jeton de rafraîchissement refusé au démarrage : jamais de restauration, message unique.
           handleSessionExpired();
-        } else if (active && data.session?.user && needsLoginCredentials(data.session.user)) {
-          // Compte téléphone resté sans e-mail ni mot de passe (étape obligatoire interrompue) :
-          // jamais restauré, il repasse par le code puis par l'étape e-mail + mot de passe.
-          dropForbiddenSession();
         } else if (active && data.session?.user) {
           const result = await loadProfile(data.session.user.id);
           const refusal = result.status === 'ok' ? providerRefusalReason(result.user) : null;
@@ -487,8 +488,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
-  // Vrai entre la validation du code et l'enregistrement de l'e-mail + mot de passe (aucun mot de passe ici).
-  const awaitingCredentialsRef = useRef(false);
+  // Id du compte entre la validation du code et l'enregistrement de l'e-mail + mot de passe (aucun mot de passe ici).
+  const awaitingCredentialsRef = useRef<string | null>(null);
 
   const verifyPhoneOtp = async (phone: string, token: string): Promise<PhoneOtpResult> => {
     setLoading(true);
@@ -504,11 +505,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         type: 'sms',
       });
       if (error) throw error;
-      if (needsLoginCredentials(data.user)) {
+      // Étape demandée seulement juste après un code (jamais à la restauration de session) : compte sans
+      // e-mail de connexion (règle `hasNoLoginEmail` du backend) et étape pas déjà envoyée.
+      if (await shouldAskLoginCredentials(data.user)) {
         // Rôle et statut vérifiés d'abord (refus = session fermée), mais l'app ne s'ouvre pas encore :
         // l'étape e-mail + mot de passe est obligatoire pour un compte créé par téléphone.
         const profile = await resolveOtpProfile(data.user);
-        awaitingCredentialsRef.current = true;
+        awaitingCredentialsRef.current = data.user?.id ?? null;
         return { user: profile, needsLoginCredentials: true };
       }
       return { user: await finishOtp(data.user, undefined, 'phone_otp'), needsLoginCredentials: false };
@@ -517,24 +520,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const saveLoginCredentials = async (email: string, newPassword: string, confirmPassword: string): Promise<User> => {
-    if (!supabaseConfigured || !supabase || !awaitingCredentialsRef.current) {
+  const saveLoginCredentials = async (
+    email: string,
+    newPassword: string,
+    confirmPassword: string,
+  ): Promise<{ user: User; outcome: LoginCredentialsOutcome }> => {
+    const userId = awaitingCredentialsRef.current;
+    if (!supabaseConfigured || !supabase || !userId) {
       throw new Error(translate('Une erreur est survenue. Réessaie.'));
     }
     setLoading(true);
     try {
+      let outcome: LoginCredentialsOutcome;
       try {
-        await setLoginCredentials(email, newPassword, confirmPassword);
+        // Pose aussi le drapeau `credentialsSubmitted:<userId>` (succès, ou e-mail de connexion déjà présent).
+        outcome = await submitLoginCredentials(userId, email, newPassword, confirmPassword);
       } catch (e) {
         if (e instanceof LoginCredentialsError && e.kind === 'session_expired') {
           // Session de l'OTP expirée : voie Task 6 (purge + message unique), l'étape est abandonnée.
-          awaitingCredentialsRef.current = false;
+          awaitingCredentialsRef.current = null;
           reportSessionExpiry(e);
         }
         throw e;
       }
-      awaitingCredentialsRef.current = false;
-      // Rafraîchit la session : le jeton et l'utilisateur portent maintenant l'e-mail (connexion par e-mail possible).
+      awaitingCredentialsRef.current = null;
+      // Rafraîchit la session (mot de passe fixé ; l'e-mail reste en attente de confirmation par lien).
       let authUser: any = null;
       try {
         const { data } = await supabase.auth.refreshSession();
@@ -543,7 +553,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         /* le compte est à jour côté serveur : on retombe sur la session en cours */
       }
       if (!authUser) authUser = (await supabase.auth.getSession()).data.session?.user ?? null;
-      return await finishOtp(authUser, email.trim().toLowerCase(), 'phone_otp');
+      const user = await finishOtp(authUser, email.trim().toLowerCase(), 'phone_otp');
+      return { user, outcome };
     } finally {
       setLoading(false);
     }
@@ -551,7 +562,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const cancelLoginCredentials = () => {
     if (!awaitingCredentialsRef.current) return;
-    awaitingCredentialsRef.current = false;
+    awaitingCredentialsRef.current = null;
     localSignOut().catch(() => {
       /* ignore : aucun état utilisateur n'a été posé */
     });

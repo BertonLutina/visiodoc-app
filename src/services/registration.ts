@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { specKey } from '@/services/specializationCatalog';
 import { edgeFunctionError, pwnedPasswordMessage, authErrorMessage, readHttpError } from '@/utils/authError';
 import { passwordIssue, passwordIssueMessage } from '@/services/passwordPolicy';
+import { hasSubmittedCredentials, markCredentialsSubmitted } from '@/services/loginCredentialsFlag';
 
 /** `users.gender` : uniquement `male` ou `female` (guide). `other` est interdit. */
 export type Gender = 'male' | 'female';
@@ -260,26 +261,40 @@ export async function resendEmailConfirmation(email: string, language?: string):
 }
 
 /* ------------------------------------------------------------------------------------------------
- * Étape 8 du guide : un compte créé par téléphone (OTP WhatsApp) reçoit obligatoirement un e-mail et
- * un mot de passe via l'Edge Function `set-login-credentials`.
+ * Étape 8 du guide : un compte créé par téléphone (OTP WhatsApp) reçoit un e-mail et un mot de passe
+ * via l'Edge Function `set-login-credentials` (backend ce92d3b).
+ *
+ * Comportement réel du backend : le mot de passe est fixé tout de suite ; l'e-mail est seulement
+ * enregistré dans `pending_login_emails` et un lien de confirmation lui est envoyé ; `auth.users.email`
+ * n'est écrit qu'au clic sur ce lien (`confirm-login-email`).
  * ---------------------------------------------------------------------------------------------- */
 
+/** Domaine factice des comptes créés par téléphone (backend `PHONE_PLACEHOLDER_DOMAIN`). */
+const PHONE_PLACEHOLDER_DOMAIN = '@phone.visiodoc.local';
+
 /**
- * Vrai si le compte authentifié est un compte « téléphone » auquel il manque encore l'e-mail
- * (donc le mot de passe) : numéro présent, adresse `auth.users.email` vide.
+ * Reprend la règle du backend `hasNoLoginEmail` : l'e-mail d'authentification est vide / absent OU se
+ * termine par `@phone.visiodoc.local` (insensible à la casse). `submitted` = le drapeau
+ * `credentialsSubmitted:<userId>` existe (étape déjà envoyée, e-mail en attente de confirmation) → faux,
+ * pour ne pas reboucler tant que le lien n'est pas cliqué.
  *
- * Règle retenue : c'est la seule donnée fiable connue juste après `verifyOtp`. GoTrue crée un compte
- * téléphone avec `email` vide ; `set-login-credentials` renseigne ensuite cette adresse. Un
- * utilisateur de retour qui a déjà un e-mail n'est donc jamais ramené à l'étape, et un compte e-mail
- * ou OAuth (sans téléphone) n'est jamais concerné.
+ * Demandée uniquement juste après une connexion par code (jamais à la restauration de session).
  */
 export function needsLoginCredentials(
   authUser: { id?: string; phone?: string | null; email?: string | null } | null | undefined,
+  submitted = false,
 ): boolean {
+  if (!authUser || submitted) return false;
+  const email = (authUser.email ?? '').trim().toLowerCase();
+  return email === '' || email.endsWith(PHONE_PLACEHOLDER_DOMAIN);
+}
+
+/** Règle + drapeau persistant de l'utilisateur. */
+export async function shouldAskLoginCredentials(
+  authUser: { id?: string; phone?: string | null; email?: string | null } | null | undefined,
+): Promise<boolean> {
   if (!authUser) return false;
-  const hasPhone = typeof authUser.phone === 'string' && authUser.phone.trim() !== '';
-  const hasEmail = typeof authUser.email === 'string' && authUser.email.trim() !== '';
-  return hasPhone && !hasEmail;
+  return needsLoginCredentials(authUser, await hasSubmittedCredentials(authUser.id ?? ''));
 }
 
 export type LoginCredentialsErrorKind =
@@ -288,54 +303,78 @@ export type LoginCredentialsErrorKind =
   | 'password_mismatch'
   | 'validation'
   | 'conflict'
+  | 'already_has_login_email'
   | 'rate_limited'
+  | 'email_failed'
   | 'session_expired'
   | 'unknown';
 
 /** Erreur de `setLoginCredentials` : contrôle client (avant tout appel) ou réponse HTTP de la fonction. */
 export class LoginCredentialsError extends Error {
   kind: LoginCredentialsErrorKind;
+  /** `code` du corps `{ success: false, code, error }` du backend (ex. `EMAIL_TAKEN`). */
+  code?: string;
   error_code?: string;
-  reasons?: string[];
 
-  constructor(
-    kind: LoginCredentialsErrorKind,
-    message: string,
-    extra?: { error_code?: string; reasons?: string[] },
-  ) {
+  constructor(kind: LoginCredentialsErrorKind, message: string, extra?: { code?: string; error_code?: string }) {
     super(message);
     this.name = 'LoginCredentialsError';
     this.kind = kind;
+    if (extra?.code) this.code = extra.code;
     if (extra?.error_code) this.error_code = extra.error_code;
-    if (extra?.reasons) this.reasons = extra.reasons;
   }
 }
 
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const credentialsKindForStatus = (status: number | undefined): LoginCredentialsErrorKind => {
+/** Statut HTTP + `code` du backend → type d'erreur. */
+const credentialsKind = (status: number | undefined, code: string | undefined): LoginCredentialsErrorKind => {
   if (status === 401) return 'session_expired';
-  if (status === 400 || status === 422) return 'validation';
-  if (status === 409) return 'conflict';
+  if (status === 409) return code === 'ALREADY_HAS_LOGIN_EMAIL' ? 'already_has_login_email' : 'conflict';
   if (status === 429) return 'rate_limited';
+  if (status === 502) return 'email_failed';
+  if (status === 400) {
+    if (code === 'WEAK_PASSWORD') return 'weak_password';
+    if (code === 'INVALID_EMAIL') return 'invalid_email';
+    if (code === 'PASSWORD_MISMATCH') return 'password_mismatch';
+    return 'validation';
+  }
   return 'unknown';
 };
 
 /** Message affiché pour une erreur de `setLoginCredentials` (français, via `translate`). */
 export function loginCredentialsErrorMessage(error: any): string {
-  if (error instanceof LoginCredentialsError) {
-    if (error.kind === 'session_expired') return translate('Ta session a expiré, reconnecte-toi.');
-    if (error.kind === 'conflict') return translate('Un compte existe déjà avec cet email.');
-    if (error.kind === 'rate_limited') return translate('Trop de tentatives. Réessaie dans quelques minutes.');
-    return pwnedPasswordMessage(error) ?? error.message;
+  if (!(error instanceof LoginCredentialsError)) return authErrorMessage(error);
+  switch (error.kind) {
+    case 'session_expired':
+      return translate('Ta session a expiré, reconnecte-toi.');
+    case 'conflict':
+      return translate('Un compte existe déjà avec cet email.');
+    case 'already_has_login_email':
+      return translate('Un e-mail de connexion est déjà associé à ce compte.');
+    case 'rate_limited':
+      return translate('Trop de tentatives. Réessaie dans quelques minutes.');
+    case 'invalid_email':
+      return translate('Adresse email invalide.');
+    case 'password_mismatch':
+      return translate('Les mots de passe ne correspondent pas.');
+    case 'weak_password':
+      // `WEAK_PASSWORD` du serveur (liste noire, e-mail, nom…) → message commun ; contrôle client → règle précise.
+      return error.code === 'WEAK_PASSWORD'
+        ? translate('Le mot de passe doit comporter au moins 10 caractères et inclure au moins une lettre et un chiffre.')
+        : error.message;
+    case 'unknown':
+      return translate('Une erreur est survenue. Réessaie.');
+    default:
+      // Texte français du serveur tel quel (400 générique, 502 e-mail non envoyé).
+      return error.message;
   }
-  return authErrorMessage(error);
 }
 
 /**
  * `POST /functions/v1/set-login-credentials` avec la session de l'utilisateur (l'en-tête
- * `Authorization: Bearer` est ajouté par supabase-js). Corps exact du guide :
- * `{ email, newPassword, confirmPassword }` (pas `password`).
+ * `Authorization: Bearer` est ajouté par supabase-js). Corps : `{ email, newPassword, confirmPassword }`.
+ * Succès réel : `{ success: true, pending: true, email }` — l'e-mail doit encore être confirmé par lien.
  *
  * Contrôles AVANT tout appel réseau : format de l'e-mail, politique de mot de passe commune
  * (10–72, lettre + chiffre) puis égalité de la confirmation. Le mot de passe n'est ni journalisé ni
@@ -345,7 +384,7 @@ export async function setLoginCredentials(
   email: string,
   newPassword: string,
   confirmPassword: string,
-): Promise<{ success: true; message: string }> {
+): Promise<{ success: true; pending: boolean; email: string }> {
   const cleanEmail = email.trim().toLowerCase();
   if (!EMAIL_FORMAT.test(cleanEmail)) {
     throw new LoginCredentialsError('invalid_email', translate('Adresse email invalide.'));
@@ -364,18 +403,78 @@ export async function setLoginCredentials(
   });
   if (error) {
     const { status, body } = await readHttpError(error);
-    const kind = credentialsKindForStatus(status);
-    // `edgeFunctionError` conserve `error_code` / `reasons` (422 weak_password + pwned).
+    const code = typeof body?.code === 'string' ? body.code : undefined;
+    const kind = credentialsKind(status, code);
     const base = edgeFunctionError(body);
     throw new LoginCredentialsError(kind, base.message, {
+      code,
       // 401 : toujours traité comme session expirée (voie Task 6, `isSessionExpiry`).
       error_code: kind === 'session_expired' ? 'session_expired' : base.error_code,
-      reasons: base.reasons,
     });
   }
-  if (data?.error || data?.success !== true) {
-    const base = edgeFunctionError(data);
-    throw new LoginCredentialsError('unknown', base.message, { error_code: base.error_code, reasons: base.reasons });
+  if (data?.success !== true) {
+    throw new LoginCredentialsError('unknown', edgeFunctionError(data).message);
   }
-  return { success: true, message: typeof data.message === 'string' ? data.message : '' };
+  return {
+    success: true,
+    pending: data.pending === true,
+    email: typeof data.email === 'string' && data.email ? data.email : cleanEmail,
+  };
+}
+
+export type LoginCredentialsOutcome = {
+  /** `pending_confirmation` : lien envoyé à `email` ; `already_has_login_email` : le compte avait déjà un e-mail. */
+  status: 'pending_confirmation' | 'already_has_login_email';
+  email: string;
+};
+
+/**
+ * `setLoginCredentials` + drapeau persistant `credentialsSubmitted:<userId>` (étape non reproposée).
+ * `ALREADY_HAS_LOGIN_EMAIL` vaut succès pour le parcours : drapeau posé, l'utilisateur peut entrer.
+ */
+export async function submitLoginCredentials(
+  userId: string,
+  email: string,
+  newPassword: string,
+  confirmPassword: string,
+): Promise<LoginCredentialsOutcome> {
+  try {
+    const result = await setLoginCredentials(email, newPassword, confirmPassword);
+    await markCredentialsSubmitted(userId);
+    return { status: 'pending_confirmation', email: result.email };
+  } catch (e) {
+    if (e instanceof LoginCredentialsError && e.kind === 'already_has_login_email') {
+      await markCredentialsSubmitted(userId);
+      return { status: 'already_has_login_email', email: email.trim().toLowerCase() };
+    }
+    throw e;
+  }
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Temporisation du renvoi du code OTP : un état par numéro E.164, au niveau du module (survit au
+ * démontage de l'écran ; un envoi au numéro A ne bloque pas le numéro B).
+ * ---------------------------------------------------------------------------------------------- */
+
+const lastCodeSentAt = new Map<string, number>();
+
+/** Note l'envoi d'un code au numéro `phone` (E.164) à l'instant `now` (ms). */
+export function markCodeSent(phone: string, now: number = Date.now()): void {
+  if (!phone) return;
+  lastCodeSentAt.set(phone, now);
+  // Les entrées expirées n'ont plus d'effet : on les retire pour borner la mémoire.
+  for (const [key, at] of lastCodeSentAt) {
+    if (resendCooldownRemaining(at, now) === 0) lastCodeSentAt.delete(key);
+  }
+}
+
+/** Secondes avant de pouvoir renvoyer un code à ce numéro (0 = possible). */
+export function codeCooldownRemaining(phone: string, now: number = Date.now()): number {
+  if (!phone) return 0;
+  return resendCooldownRemaining(lastCodeSentAt.get(phone) ?? null, now);
+}
+
+/** Réservé aux tests. */
+export function resetCodeCooldowns(): void {
+  lastCodeSentAt.clear();
 }

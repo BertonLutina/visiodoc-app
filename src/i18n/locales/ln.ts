@@ -587,4 +587,7 @@ export const ln: Record<string, string> = {
   "Recevoir le code ({seconds} s)": "Zwa code ({seconds} s)",
   "Renvoyer le code ({seconds} s)": "Tinda code lisusu ({seconds} s)",
   "Les mots de passe ne correspondent pas.": "Mots de passe ekokani te.",
+  "Un e-mail de confirmation t'a été envoyé à {email}. Clique sur le lien pour pouvoir te connecter aussi avec ton e-mail.": "Email ya bondimi etindami na {email}. Fina na lien po okoka mpe kokota na email na yo.",
+  "Un e-mail de connexion est déjà associé à ce compte.": "Email ya kokota ejali déjà na compte oyo.",
+  "On vous envoie un code de confirmation par WhatsApp.": "Tokotinda yo code ya bondimi na WhatsApp.",
 };
