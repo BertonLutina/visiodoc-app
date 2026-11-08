@@ -45,6 +45,18 @@ Avant `eas build -p production`, vérifier que l'environnement EAS `production` 
 `EXPO_PUBLIC_APP_ENV` vient de `eas.json` ; une valeur absente ou inconnue vaut `production`
 (`src/config/appEnv.ts`). L'application n'a pas de sélecteur d'environnement : un build est lié à un seul projet.
 
+## Lien magique patient (comme le web)
+
+L'écran `app/(auth)/magic-link.tsx` appelle l'Edge Function `magic-link-request` ; l'e-mail contient
+`https://app.visiodoc.online/auth/verify?token=<64 hex>` (domaine = `FRONTEND_BASE_URL` côté serveur). L'écran
+`app/auth/verify.tsx` échange le jeton via `magic-link-verify` puis ouvre la session. Réservé aux patients.
+
+Pour que le lien ouvre l'app (et non le navigateur), le domaine doit servir, **à la racine `/.well-known/`** :
+`apple-app-site-association` (iOS, `applinks` pour `<TEAM_ID>.com.visiodoc.app`, chemin `/auth/verify*`) et
+`assetlinks.json` (Android, package `com.visiodoc.app` + empreinte SHA-256 du certificat de signature). Les liens
+universels ne fonctionnent pas dans Expo Go : il faut un build de développement ou de production. Test sans ces
+fichiers : `npx uri-scheme open "visiodoc://auth/verify?token=<64 hex>" --ios` (ou `--android`).
+
 ## Avancement (4 phases)
 
 | Phase | Contenu | État |

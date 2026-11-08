@@ -11,12 +11,11 @@ type Method = {
   icon: typeof Mail;
   label: string;
   sub: string;
-  href: '/(auth)/password-login-provider' | '/(auth)/magic-link' | '/(auth)/phone-login';
+  href: '/(auth)/password-login-provider' | '/(auth)/phone-login';
 };
 
 const methods: Method[] = [
   { icon: Lock, label: 'Email et mot de passe', sub: 'Connexion classique', href: '/(auth)/password-login-provider' },
-  { icon: Mail, label: 'Lien magique par email', sub: 'Sans mot de passe', href: '/(auth)/magic-link' },
   { icon: Smartphone, label: 'Numéro de téléphone', sub: 'Code de vérification par SMS', href: '/(auth)/phone-login' },
 ];
 

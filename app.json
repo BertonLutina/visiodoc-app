@@ -18,7 +18,10 @@
         "NSMicrophoneUsageDescription": "VisioDoc utilise le micro pour les consultations vidéo.",
         "NSPhotoLibraryUsageDescription": "VisioDoc utilise votre photothèque pour votre photo de profil et pour joindre des documents au dossier médical d'un patient.",
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "associatedDomains": [
+        "applinks:app.visiodoc.online"
+      ]
     },
     "android": {
       "package": "com.visiodoc.app",
@@ -32,6 +35,23 @@
         "MODIFY_AUDIO_SETTINGS",
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "app.visiodoc.online",
+              "pathPrefix": "/auth/verify"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
       ]
     },
     "plugins": [

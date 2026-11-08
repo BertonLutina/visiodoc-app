@@ -5,6 +5,7 @@ import { getDeviceId } from '@/services/deviceId';
 export type AuthEventMethod =
   | 'password'
   | 'email_otp'
+  | 'magic_link'
   | 'phone_otp'
   | 'oauth_google'
   | 'oauth_azure'

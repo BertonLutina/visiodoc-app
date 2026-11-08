@@ -35,6 +35,7 @@ import { currentPatient } from '@/data/mock';
 import { currentProvider } from '@/data/mockProvider';
 import * as biometrics from '@/services/biometrics';
 import { logAuthEvent, type AuthEventMethod } from '@/services/auditLog';
+import { requestMagicLink, verifyMagicLinkToken } from '@/services/magicLink';
 import { translate } from '@/i18n/core';
 
 // Termine proprement une session OAuth ouverte dans le navigateur système.
@@ -96,10 +97,10 @@ interface AuthContextType {
   /** Renvoie l'utilisateur connecté (pour router selon `providerHomeHref`). */
   loginPatient: (email: string, password: string) => Promise<User>;
   loginProvider: (email: string, password: string) => Promise<User>;
-  /** Connexion sans mot de passe — envoie un lien/code par email. */
-  sendEmailOtp: (email: string) => Promise<void>;
-  /** Vérifie le code ; renvoie l'utilisateur connecté (pour router selon le rôle). */
-  verifyEmailOtp: (email: string, token: string) => Promise<User | null>;
+  /** Lien magique patient (comme le web) : envoie l'e-mail contenant `…/auth/verify?token=…`. */
+  sendMagicLink: (email: string) => Promise<void>;
+  /** Échange le jeton du lien contre une session ; renvoie l'utilisateur connecté (gardes de rôle et de statut incluses). */
+  verifyMagicLink: (token: string) => Promise<User>;
   /** Connexion par téléphone — envoie un code par SMS. */
   sendPhoneOtp: (phone: string) => Promise<void>;
   /**
@@ -463,35 +464,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return profile;
   };
 
-  /* ---------- Connexion sans mot de passe : email ---------- */
-  const sendEmailOtp = async (email: string) => {
+  /* ---------- Lien magique par e-mail (patients, même flux que le web) ---------- */
+  const sendMagicLink = async (email: string) => {
     if (!supabaseConfigured || !supabase) {
       await new Promise((r) => setTimeout(r, 400));
       return;
     }
-    // shouldCreateUser: false → ne connecte que des comptes existants (pas d'orphelin sans profil)
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: { shouldCreateUser: false },
-    });
-    if (error) throw error;
+    await requestMagicLink(email);
   };
 
-  const verifyEmailOtp = async (email: string, token: string): Promise<User | null> => {
+  const verifyMagicLink = async (token: string): Promise<User> => {
     setLoading(true);
     try {
       if (!supabaseConfigured || !supabase) {
-        const u = { ...currentPatient, email: email.trim().toLowerCase() };
-        signedIn(u, 'email_otp');
-        return u;
+        signedIn(currentPatient, 'magic_link');
+        return currentPatient;
       }
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: token.trim(),
-        type: 'email',
-      });
+      const session = await verifyMagicLinkToken(token);
+      const { data, error } = await supabase.auth.setSession(session);
       if (error) throw error;
-      return await finishOtp(data.user, email, 'email_otp');
+      return await finishOtp(data.user ?? data.session?.user, undefined, 'magic_link');
     } finally {
       setLoading(false);
     }
@@ -816,8 +808,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       initializing: initializing || locked,
       loginPatient,
       loginProvider,
-      sendEmailOtp,
-      verifyEmailOtp,
+      sendMagicLink,
+      verifyMagicLink,
       sendPhoneOtp,
       verifyPhoneOtp,
       saveLoginCredentials,
