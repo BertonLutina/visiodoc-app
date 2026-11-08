@@ -563,4 +563,6 @@ export const sw: Record<string, string> = {
   "Non": "Hapana",
   "Ton paiement a été reçu mais ta consultation n'est pas encore confirmée. Ne paie pas une seconde fois : contacte le support si cela dure.": "Malipo yako yamepokelewa lakini mashauriano yako bado hayajathibitishwa. Usilipe mara ya pili: wasiliana na msaada ikiwa hali hii inaendelea.",
   "Paiement reçu mais consultation non confirmée : contacte le support avec la référence": "Malipo yamepokelewa lakini mashauriano hayajathibitishwa: wasiliana na msaada ukitaja rejeleo",
+  "Paiement reçu, contacte le support": "Malipo yamepokelewa, wasiliana na msaada",
+  "réf.": "rej.",
 };

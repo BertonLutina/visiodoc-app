@@ -54,15 +54,21 @@ export default function PaymentScreen() {
   // Fermeture par un retour système / geste sans réponse du widget = écran quitté (`dismissed`, tentative
   // conservée : on ne sait pas si le patient a été débité). Sans effet si déjà réglé.
   const navigation = useNavigation();
+  const mountedRef = useRef(false);
   useEffect(() => {
+    mountedRef.current = true;
     const unsubscribe = navigation.addListener('beforeRemove', () => {
       if (txnRef) settlePaymentWidget(txnRef, { kind: 'dismissed', reason: 'user_left' });
     });
     return () => {
       unsubscribe();
-      // Démontage sans `beforeRemove` : la promesse ne reste jamais pendante (verrou « en cours » tenu, entrée
-      // de la table fuitée). No-op si la demande est déjà réglée.
-      if (txnRef) settlePaymentWidget(txnRef, { kind: 'dismissed', reason: 'user_left' });
+      mountedRef.current = false;
+      // Démontage réel sans `beforeRemove` : la promesse ne reste jamais pendante (verrou « en cours » tenu,
+      // entrée de la table fuitée). Différé d'un tour : un double effet (StrictMode / Fast Refresh en dev) remet
+      // `mountedRef` à true avant l'échéance et ne règle donc PAS la demande. No-op si déjà réglée.
+      setTimeout(() => {
+        if (!mountedRef.current && txnRef) settlePaymentWidget(txnRef, { kind: 'dismissed', reason: 'user_left' });
+      }, 0);
     };
   }, [navigation, txnRef]);
 

@@ -563,4 +563,6 @@ export const en: Record<string, string> = {
   "Non": "No",
   "Ton paiement a été reçu mais ta consultation n'est pas encore confirmée. Ne paie pas une seconde fois : contacte le support si cela dure.": "Your payment was received but your consultation is not confirmed yet. Do not pay a second time: contact support if this lasts.",
   "Paiement reçu mais consultation non confirmée : contacte le support avec la référence": "Payment received but consultation not confirmed: contact support with reference",
+  "Paiement reçu, contacte le support": "Payment received, contact support",
+  "réf.": "ref.",
 };

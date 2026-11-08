@@ -121,8 +121,11 @@ export function parseWidgetMessage(raw: unknown, expectedTxnRef: string): Widget
   if (resp === 'X1') return { kind: 'cancelled' };
   if (resp === 'Z6') return { kind: 'declined', code: resp, desc: String(msg.desc ?? '') };
   if (resp === 'TO') return { kind: 'dismissed', reason: 'timeout' };
-  // Tout autre code n'est PAS un refus explicite : on ne sait pas si le patient a été débité → tentative conservée.
-  return { kind: 'dismissed', reason: 'gateway_returned' };
+  // Tout autre code (refus bancaire ordinaire compris) n'est PAS définitif : même parcours que « écran quitté »,
+  // « Tu as été débité ? » → Non efface la tentative tout de suite. Seul le code est journalisé (aucune donnée
+  // personnelle), pour resserrer la liste des codes connus après la recette.
+  console.warn('[payment] unknown widget resp code:', resp || '(empty)');
+  return { kind: 'dismissed', reason: 'user_left' };
 }
 
 /**

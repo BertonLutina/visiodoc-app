@@ -54,7 +54,11 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
       select: () => ({ eq: () => ({ maybeSingle: rowMock }) }),
     });
     jest.doMock('@/lib/supabase', () => ({
-      supabase: { from: fromMock, functions: { invoke: invokeMock }, auth: { refreshSession: jest.fn() } },
+      supabase: { from: fromMock, functions: { invoke: invokeMock }, auth: {
+          refreshSession: jest.fn(),
+          getSession: async () => ({ data: { session: { user: { id: 'patient-uid' } } }, error: null }),
+        },
+      },
       supabasePublic: null,
       supabaseConfigured: true,
     }));

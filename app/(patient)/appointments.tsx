@@ -19,6 +19,7 @@ import { createOpenPaymentWidget, paymentWidgetPreflight } from '@/services/paym
 import { createBusyLock } from '@/utils/busyLock';
 import { canPayNow } from '@/utils/canPayNow';
 import { showDismissedPaymentPrompt } from '@/utils/paymentPrompts';
+import { supportCaseNotifier } from '@/utils/supportCaseNotice';
 import type { Consultation, ConsultationStatus } from '@/types';
 import { useLanguage, useT } from '@/i18n';
 
@@ -37,6 +38,7 @@ function Row({
   onPay,
   paying,
   canPay,
+  supportRef,
 }: {
   c: Consultation;
   joinable: boolean;
@@ -44,6 +46,8 @@ function Row({
   onPay: (c: Consultation) => void;
   paying: boolean;
   canPay: boolean;
+  /** `txnRef` d'un paiement reçu dont la consultation n'a pas pu être confirmée (cas support). */
+  supportRef?: string;
 }) {
   const t = useT();
   // `pending_payment` : réservée mais pas payée → jamais présentée comme confirmée ni rejoignable.
@@ -64,6 +68,11 @@ function Row({
       <Text className="font-sans text-sm text-muted mt-0.5">
         {typeLabel(c.type)} · {c.durationMin} {t('min')} · {formatMoney(c.fee, country)}
       </Text>
+      {supportRef && (
+        <Text className="font-sans-semibold text-xs text-amber-600 mt-3">
+          {t('Paiement reçu, contacte le support')} ({t('réf.')} {supportRef})
+        </Text>
+      )}
       {canPay && (
         <Button
           label={t('Payer maintenant')}
@@ -100,6 +109,9 @@ export default function Appointments() {
   const attempts = useAsync(() => (user?.id ? listPendingAttempts(user.id) : Promise.resolve([])), [user?.id]);
   const attemptIds = new Set((attempts.data ?? []).map((a) => a.consultationId));
 
+  // Cas support (payé mais consultation expirée / annulée) : ligne persistante sur la carte concernée.
+  const [supportRefs, setSupportRefs] = useState<Record<string, string>>({});
+
   // Au retour sur l'écran : rejoue `confirm` pour un paiement resté non confirmé (même txnRef / payRef), puis
   // relit la base (après un paiement, `scheduled`/`paid` viennent du serveur).
   useFocusEffect(
@@ -107,11 +119,14 @@ export default function Appointments() {
       let active = true;
       (async () => {
         const supportCases = await reconcilePendingPayments();
-        if (supportCases.length > 0 && active) {
-          // Payé mais consultation expirée / annulée : on garde la référence et on oriente vers le support.
+        if (!active) return;
+        setSupportRefs(supportCaseNotifier.byConsultation(supportCases));
+        // Alerte : UNE fois par txnRef et par session (la ligne de la carte, elle, reste affichée).
+        const fresh = supportCaseNotifier.takeNew(supportCases);
+        if (fresh.length > 0) {
           Alert.alert(
             t('Paiement en cours de confirmation'),
-            `${t('Paiement reçu mais consultation non confirmée : contacte le support avec la référence')} ${supportCases
+            `${t('Paiement reçu mais consultation non confirmée : contacte le support avec la référence')} ${fresh
               .map((c) => c.txnRef)
               .join(', ')}`,
           );
@@ -232,6 +247,7 @@ export default function Appointments() {
             onPay={onPay}
             paying={payingId === c.id}
             canPay={canPayNow(c, Date.now(), attemptIds.has(c.id))}
+            supportRef={supportRefs[c.id]}
           />
         ))}
         {data.length === 0 && (

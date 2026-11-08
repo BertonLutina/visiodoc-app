@@ -1,5 +1,5 @@
 import { Alert } from 'react-native';
-import { resolveDismissedAttempt } from '@/services/paymentAttempt';
+import { currentUserId, resolveDismissedAttempt } from '@/services/paymentAttempt';
 
 type T = (key: string) => string;
 
@@ -8,11 +8,14 @@ type T = (key: string) => string;
  * débité ? » : Oui = on garde la tentative et on affiche le message de vérification ; Non = tentative effacée.
  * Retour passerelle sans résultat / timeout → message de vérification directement (tentative conservée).
  */
-export function showDismissedPaymentPrompt(
+export async function showDismissedPaymentPrompt(
   consultationId: string,
   reason: 'user_left' | 'gateway_returned' | 'timeout',
   t: T,
-): void {
+): Promise<void> {
+  // Sans session (expiration pendant le paiement) : pas d'invite — « Non » ne pourrait rien effacer et l'app
+  // redirige vers la connexion ; la tentative est conservée et rattrapée à la reconnexion.
+  if (!(await currentUserId())) return;
   const verifying = () =>
     Alert.alert(
       t('Paiement en cours de confirmation'),

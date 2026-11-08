@@ -43,7 +43,10 @@ jest.mock('@/lib/supabase', () => ({
     functions: { invoke: (...a: unknown[]) => mockInvoke(...a) },
     auth: {
       refreshSession: (...a: unknown[]) => mockRefresh(...a),
-      getSession: async () => ({ data: { session: mockCurrentUser ? { user: { id: mockCurrentUser } } : null }, error: null }),
+      getSession: async () => {
+        if (mockCurrentUser === '__throw__') throw new Error('storage unavailable');
+        return { data: { session: mockCurrentUser ? { user: { id: mockCurrentUser } } : null }, error: null };
+      },
     },
     from: (...a: unknown[]) => mockFrom(...a),
   },
@@ -829,6 +832,57 @@ describe('paid attempt whose consultation is no longer payable: support case, no
     await saveAttempt({ consultationId: CONSULT, txnRef: TXN, payRef: PAY_REF });
     mockMaybeSingle.mockResolvedValue(PAID_ROW);
     expect(await reconcilePendingPayments()).toEqual([]);
+  });
+});
+
+describe('fail closed without an authenticated user', () => {
+  it('payConsultation throws BEFORE registering or opening the widget when there is no session user', async () => {
+    mockCurrentUser = null;
+    const openPaymentWidget = jest.fn();
+    await expect(payConsultation({ consultationId: CONSULT, openPaymentWidget })).rejects.toBeInstanceOf(
+      PaymentRegistrationError,
+    );
+    expect(openPaymentWidget).not.toHaveBeenCalled();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('payExistingConsultation fails closed too (no widget, no register, no confirm)', async () => {
+    mockCurrentUser = null;
+    mockMaybeSingle.mockResolvedValue(PENDING_ROW);
+    const openPaymentWidget = jest.fn();
+    await expect(payExistingConsultation({ consultationId: CONSULT, openPaymentWidget })).rejects.toBeInstanceOf(
+      PaymentRegistrationError,
+    );
+    expect(openPaymentWidget).not.toHaveBeenCalled();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('a getSession failure also fails closed', async () => {
+    mockCurrentUser = '__throw__';
+    const openPaymentWidget = jest.fn();
+    await expect(payConsultation({ consultationId: CONSULT, openPaymentWidget })).rejects.toBeInstanceOf(
+      PaymentRegistrationError,
+    );
+    expect(openPaymentWidget).not.toHaveBeenCalled();
+  });
+});
+
+describe('in_progress / completed rows count as confirmed (no false support alert)', () => {
+  it.each(['in_progress', 'completed'])('reconcile clears a payRef attempt whose row is %s and reports no support case', async (status) => {
+    await saveAttempt({ consultationId: CONSULT, txnRef: TXN, payRef: PAY_REF });
+    mockMaybeSingle.mockResolvedValue({ data: { id: CONSULT, status, payment_status: 'pending', scheduled_at: null }, error: null });
+    expect(await reconcilePendingPayments()).toEqual([]);
+    expect(await getAttempt(CONSULT)).toBeNull();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it.each(['in_progress', 'completed'])('payExisting on a %s row is already_paid, not a support case', async (status) => {
+    await saveAttempt({ consultationId: CONSULT, txnRef: TXN, payRef: PAY_REF });
+    mockMaybeSingle.mockResolvedValue({ data: { id: CONSULT, status, payment_status: null, scheduled_at: null }, error: null });
+    await expect(payExistingConsultation({ consultationId: CONSULT, openPaymentWidget: jest.fn() })).resolves.toEqual({
+      status: 'already_paid',
+    });
+    expect(await getAttempt(CONSULT)).toBeNull();
   });
 });
 

@@ -237,11 +237,13 @@ export async function readConsultationPayment(consultationId: string): Promise<C
 }
 
 const readSafe = (consultationId: string) => readConsultationPayment(consultationId).catch(() => null);
-/** Confirmée côté serveur : `paid` ou `scheduled` (le serveur passe les deux ensemble). */
-const isPaid = (row: ConsultationPaymentState) => row.paymentStatus === 'paid' || row.status === 'scheduled';
+/** Confirmée côté serveur : `paid`, ou déjà au-delà du paiement (`scheduled` / `in_progress` / `completed`). */
+const CONFIRMED_STATUSES = ['scheduled', 'in_progress', 'completed'];
+const isPaid = (row: ConsultationPaymentState) =>
+  row.paymentStatus === 'paid' || CONFIRMED_STATUSES.includes(row.status);
 
-/** Utilisateur connecté (session locale) ; `null` sans session : aucune tentative n'est alors lue ni écrite. */
-async function currentUserId(): Promise<string | null> {
+/** Utilisateur connecté (session locale) ; `null` sans session ou si la session est illisible. */
+export async function currentUserId(): Promise<string | null> {
   try {
     const { data } = await supabase!.auth.getSession();
     return data?.session?.user?.id ?? null;
@@ -250,14 +252,22 @@ async function currentUserId(): Promise<string | null> {
   }
 }
 
+/**
+ * Échec « fermé » : sans utilisateur authentifié on ne paie JAMAIS (une tentative non persistée = débit non
+ * rattrapable). Lève AVANT l'enregistrement et l'ouverture du widget.
+ */
+async function requireUserId(): Promise<string> {
+  const userId = await currentUserId();
+  if (!userId) throw sessionExpiredError();
+  return userId;
+}
+
 /* ---------- Stockage « au mieux » : un disque plein ne doit jamais bloquer ni confirmer un paiement ---------- */
 
-const safeSave = async (userId: string | null, a: { consultationId: string; txnRef: string; payRef?: string }) => {
-  if (!userId) return;
+const safeSave = async (userId: string, a: { consultationId: string; txnRef: string; payRef?: string }) => {
   await savePendingAttempt({ userId, ...a }).catch(() => undefined);
 };
-const safeClear = async (userId: string | null, consultationId: string) => {
-  if (!userId) return;
+const safeClear = async (userId: string, consultationId: string) => {
   await clearPendingAttempt(consultationId, userId).catch(() => undefined);
 };
 
@@ -343,7 +353,7 @@ export type PayConsultationResult =
   | { status: 'dismissed'; txnRef: string; reason: 'user_left' | 'gateway_returned' | 'timeout' };
 
 async function payConsultationUnlocked(
-  userId: string | null,
+  userId: string,
   input: {
   consultationId: string;
   openPaymentWidget: OpenPaymentWidget;
@@ -385,7 +395,7 @@ async function payConsultationUnlocked(
   }
 
   // Avant confirm, jamais bloquant : même si l'écriture échoue, confirm est TOUJOURS appelé.
-  const stored: PendingPaymentAttempt = { userId: userId ?? '', consultationId, txnRef, payRef: outcome.payRef, at: Date.now() };
+  const stored: PendingPaymentAttempt = { userId, consultationId, txnRef, payRef: outcome.payRef, at: Date.now() };
   await safeSave(userId, stored);
   const result = await confirmStoredAttempt(stored, useWallet);
   if (result === 'handled') await settleHandled(stored);
@@ -410,7 +420,7 @@ export async function payConsultation(input: {
     () => {
       throw new PaymentInProgressError();
     },
-    async () => payConsultationUnlocked(await currentUserId(), input),
+    async () => payConsultationUnlocked(await requireUserId(), input),
   );
 }
 
@@ -425,7 +435,8 @@ export type PayExistingResult =
  * « Oui » → conservée (message de vérification, reprise explicite possible après 15 min).
  */
 export async function resolveDismissedAttempt(consultationId: string, debited: boolean): Promise<void> {
-  if (!debited) await safeClear(await currentUserId(), consultationId);
+  const userId = await currentUserId();
+  if (!debited && userId) await safeClear(userId, consultationId);
 }
 
 async function payExistingUnlocked(input: {
@@ -435,9 +446,9 @@ async function payExistingUnlocked(input: {
   override?: boolean;
 }): Promise<PayExistingResult> {
   const { consultationId, openPaymentWidget, useWallet = false, override = false } = input;
-  const userId = await currentUserId();
+  const userId = await requireUserId();
   const row = await readConsultationPayment(consultationId);
-  const attempt = userId ? await getPendingAttempt(consultationId, userId) : null;
+  const attempt = await getPendingAttempt(consultationId, userId);
   if (row && isPaid(row)) {
     await safeClear(userId, consultationId);
     return { status: 'already_paid' };

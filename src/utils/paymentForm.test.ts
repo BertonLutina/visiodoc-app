@@ -97,11 +97,29 @@ describe('parseWidgetMessage', () => {
     });
   });
 
-  it('any other resp code is NOT a definitive refusal: dismissed (attempt kept), never cancelled', () => {
-    for (const resp of ['Z1', 'T0', '99', '', 'WHATEVER']) {
-      expect(parseWidgetMessage(complete({ resp, desc: 'x' }), TXN)).toEqual({ kind: 'dismissed', reason: 'gateway_returned' });
+  it('any other resp code is not definitive: it follows the user_left flow ("Tu as été débité ?"), never cancelled', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (const resp of ['Z1', 'T0', '99', 'WHATEVER']) {
+      expect(parseWidgetMessage(complete({ resp, desc: 'x' }), TXN)).toEqual({ kind: 'dismissed', reason: 'user_left' });
     }
-    expect(parseWidgetMessage(complete({}), TXN)).toEqual({ kind: 'dismissed', reason: 'gateway_returned' });
+    expect(parseWidgetMessage(complete({}), TXN)).toEqual({ kind: 'dismissed', reason: 'user_left' });
+    warn.mockRestore();
+  });
+
+  it('logs ONLY the unknown code with console.warn (no desc / payRef / txnref / PII) so the list can be tightened', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    parseWidgetMessage(complete({ resp: 'Z1', desc: 'John Doe card 4111', payRef: 'SECRET' }), TXN);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const logged = JSON.stringify(warn.mock.calls[0]);
+    expect(logged).toContain('Z1');
+    for (const secret of ['John', '4111', 'SECRET', TXN]) expect(logged).not.toContain(secret);
+    warn.mockClear();
+    parseWidgetMessage(complete({ resp: 'X1' }), TXN); // known codes do not warn
+    parseWidgetMessage(complete({ resp: 'Z6' }), TXN);
+    parseWidgetMessage(complete({ resp: 'TO' }), TXN);
+    parseWidgetMessage(complete({ resp: '00', payRef: 'P' }), TXN);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('TO (gateway timeout) is NOT definitive: a timeout can still succeed, so it is "dismissed/timeout"', () => {
