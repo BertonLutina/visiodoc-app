@@ -347,6 +347,19 @@ export async function startConsultation(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/**
+ * Variante des écrans : le statut `in_progress` est cosmétique (la porte réelle est `get-video-token`), un
+ * refus ou une panne ne doit jamais empêcher un prestataire de rejoindre l'appel. Ne lève jamais ; aucune
+ * donnée personnelle journalisée (seulement le code d'erreur).
+ */
+export async function startConsultationBestEffort(id: string): Promise<void> {
+  try {
+    await startConsultation(id);
+  } catch (e) {
+    console.warn('startConsultation failed', (e as { code?: unknown } | null)?.code ?? 'unknown');
+  }
+}
+
 /* ---------- Patients ---------- */
 export async function getPatients(doctorId: string): Promise<ProviderPatient[]> {
   if (useMock()) return mock.providerPatients;

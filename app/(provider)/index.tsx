@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -23,7 +23,7 @@ import {
   getReviewSummary,
   getTodayConsultations,
   getValidationStatus,
-  startConsultation,
+  startConsultationBestEffort,
 } from '@/services/providerApi';
 import { buildAlerts, countdownLabel } from '@/services/dashboardMetrics';
 import { currentProvider } from '@/data/mockProvider';
@@ -134,10 +134,9 @@ export default function ProviderDashboard() {
   const onStart = async (c: ProviderConsultation) => {
     setStarting(true);
     try {
-      await startConsultation(c.id);
+      // Statut cosmétique : un échec ne bloque jamais l'entrée dans l'appel (`get-video-token` fait foi).
+      await startConsultationBestEffort(c.id);
       router.push(`/call/${c.roomId ?? c.id}`);
-    } catch {
-      Alert.alert(t('Erreur'), t('Impossible de démarrer la consultation. Réessaie.'));
     } finally {
       setStarting(false);
     }

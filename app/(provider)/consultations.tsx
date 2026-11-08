@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Card } from '@/components/ui';
@@ -8,7 +8,7 @@ import { typeLabel } from '@/utils/format';
 import { canStartConsultation } from '@/utils/canStart';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
-import { getProviderConsultations, getTodayConsultations, startConsultation } from '@/services/providerApi';
+import { getProviderConsultations, getTodayConsultations, startConsultationBestEffort } from '@/services/providerApi';
 import { currentProvider } from '@/data/mockProvider';
 import type { ProviderConsultation } from '@/types/provider';
 import { useLanguage, useT } from '@/i18n';
@@ -48,12 +48,9 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
         <View className="flex-row mt-3">
           <Pressable
             onPress={async () => {
-              try {
-                await startConsultation(c.id);
-                router.push(`/call/${c.roomId ?? c.id}`);
-              } catch {
-                Alert.alert(t('Erreur'), t('Impossible de démarrer la consultation. Réessaie.'));
-              }
+              // Statut cosmétique : un échec ne bloque jamais l'entrée dans l'appel (`get-video-token` fait foi).
+              await startConsultationBestEffort(c.id);
+              router.push(`/call/${c.roomId ?? c.id}`);
             }}
             className="flex-1 bg-accent rounded-2xl py-3.5 items-center mr-2"
           >

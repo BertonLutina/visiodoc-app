@@ -699,3 +699,41 @@ describe('provider consultation mapping and startConsultation', () => {
     await expect(require('./providerApi').startConsultation('c1')).rejects.toMatchObject({ code: '42501' });
   });
 });
+
+describe('startConsultationBestEffort (the DB in_progress status never gates joining a call)', () => {
+  afterEach(() => {
+    jest.dontMock('@/lib/supabase');
+    jest.restoreAllMocks();
+  });
+
+  const load = (result: { error: unknown } | Error) => {
+    jest.resetModules();
+    const eq = result instanceof Error ? jest.fn().mockRejectedValue(result) : jest.fn().mockResolvedValue(result);
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: jest.fn(() => ({ update: jest.fn(() => ({ eq })) })) },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+    return require('./providerApi');
+  };
+
+  it('resolves when the update succeeds', async () => {
+    await expect(load({ error: null }).startConsultationBestEffort('c1')).resolves.toBeUndefined();
+  });
+
+  it('resolves (never throws) when the update is refused by the database', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(load({ error: { code: '42501', message: 'denied for patient Jean' } }).startConsultationBestEffort('c1')).resolves.toBeUndefined();
+    // Pas de PII : seulement le code d'erreur.
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('Jean');
+  });
+
+  it('resolves when the request itself rejects (network)', async () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await expect(load(new Error('Network request failed')).startConsultationBestEffort('c1')).resolves.toBeUndefined();
+  });
+
+  it('startConsultation itself still throws the database error', async () => {
+    await expect(load({ error: { code: '42501', message: 'x' } }).startConsultation('c1')).rejects.toMatchObject({ code: '42501' });
+  });
+});
