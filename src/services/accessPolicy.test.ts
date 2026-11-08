@@ -1,4 +1,4 @@
-import { mobileRole, providerGate, providerHomeHref, providerRefusalReason, subscriptionScreenMode } from './accessPolicy';
+import { mobileRole, providerGate, providerHomeHref, providerRefusalReason, subscriptionScreenState } from './accessPolicy';
 import { en } from '@/i18n/locales/en';
 import { sw } from '@/i18n/locales/sw';
 import { ln } from '@/i18n/locales/ln';
@@ -200,18 +200,32 @@ describe('provider refusal messages', () => {
   });
 });
 
-describe('subscriptionScreenMode (no mock plans for restricted providers)', () => {
-  it("is 'restricted' for a provider whose gate is 'subscribe'", () => {
-    expect(subscriptionScreenMode({ role: 'provider', doctorStatus: 'VALIDE_SANS_ABO', isActive: true })).toBe('restricted');
-    expect(subscriptionScreenMode({ role: 'provider', doctorStatus: 'profil_valide', isActive: true })).toBe('restricted');
+describe('subscriptionScreenState (the notice for every provider, never mock plans)', () => {
+  it("restricted provider ('subscribe' gate): notice + logout, no back button", () => {
+    for (const doctorStatus of ['VALIDE_SANS_ABO', 'profil_valide']) {
+      expect(subscriptionScreenState({ role: 'provider', doctorStatus, isActive: true })).toEqual({
+        showNotice: true,
+        showLogout: true,
+        showBack: false,
+      });
+    }
   });
 
-  it("is 'full' for a provider with an active subscription", () => {
-    expect(subscriptionScreenMode({ role: 'provider', doctorStatus: 'VALIDE_ABO_ACTIF', isActive: true })).toBe('full');
+  it('full provider (VALIDE_ABO_ACTIF): the same notice, no mock plans, with a back button and no logout', () => {
+    expect(subscriptionScreenState({ role: 'provider', doctorStatus: 'VALIDE_ABO_ACTIF', isActive: true })).toEqual({
+      showNotice: true,
+      showLogout: false,
+      showBack: true,
+    });
   });
 
-  it("is 'restricted' without a user (never shows mock prices to a visitor)", () => {
-    expect(subscriptionScreenMode(null)).toBe('restricted');
+  it('visitor (deep link, no user): the notice with a back button and no logout', () => {
+    expect(subscriptionScreenState(null)).toEqual({ showNotice: true, showLogout: false, showBack: true });
+    expect(subscriptionScreenState(undefined)).toEqual({ showNotice: true, showLogout: false, showBack: true });
+  });
+
+  it('a non-provider signed-in user can go back and has no logout here', () => {
+    expect(subscriptionScreenState({ role: 'patient' })).toEqual({ showNotice: true, showLogout: false, showBack: true });
   });
 
   it('ships the restricted-access notice in en, sw and ln', () => {
