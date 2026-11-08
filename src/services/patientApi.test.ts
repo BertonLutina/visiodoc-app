@@ -278,3 +278,172 @@ describe('getWallet', () => {
     expect(wallet.aiCreditsLeft).toBe(0);
   });
 });
+
+describe('shouldHideCommercialInfo', () => {
+  const { shouldHideCommercialInfo } = require('./patientApi');
+
+  it('hides the fee and slots when the fee is null even for a signed-in user', () => {
+    expect(shouldHideCommercialInfo(null, true)).toBe(true);
+  });
+
+  it('hides the fee and slots for a visitor even when a fee is present', () => {
+    expect(shouldHideCommercialInfo(15000, false)).toBe(true);
+  });
+
+  it('hides everything for a visitor without fee', () => {
+    expect(shouldHideCommercialInfo(null, false)).toBe(true);
+  });
+
+  it('shows the fee and slots for a signed-in user with a fee', () => {
+    expect(shouldHideCommercialInfo(15000, true)).toBe(false);
+  });
+
+  it('treats a free (0) consultation as a real fee, not as hidden', () => {
+    expect(shouldHideCommercialInfo(0, true)).toBe(false);
+  });
+});
+
+describe('public doctor catalog (public_provider_listing)', () => {
+  const LIST_SELECT = 'id, first_name, last_name, avatar_url, specialty_labels, consultation_fee, currency_code, city, rating';
+  const DETAIL_SELECT =
+    'id, first_name, last_name, avatar_url, bio, years_of_experience, qualifications, languages, country_id, city, rating, total_consultations, availability_status, specialty_id, specialty_labels, consultation_fee, currency_code';
+
+  const sessionOrder = jest.fn();
+  const sessionSelect = jest.fn();
+  const sessionFrom = jest.fn();
+  const publicOrder = jest.fn();
+  const publicSelect = jest.fn();
+  const publicFrom = jest.fn();
+  const publicMaybeSingle = jest.fn();
+  const publicEq = jest.fn();
+  const sessionMaybeSingle = jest.fn();
+  const sessionEq = jest.fn();
+
+  const rows = [
+    {
+      id: 'd1',
+      first_name: 'Amara',
+      last_name: 'Diallo',
+      avatar_url: 'https://cdn/x.png',
+      specialty_labels: ['Médecine générale', 'Pédiatrie'],
+      consultation_fee: 15000,
+      currency_code: 'CDF',
+      city: 'Kinshasa',
+      rating: 4.9,
+    },
+    {
+      id: 'd2',
+      first_name: 'Ngozi',
+      last_name: 'Kamau',
+      avatar_url: null,
+      specialty_labels: null,
+      consultation_fee: null,
+      currency_code: null,
+      city: null,
+      rating: null,
+    },
+  ];
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    sessionOrder.mockResolvedValue({ data: rows, error: null });
+    sessionSelect.mockReturnValue({ order: sessionOrder, eq: sessionEq });
+    sessionFrom.mockReturnValue({ select: sessionSelect });
+    publicOrder.mockResolvedValue({ data: rows, error: null });
+    publicSelect.mockReturnValue({ order: publicOrder, eq: publicEq });
+    publicFrom.mockReturnValue({ select: publicSelect });
+    publicMaybeSingle.mockResolvedValue({ data: { ...rows[0], bio: 'b', years_of_experience: 8, total_consultations: 240, availability_status: 'available' }, error: null });
+    publicEq.mockReturnValue({ maybeSingle: publicMaybeSingle });
+    sessionMaybeSingle.mockResolvedValue({ data: null, error: null });
+    sessionEq.mockReturnValue({ maybeSingle: sessionMaybeSingle });
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: sessionFrom },
+      supabasePublic: { from: publicFrom },
+      supabaseConfigured: true,
+    }));
+  });
+
+  afterEach(() => {
+    jest.dontMock('@/lib/supabase');
+  });
+
+  it('reads public_provider_listing (never users) with the exact columns, best rated first', async () => {
+    const { getDoctors } = require('./patientApi');
+    await getDoctors();
+    expect(publicFrom).toHaveBeenCalledTimes(1);
+    expect(publicFrom).toHaveBeenCalledWith('public_provider_listing');
+    expect(publicFrom).not.toHaveBeenCalledWith('users');
+    expect(publicSelect).toHaveBeenCalledWith(LIST_SELECT);
+    expect(publicOrder).toHaveBeenCalledWith('rating', { ascending: false });
+  });
+
+  it('uses the anonymous client for a visitor', async () => {
+    const { getDoctors } = require('./patientApi');
+    await getDoctors({ signedIn: false });
+    expect(publicFrom).toHaveBeenCalledWith('public_provider_listing');
+    expect(sessionFrom).not.toHaveBeenCalled();
+  });
+
+  it('uses the session client when signed in, so the fee is not null', async () => {
+    const { getDoctors } = require('./patientApi');
+    await getDoctors({ signedIn: true });
+    expect(sessionFrom).toHaveBeenCalledWith('public_provider_listing');
+    expect(sessionSelect).toHaveBeenCalledWith(LIST_SELECT);
+    expect(sessionOrder).toHaveBeenCalledWith('rating', { ascending: false });
+    expect(publicFrom).not.toHaveBeenCalled();
+  });
+
+  it('maps rows, keeping a null fee and currency as null (no 0, no NaN)', async () => {
+    const { getDoctors } = require('./patientApi');
+    const doctors = await getDoctors({ signedIn: true });
+    expect(doctors).toHaveLength(2);
+    expect(doctors[0]).toMatchObject({
+      id: 'd1',
+      firstName: 'Amara',
+      lastName: 'Diallo',
+      specialty: 'Médecine générale · Pédiatrie',
+      city: 'Kinshasa',
+      fee: 15000,
+      currencyCode: 'CDF',
+      rating: 4.9,
+      initials: 'AD',
+      avatarUrl: 'https://cdn/x.png',
+    });
+    expect(doctors[1]).toMatchObject({
+      id: 'd2',
+      specialty: 'Médecin',
+      city: '',
+      fee: null,
+      currencyCode: null,
+      rating: 0,
+      initials: 'NK',
+    });
+    expect(doctors[1].avatarUrl).toBeUndefined();
+  });
+
+  it('propagates a catalog error', async () => {
+    publicOrder.mockResolvedValue({ data: null, error: new Error('boom') });
+    const { getDoctors } = require('./patientApi');
+    await expect(getDoctors()).rejects.toThrow('boom');
+  });
+
+  it('reads the doctor profile from the same view, by id', async () => {
+    const { getDoctor } = require('./patientApi');
+    const doctor = await getDoctor('d1', { signedIn: false });
+    expect(publicFrom).toHaveBeenCalledWith('public_provider_listing');
+    expect(publicFrom).not.toHaveBeenCalledWith('users');
+    expect(publicSelect).toHaveBeenCalledWith(DETAIL_SELECT);
+    expect(publicEq).toHaveBeenCalledWith('id', 'd1');
+    expect(doctor).toMatchObject({ id: 'd1', fee: 15000, yearsOfExperience: 8, availabilityLabel: 'Dispo auj.' });
+  });
+
+  it('uses the session client for the profile when signed in, and returns null when absent', async () => {
+    const { getDoctor } = require('./patientApi');
+    const doctor = await getDoctor('ghost', { signedIn: true });
+    expect(sessionFrom).toHaveBeenCalledWith('public_provider_listing');
+    expect(sessionEq).toHaveBeenCalledWith('id', 'ghost');
+    expect(publicFrom).not.toHaveBeenCalled();
+    expect(doctor).toBeNull();
+  });
+});

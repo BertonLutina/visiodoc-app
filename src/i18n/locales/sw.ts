@@ -96,6 +96,7 @@ export const sw: Record<string, string> = {
   "Compte-rendu": "Ripoti",
   "Confirmée": "Imethibitishwa",
   "Congés": "Likizo",
+  "Connectez-vous pour voir le tarif et les disponibilités": "Ingia ili kuona bei na nyakati zinazopatikana",
   "Connexion": "Ingia",
   "Connexion classique": "Kuingia kwa kawaida",
   "Connexion impossible": "Imeshindikana kuingia",

@@ -7,6 +7,7 @@ import type {
   Doctor,
   MedicalRecord,
   Wallet,
+  WalletTransaction,
 } from '@/types';
 import { isMedicalRecordKind } from './medicalRecordTaxonomy';
 import { normalizeConsultationStatus } from '@/utils/format';
@@ -21,59 +22,80 @@ const initials = (a?: string, b?: string) =>
 const specLabel = (s: any): string =>
   Array.isArray(s) ? s.filter(Boolean).join(' · ') : (s ?? '');
 
-/* ---------- Médecins ---------- */
+/* ---------- Médecins ----------
+ * Catalogue public : la vue `public_provider_listing` est l'unique point d'entrée (jamais la table
+ * `users`, dont la RLS renvoie 0 ligne à un visiteur). Pour un visiteur anonyme la vue renvoie
+ * `consultation_fee` et `currency_code` à NULL ; pour un utilisateur connecté, le vrai tarif. */
+const CATALOG_VIEW = 'public_provider_listing';
+
+const LIST_COLUMNS =
+  'id, first_name, last_name, avatar_url, specialty_labels, consultation_fee, currency_code, city, rating';
+
+// Colonnes réellement exposées par la vue, utiles à la fiche médecin.
+const DETAIL_COLUMNS =
+  'id, first_name, last_name, avatar_url, bio, years_of_experience, qualifications, languages, country_id, city, rating, total_consultations, availability_status, specialty_id, specialty_labels, consultation_fee, currency_code';
+
+/** Qui lit le catalogue : `signedIn` choisit le client de session (tarif visible) plutôt que l'anonyme. */
+export type CatalogOptions = { signedIn?: boolean };
+
+const catalogClient = (signedIn?: boolean) => (signedIn ? supabase! : supabasePublic ?? supabase!);
+
+/**
+ * Faut-il masquer le tarif et les créneaux ? Oui pour un visiteur, ou quand la vue ne renvoie pas
+ * de tarif (`null`) même à un utilisateur connecté.
+ */
+export function shouldHideCommercialInfo(fee: number | null, signedIn: boolean): boolean {
+  return !signedIn || fee === null;
+}
+
+const toFee = (v: unknown): number | null => {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 function mapDoctor(row: any): Doctor {
-  // La fiche `healthcare_professionals` peut être absente (profil incomplet) :
-  // on retombe alors sur les champs de `users`, puis sur des valeurs par défaut.
-  const hp = row.healthcare_professionals ?? {};
-  const specialty = specLabel(hp.specialization) || specLabel(row.specialization) || 'Médecin';
+  const specialty = specLabel(row.specialty_labels) || 'Médecin';
   return {
     id: row.id,
     firstName: row.first_name ?? '',
     lastName: row.last_name ?? '',
     specialty,
-    city: hp.city ?? '',
-    fee: hp.consultation_fee ?? row.consultation_fee ?? 0,
-    rating: hp.rating ?? 0,
-    reviewsCount: hp.total_consultations ?? 0,
-    yearsOfExperience: hp.years_of_experience ?? row.years_of_experience ?? 0,
-    patientsCount: hp.total_consultations ?? 0,
-    availabilityLabel: hp.availability_status === 'available' ? 'Dispo auj.' : 'Sur RDV',
+    city: row.city ?? '',
+    fee: toFee(row.consultation_fee),
+    currencyCode: row.currency_code ?? null,
+    rating: Number(row.rating) || 0,
+    reviewsCount: row.total_consultations ?? 0,
+    yearsOfExperience: row.years_of_experience ?? 0,
+    patientsCount: row.total_consultations ?? 0,
+    availabilityLabel:
+      row.availability_status === undefined || row.availability_status === null
+        ? undefined
+        : row.availability_status === 'available'
+          ? 'Dispo auj.'
+          : 'Sur RDV',
     initials: initials(row.first_name, row.last_name),
     avatarUrl: row.avatar_url ?? undefined,
   };
 }
 
-const DOCTOR_COLUMNS = `id, first_name, last_name, specialization, consultation_fee, years_of_experience,
-       healthcare_professionals ( specialization, city, consultation_fee, rating,
-         years_of_experience, total_consultations, availability_status )`;
-
-/**
- * `avatar_url` est ajouté en tête de sélection ; si les droits colonne de la table `users`
- * ne l'exposent pas à ce rôle, on réessaie sans la photo plutôt que de casser le catalogue.
- */
-async function withAvatarFallback<T>(run: (columns: string) => PromiseLike<{ data: T | null; error: any }>) {
-  const first = await run(`avatar_url, ${DOCTOR_COLUMNS}`);
-  if (!first.error) return first;
-  return run(DOCTOR_COLUMNS);
-}
-
-export async function getDoctors(): Promise<Doctor[]> {
+export async function getDoctors(options: CatalogOptions = {}): Promise<Doctor[]> {
   if (useMock()) return mock.doctors;
-  // Client PUBLIC (anon) : le catalogue des médecins est visible de tous,
-  // alors qu'un patient connecté ne verrait que sa propre ligne `users` (RLS).
-  const { data, error } = await withAvatarFallback<any[]>((columns) =>
-    supabasePublic!.from('users').select(columns).eq('role', 'provider').eq('is_active', true).limit(50),
-  );
+  const { data, error } = await catalogClient(options.signedIn)
+    .from(CATALOG_VIEW)
+    .select(LIST_COLUMNS)
+    .order('rating', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapDoctor);
 }
 
-export async function getDoctor(id: string): Promise<Doctor | null> {
+export async function getDoctor(id: string, options: CatalogOptions = {}): Promise<Doctor | null> {
   if (useMock()) return mock.doctors.find((d) => d.id === id) ?? null;
-  const { data, error } = await withAvatarFallback<any>((columns) =>
-    supabasePublic!.from('users').select(columns).eq('id', id).single(),
-  );
+  const { data, error } = await catalogClient(options.signedIn)
+    .from(CATALOG_VIEW)
+    .select(DETAIL_COLUMNS)
+    .eq('id', id)
+    .maybeSingle();
   if (error) throw error;
   return data ? mapDoctor(data) : null;
 }
@@ -286,16 +308,19 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   EXPIRED: 'Paiement expiré',
 };
 
+type ProviderName = { first_name?: string | null; last_name?: string | null };
+
 export function mapPaymentRow(row: {
   id: string;
   amount?: number | null;
   status?: string | null;
   created_at?: string | null;
-  provider?: { first_name?: string | null; last_name?: string | null } | null;
+  provider?: ProviderName | ProviderName[] | null;
 }): WalletTransaction {
   const major = (Number(row.amount) || 0) / 100;
   const status = row.status ?? '';
-  const provider = row.provider ?? {};
+  // L'embed many-to-one est un objet à l'exécution, mais supabase-js (sans types générés) le type en tableau.
+  const provider = (Array.isArray(row.provider) ? row.provider[0] : row.provider) ?? {};
   const who = [provider.first_name, provider.last_name].filter(Boolean).join(' ').trim();
   return {
     id: row.id,

@@ -35,12 +35,15 @@ export interface Doctor {
   lastName: string;
   specialty: string;
   city: string;
-  fee: number; // en devise locale (FC en RDC)
+  /** Tarif ; `null` quand la vue le masque (visiteur, ou tarif non renseigné). */
+  fee: number | null;
+  /** Code ISO 4217 renvoyé par `public_provider_listing.currency_code` (null si masqué). */
+  currencyCode?: string | null;
   rating: number;
   reviewsCount: number;
   yearsOfExperience: number;
   patientsCount: number;
-  availabilityLabel: string; // ex: "Dispo auj."
+  availabilityLabel?: string; // ex: "Dispo auj." (absent du catalogue liste)
   initials: string;
   /** Photo de profil publique (users.avatar_url). */
   avatarUrl?: string;

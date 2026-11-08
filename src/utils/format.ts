@@ -1,5 +1,5 @@
 import type { ConsultationStatus, ConsultationType } from '@/types';
-import { activeCountry, type CountryConfig } from '@/config/countries';
+import { activeCountry, COUNTRIES, type CountryConfig } from '@/config/countries';
 import { appLocale, translate } from '@/i18n/core';
 
 /** Montant dans la devise locale, ex: "25 000 FC". */
@@ -8,6 +8,23 @@ export function formatMoney(amount: number, country: CountryConfig = activeCount
   const sign = amount < 0 ? '-' : '';
   const abs = Math.abs(amount).toLocaleString(appLocale());
   return position === 'prefix' ? `${sign}${symbol}${abs}` : `${sign}${abs} ${symbol}`;
+}
+
+/**
+ * Tarif d'un médecin avec sa devise. La devise vient de `public_provider_listing.currency_code`
+ * (pays du médecin) ; on la rattache à un pays connu pour garder le symbole habituel (« FC »),
+ * sinon on affiche le code ISO. Renvoie `null` quand le tarif est masqué (jamais « null » / « NaN »).
+ */
+export function formatDoctorFee(
+  fee: number | null | undefined,
+  currencyCode: string | null | undefined,
+  fallbackCountry: CountryConfig = activeCountry,
+): string | null {
+  if (fee === null || fee === undefined || !Number.isFinite(fee)) return null;
+  if (!currencyCode) return formatMoney(fee, fallbackCountry);
+  const known = Object.values(COUNTRIES).find((c) => c.currency.code === currencyCode);
+  if (known) return formatMoney(fee, known);
+  return `${fee.toLocaleString(appLocale())} ${currencyCode}`;
 }
 
 /** Équivalent USD arrondi d'un montant en devise locale, ex: "~$9". */

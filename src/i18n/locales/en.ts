@@ -96,6 +96,7 @@ export const en: Record<string, string> = {
   "Compte-rendu": "Report",
   "Confirmée": "Confirmed",
   "Congés": "Time off",
+  "Connectez-vous pour voir le tarif et les disponibilités": "Log in to see the fee and availability",
   "Connexion": "Sign in",
   "Connexion classique": "Classic sign-in",
   "Connexion impossible": "Unable to sign in",

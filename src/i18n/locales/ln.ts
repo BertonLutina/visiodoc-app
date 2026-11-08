@@ -96,6 +96,7 @@ export const ln: Record<string, string> = {
   "Compte-rendu": "Compte-rendu",
   "Confirmée": "Endimami",
   "Congés": "Bopemi",
+  "Connectez-vous pour voir le tarif et les disponibilités": "Kotela mpo na komona talo mpe ntango ezali",
   "Connexion": "Kokota",
   "Connexion classique": "Kokota ya mbala na mbala",
   "Connexion impossible": "Kokota ekokaki te",

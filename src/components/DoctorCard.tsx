@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Avatar } from '@/components/ui';
-import { formatMoney } from '@/utils/format';
+import { formatDoctorFee } from '@/utils/format';
+import { shouldHideCommercialInfo } from '@/services/patientApi';
 import { colors } from '@/theme/colors';
 import type { CountryConfig } from '@/config/countries';
 import type { Doctor } from '@/types';
@@ -11,13 +12,19 @@ export function DoctorCard({
   doctor,
   onPress,
   country,
+  signedIn = false,
 }: {
   doctor: Doctor;
   onPress?: () => void;
   /** Pays dont la devise doit être utilisée pour afficher le tarif (défaut : pays actif de l'app). */
   country?: CountryConfig;
+  /** Session active ? Sans session (ou sans tarif), le tarif n'est pas affiché. */
+  signedIn?: boolean;
 }) {
   const t = useT();
+  const feeText = shouldHideCommercialInfo(doctor.fee, signedIn)
+    ? null
+    : formatDoctorFee(doctor.fee, doctor.currencyCode, country);
   return (
     <Pressable
       onPress={onPress}
@@ -33,12 +40,16 @@ export function DoctorCard({
         </Text>
         <Text className="text-xs mt-1 font-sans-semibold" style={{ color: colors.star }}>
           ★ {doctor.rating.toFixed(1)}
-          <Text className="font-sans text-muted"> · {t(doctor.availabilityLabel)}</Text>
+          {signedIn && doctor.availabilityLabel ? (
+            <Text className="font-sans text-muted"> · {t(doctor.availabilityLabel)}</Text>
+          ) : null}
         </Text>
       </View>
-      <View className="items-end">
-        <Text className="font-serif-bold text-base text-primary">{formatMoney(doctor.fee, country)}</Text>
-      </View>
+      {feeText ? (
+        <View className="items-end">
+          <Text className="font-serif-bold text-base text-primary">{feeText}</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }

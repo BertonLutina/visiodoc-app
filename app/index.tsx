@@ -8,6 +8,7 @@ import { DoctorCard } from '@/components/DoctorCard';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
+import { SignInForPricing } from '@/components/SignInForPricing';
 import { getDoctors } from '@/services/patientApi';
 import { useT } from '@/i18n';
 import { providerHomeHref } from '@/services/accessPolicy';
@@ -23,7 +24,7 @@ export default function PublicHome() {
   const t = useT();
   const { user, initializing } = useAuth();
   const [roleModalVisible, setRoleModalVisible] = useState(false);
-  const { data: doctors, loading: doctorsLoading } = useAsync(getDoctors, []);
+  const { data: doctors, loading: doctorsLoading } = useAsync(() => getDoctors({ signedIn: !!user }), [!!user]);
   const featured = (doctors ?? []).slice(0, 2);
 
   const chooseRole = (href: '/(auth)/login' | '/(auth)/login-provider') => {
@@ -107,9 +108,12 @@ export default function PublicHome() {
           ) : featured.length === 0 ? (
             <Text className="font-sans text-muted">{t('Aucun médecin trouvé.')}</Text>
           ) : (
-            featured.map((d) => (
-              <DoctorCard key={d.id} doctor={d} onPress={() => router.push('/(auth)/login')} />
-            ))
+            <>
+              <SignInForPricing signedIn={false} className="mb-3" />
+              {featured.map((d) => (
+                <DoctorCard key={d.id} doctor={d} signedIn={false} onPress={() => router.push('/(auth)/login')} />
+              ))}
+            </>
           )}
         </View>
       </ScrollView>

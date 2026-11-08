@@ -8,7 +8,8 @@ import { colors } from '@/theme/colors';
 import { getCountry } from '@/config/countries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
-import { getDoctors } from '@/services/patientApi';
+import { SignInForPricing } from '@/components/SignInForPricing';
+import { getDoctors, shouldHideCommercialInfo } from '@/services/patientApi';
 import { useT } from '@/i18n';
 
 const filters = ['Tous', 'Généraliste', 'Pédiatrie', 'Cardio', 'Gynéco'];
@@ -19,7 +20,8 @@ export default function DoctorsSearch() {
   const country = getCountry(user?.countryCode ?? 'CD');
   const [active, setActive] = useState('Tous');
   const [query, setQuery] = useState('');
-  const { data: doctors, loading, refreshing, refresh } = useAsync(getDoctors, []);
+  const signedIn = !!user;
+  const { data: doctors, loading, refreshing, refresh } = useAsync(() => getDoctors({ signedIn }), [signedIn]);
 
   const list = useMemo(() => {
     return (doctors ?? []).filter((d) => {
@@ -71,8 +73,17 @@ export default function DoctorsSearch() {
           <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
+        {!loading && list.some((d) => shouldHideCommercialInfo(d.fee, signedIn)) && (
+          <SignInForPricing signedIn={signedIn} className="mb-3" />
+        )}
         {list.map((d) => (
-          <DoctorCard key={d.id} doctor={d} country={country} onPress={() => router.push(`/doctor/${d.id}`)} />
+          <DoctorCard
+            key={d.id}
+            doctor={d}
+            country={country}
+            signedIn={signedIn}
+            onPress={() => router.push(`/doctor/${d.id}`)}
+          />
         ))}
         {loading && <Text className="text-center text-muted mt-10">{t('Chargement…')}</Text>}
         {!loading && list.length === 0 && (
