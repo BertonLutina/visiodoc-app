@@ -5,7 +5,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   User as UserIcon,
   Stethoscope,
-  Coins,
   CalendarClock,
   Star,
   Brain,
@@ -14,13 +13,11 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 import { AvatarPicker } from '@/components/AvatarPicker';
-import { formatMoney } from '@/utils/format';
 import { colors } from '@/theme/colors';
-import { activeCountry } from '@/config/countries';
 import { useAuth } from '@/contexts/AuthContext';
 import { BiometricToggleRow } from '@/components/BiometricToggleRow';
 import { PreferencesSection } from '@/components/PreferencesSection';
-import { currentProvider } from '@/data/mockProvider';
+import { providerGate } from '@/services/accessPolicy';
 import { useAsync } from '@/hooks/useAsync';
 import { useFocusEffect } from 'expo-router';
 import { getMySpecializations } from '@/services/providerApi';
@@ -30,28 +27,33 @@ import { useT } from '@/i18n';
 export default function ProviderProfile() {
   const t = useT();
   const { user, logout } = useAuth();
-  const p = currentProvider;
+  // Seules les données réelles du compte s'affichent ici : aucun tarif, plan ou horaire inventé par le client.
+  const fullAccess = !!user && providerGate(user.doctorStatus, user.isActive) === 'full';
   const { data: specs, refresh: refreshSpecs } = useAsync(() => getMySpecializations(user?.id ?? ''), [user?.id]);
   useFocusEffect(
     React.useCallback(() => {
       refreshSpecs();
     }, [user?.id]),
   );
-  const specLabel = specs && specs.length ? joinSpecializations(specs) : p.specialization;
+  const specLabel = specs && specs.length ? joinSpecializations(specs) : undefined;
 
   const displayName = user
     ? `Dr. ${user.firstName} ${user.lastName}`.trim()
-    : `Dr. ${p.firstName} ${p.lastName}`;
+    : 'Dr.';
   const initials = user
     ? `${(user.firstName ?? '').charAt(0)}${(user.lastName ?? '').charAt(0)}`.toUpperCase() || 'DR'
-    : p.initials;
+    : 'DR';
 
   const rows = [
     { icon: UserIcon, label: 'Mon profil', value: 'Infos personnelles', onPress: () => router.push('/profile-edit') },
     { icon: Stethoscope, label: 'Spécialisation', value: specLabel, onPress: () => router.push('/provider/specializations') },
-    { icon: Coins, label: 'Tarif consultation', value: `${formatMoney(p.consultationFee)} / ${t('consult.')}`, onPress: () => router.push('/provider/fee') },
-    { icon: CalendarClock, label: 'Disponibilités', value: 'Lun–Ven · 9h–18h', onPress: () => router.push('/provider/availability') },
-    { icon: Star, label: 'Abonnement', value: 'Plan annuel · Actif', onPress: () => router.push('/provider/subscription') },
+    { icon: CalendarClock, label: 'Disponibilités', onPress: () => router.push('/provider/availability') },
+    {
+      icon: Star,
+      label: 'Abonnement',
+      value: fullAccess ? 'Abonnement actif' : undefined,
+      onPress: () => router.push('/provider/subscription'),
+    },
     { icon: Brain, label: 'Analyse IA', value: 'Bientôt disponible', disabled: true },
     { icon: Bell, label: 'Notifications', onPress: () => router.push('/notifications') },
   ];
@@ -68,11 +70,13 @@ export default function ProviderProfile() {
           <AvatarPicker initials={initials} size={76} tone="clay" />
           <Text className="font-serif-bold text-2xl text-ink mt-3">{displayName}</Text>
           <Text className="font-sans text-sm text-muted mt-0.5">
-            {t('Médecin')} · {p.city}, {activeCountry.name}
+            {t('Médecin')}
           </Text>
-          <View className="bg-accent-50 px-3 py-1.5 rounded-full mt-3">
-            <Text className="font-sans-bold text-xs" style={{ color: '#9A3412' }}>{t('✓ Compte validé · Actif')}</Text>
-          </View>
+          {fullAccess ? (
+            <View className="bg-accent-50 px-3 py-1.5 rounded-full mt-3">
+              <Text className="font-sans-bold text-xs" style={{ color: '#9A3412' }}>{t('✓ Compte validé · Actif')}</Text>
+            </View>
+          ) : null}
         </View>
 
         <View className="bg-surface rounded-3xl border border-line overflow-hidden">

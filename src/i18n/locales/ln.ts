@@ -594,4 +594,5 @@ export const ln: Record<string, string> = {
   "Un e-mail de connexion est déjà associé à ce compte.": "Email ya kokota ejali déjà na compte oyo.",
   "On vous envoie un code de confirmation par WhatsApp.": "Tokotinda yo code ya bondimi na WhatsApp.",
   "L'abonnement sera bientôt disponible dans l'application. Ton accès est limité en attendant.": "Abonnement ekozala na application mosika te. Kati na yango, nzela na yo ya kokota ezali moke.",
+  "Abonnement actif": "Abonnement ezali na mosala",
 };
