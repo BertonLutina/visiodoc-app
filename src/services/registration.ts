@@ -1,5 +1,7 @@
 import { currentLangCode, translate } from '@/i18n/core';
 import { COUNTRIES } from '@/config/countries';
+import { getAfricanCountry } from '@/config/africanCountries';
+import { toE164 } from '@/utils/phone';
 import { supabase } from '@/lib/supabase';
 import { specKey } from '@/services/specializationCatalog';
 import { edgeFunctionError, pwnedPasswordMessage, authErrorMessage } from '@/utils/authError';
@@ -17,6 +19,8 @@ export interface RegisterPrestaInput {
   /** Volontairement large : la validation (male/female) se fait dans `buildRegisterPrestaBody`. */
   gender?: string | null;
   phone?: string;
+  /** Code ISO du pays choisi (indicatif téléphonique pour le format E.164). */
+  countryCode?: string;
   /** UUID d'un `service_types` officiel, sinon `null` (voir `resolveSpecialty`). */
   serviceTypeId: string | null;
   /** Spécialité hors catalogue proposée par le prestataire, sinon `null`. */
@@ -40,6 +44,10 @@ export interface RegisterPrestaBody {
   licenseNumber: string;
 }
 
+/** Indicatif téléphonique du pays choisi (ex. '+243'), `undefined` si le code est inconnu. */
+const dialCodeFor = (countryCode?: string): string | undefined =>
+  countryCode ? getAfricanCountry(countryCode)?.dialCode : undefined;
+
 /**
  * Corps de `POST /functions/v1/register-presta` (guide « Inscription Prestataire »).
  * Lève AVANT tout appel réseau si le genre est absent ou différent de `male` / `female`.
@@ -54,7 +62,7 @@ export function buildRegisterPrestaBody(input: RegisterPrestaInput): RegisterPre
     firstName: input.firstName,
     lastName: input.lastName,
     gender: input.gender,
-    phone: input.phone,
+    phone: toE164(input.phone, dialCodeFor(input.countryCode)),
     serviceTypeId: input.serviceTypeId,
     proposedSpecialtyLabel: input.proposedSpecialtyLabel?.trim() || null,
     countryId: input.countryId,
@@ -212,7 +220,7 @@ export async function registerPatientAccount(
   }
   if (!supabase) throw new Error(translate('Backend non configuré.'));
 
-  const phone = input.phone?.trim();
+  const phone = toE164(input.phone, dialCodeFor(input.countryCode));
   const countryId = input.countryCode ? COUNTRIES[input.countryCode]?.id : undefined;
   const language = serverLanguage();
   const body = {

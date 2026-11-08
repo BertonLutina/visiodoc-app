@@ -468,6 +468,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           lastName: input.lastName,
           gender: input.gender,
           phone: input.phone,
+          countryCode: input.countryCode,
           serviceTypeId,
           proposedSpecialtyLabel,
           countryId: countryIdForCode(input.countryCode),

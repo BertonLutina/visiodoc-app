@@ -7,6 +7,7 @@ import { Button, Field, ScreenTitle } from '@/components/ui';
 import { CountryPicker } from '@/components/CountryPicker';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
+import { toE164 } from '@/utils/phone';
 import { authErrorMessage, isProviderPending, PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
@@ -28,7 +29,7 @@ export default function PhoneLogin() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const country = getAfricanCountry(countryCode);
-  const fullPhone = `${country?.dialCode ?? ''}${local.replace(/\D/g, '').replace(/^0+/, '')}`;
+  const fullPhone = toE164(local, country?.dialCode) ?? '';
   const phoneValid = local.replace(/\D/g, '').length >= 8;
 
   const handleError = (e: any) => {

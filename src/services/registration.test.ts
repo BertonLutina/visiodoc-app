@@ -89,6 +89,19 @@ describe('buildRegisterPrestaBody', () => {
     expect(buildRegisterPrestaBody({ ...baseInput, gender: 'male' }).gender).toBe('male');
   });
 
+  it.each([
+    ['0810000001', '+243810000001'],
+    ['+243 81 000 0001', '+243810000001'],
+    ['00243810000001', '+243810000001'],
+  ])('sends the provider phone %s as %s', (typed, sent) => {
+    expect(buildRegisterPrestaBody({ ...baseInput, phone: typed, countryCode: 'CD' }).phone).toBe(sent);
+  });
+
+  it('omits the provider phone when blank', () => {
+    expect(buildRegisterPrestaBody({ ...baseInput, phone: '  ', countryCode: 'CD' }).phone).toBeUndefined();
+    expect(buildRegisterPrestaBody({ ...baseInput, phone: undefined, countryCode: 'CD' }).phone).toBeUndefined();
+  });
+
   it("throws before any network call when gender is 'other'", () => {
     expect(() => buildRegisterPrestaBody({ ...baseInput, gender: 'other' })).toThrow();
   });
@@ -273,6 +286,22 @@ describe('registerPatientAccount', () => {
   it('omits countryId when no country was chosen', async () => {
     await registerPatientAccount({ ...patientInput, countryCode: undefined });
     expect(Object.keys(mockInvoke.mock.calls[0][1].body)).not.toContain('countryId');
+  });
+
+  it.each([
+    ['0899999999', '+243899999999'],
+    ['899999999', '+243899999999'],
+    ['+243 899 999 999', '+243899999999'],
+    ['00243899999999', '+243899999999'],
+    ['+243899999999', '+243899999999'],
+  ])('sends the phone %s as %s in the body (DRC)', async (typed, sent) => {
+    await registerPatientAccount({ ...patientInput, phone: typed, countryCode: 'CD' });
+    expect(mockInvoke.mock.calls[0][1].body.phone).toBe(sent);
+  });
+
+  it("uses the chosen country's dial code for a local phone (Niger)", async () => {
+    await registerPatientAccount({ ...patientInput, phone: '90 12 34 56', countryCode: 'NE' });
+    expect(mockInvoke.mock.calls[0][1].body.phone).toBe('+22790123456');
   });
 
   it('omits phone when it is empty, and sends male as is', async () => {
