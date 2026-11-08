@@ -63,6 +63,10 @@ export interface Consultation {
   type: ConsultationType;
   durationMin: number;
   fee: number;
+  /** `consultations.currency` (ISO), utile pour repayer une consultation en attente. */
+  currency?: string;
+  /** `status = 'pending_payment'` : réservée mais pas encore payée, ni confirmée. */
+  awaitingPayment?: boolean;
   status: ConsultationStatus;
   roomId?: string;
 }

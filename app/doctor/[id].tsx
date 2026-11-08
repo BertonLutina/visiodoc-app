@@ -10,14 +10,17 @@ import { SignInForPricing } from '@/components/SignInForPricing';
 import { getCountry } from '@/config/countries';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabaseConfigured } from '@/lib/supabase';
 import { useAsync } from '@/hooks/useAsync';
 import {
-  bookConsultation,
+  bookAndPayConsultation,
+  getConsultationById,
   getDoctor,
-  PaymentInitiationError,
   shouldHideCommercialInfo,
   SlotUnavailableError,
 } from '@/services/patientApi';
+import { PaymentConfirmationError } from '@/services/paymentAttempt';
+import { createOpenPaymentWidget, isPaymentWidgetAvailable } from '@/services/paymentWidget';
 import { getDaySlots, getMonthAvailability } from '@/services/availabilityApi';
 import { appLocale } from '@/i18n';
 import type { ConsultationType } from '@/types';
@@ -85,32 +88,58 @@ export default function DoctorProfile() {
   const activeSlot = (daySlots ?? []).find((s) => timeLabel(s.start) === time) ?? null;
 
   const onBook = async () => {
-    if (!doctor || !activeSlot || doctor.fee === null || hideCommercial) return;
+    if (!doctor || !activeSlot || doctor.fee === null || !doctor.currencyCode || hideCommercial) return;
+    // Paiement indisponible (widget non configuré) : on ne crée pas de consultation impayable.
+    if (supabaseConfigured && !isPaymentWidgetAvailable()) {
+      Alert.alert(t('Paiement indisponible.'), t("Le paiement n'est pas disponible pour le moment. Réessaie plus tard."));
+      return;
+    }
     setBooking(true);
     try {
-      const { paymentIntent } = await bookConsultation({
-        patientId: user?.id ?? 'patient-1',
-        doctorId: doctor.id,
-        scheduledAt: activeSlot.start.toISOString(),
-        duration: Math.round((activeSlot.end.getTime() - activeSlot.start.getTime()) / 60000),
-        type,
-        fee: doctor.fee,
-        countryCode: user?.countryCode,
-        customerEmail: user?.email,
-        customerName: user ? `${user.firstName} ${user.lastName}` : undefined,
-      });
-      if (paymentIntent) {
-        router.replace({ pathname: '/payment', params: { intent: JSON.stringify(paymentIntent) } });
+      // insert pending_payment → register-payment-attempt → widget → confirm-consultation-payment
+      const result = await bookAndPayConsultation(
+        {
+          patientId: user?.id ?? 'patient-1',
+          doctorId: doctor.id,
+          scheduledAt: activeSlot.start.toISOString(),
+          duration: Math.round((activeSlot.end.getTime() - activeSlot.start.getTime()) / 60000),
+          type,
+          fee: doctor.fee,
+          currencyCode: doctor.currencyCode,
+        },
+        createOpenPaymentWidget({
+          amount: doctor.fee,
+          currency: doctor.currencyCode,
+          customerId: user?.id ?? '',
+          customerName: user ? `${user.firstName} ${user.lastName}` : '',
+          customerEmail: user?.email ?? '',
+          payItemName: t('Consultation'),
+        }),
+      );
+      if (result.payment === 'confirmed') {
+        // Le statut affiché vient de la base (relue), jamais d'un état local.
+        const reread = await getConsultationById(result.id).catch(() => null);
+        if (reread && reread.awaitingPayment) {
+          Alert.alert(t('Paiement en cours de confirmation'), t("Ton paiement est en cours de confirmation. Vérifie tes rendez-vous dans quelques instants."));
+        }
       } else {
-        router.replace('/(patient)/appointments');
+        Alert.alert(
+          t('Paiement non effectué'),
+          t('Ta consultation est réservée mais en attente de paiement. Tu peux payer plus tard depuis Mes consultations.'),
+        );
       }
+      router.replace('/(patient)/appointments');
     } catch (e: any) {
       if (e instanceof SlotUnavailableError) {
         Alert.alert(t('Créneau indisponible'), e.message);
         setTime(null);
         reloadDay();
         reloadMonth();
-      } else if (e instanceof PaymentInitiationError) {
+      } else if (e instanceof PaymentConfirmationError) {
+        Alert.alert(t('Paiement en cours de confirmation'), e.message);
+        router.replace('/(patient)/appointments');
+      } else if (e?.consultationId) {
+        // Consultation créée mais paiement non démarré : elle reste `pending_payment`.
         Alert.alert(t('Paiement non démarré'), e.message);
         router.replace('/(patient)/appointments');
       } else {

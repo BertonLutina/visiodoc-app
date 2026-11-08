@@ -16,6 +16,8 @@ type Tab = 'upcoming' | 'inprogress' | 'past';
 
 function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
   const t = useT();
+  // `pending_payment` : réservée par le patient mais pas payée → ni confirmée, ni démarrable.
+  const unpaid = c.rawStatus === 'pending_payment';
   return (
     <Card className="mb-3">
       <View className="flex-row items-center">
@@ -26,12 +28,16 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
           </Text>
           <Text className="font-sans text-xs text-muted mt-0.5">{c.reason}</Text>
         </View>
-        <Badge label={c.status === 'pending' ? t('En attente') : t('Confirmée')} tone={c.status === 'pending' ? 'amber' : 'green'} />
+        {unpaid ? (
+          <Badge label={t('Paiement en attente')} tone="amber" />
+        ) : (
+          <Badge label={c.status === 'pending' ? t('En attente') : t('Confirmée')} tone={c.status === 'pending' ? 'amber' : 'green'} />
+        )}
       </View>
       <Text className="font-sans-semibold text-sm text-clay mt-3">
         {c.dateLabel} · {typeLabel(c.type)} · {c.durationMin} {t('min')}
       </Text>
-      {canStart && (
+      {canStart && !unpaid && (
         <View className="flex-row mt-3">
           <Pressable
             onPress={async () => {

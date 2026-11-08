@@ -20,7 +20,8 @@ export interface DashboardInput {
   weeklyCapacity: number;
 }
 
-const ACTIVE = new Set(['pending', 'pending_payment', 'scheduled', 'confirmed', 'in_progress']);
+// `pending_payment` (réservée, non payée) n'est PAS active : ni « prochaine consultation », ni rendez-vous à venir.
+const ACTIVE = new Set(['pending', 'scheduled', 'confirmed', 'in_progress']);
 const BOOKED = new Set(['scheduled', 'confirmed', 'in_progress', 'completed', 'pending']);
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 const DAYS = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];

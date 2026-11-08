@@ -36,7 +36,8 @@ export default function PatientDashboard() {
 
   const upList = upcoming ?? [];
   const pastList = past ?? [];
-  const next = upList[0];
+  // Une consultation `pending_payment` n'est pas confirmée : elle ne peut pas être « la prochaine » à rejoindre.
+  const next = upList.find((c) => !c.awaitingPayment);
 
   const fullName = user ? `${user.firstName} ${user.lastName}`.trim() : t('Bienvenue');
   const initials =
@@ -113,7 +114,7 @@ export default function PatientDashboard() {
             <Text className="font-sans text-xs text-muted">{t('au total')}</Text>
           </Card>
           <Card className="w-[48%]">
-            <Text className="font-serif-bold text-4xl text-ink">{upList.length}</Text>
+            <Text className="font-serif-bold text-4xl text-ink">{upList.filter((c) => !c.awaitingPayment).length}</Text>
             <Text className="font-sans-semibold text-sm text-ink mt-1">{t('À venir')}</Text>
             <Text className="font-sans text-xs text-muted">{t('consultations')}</Text>
           </Card>

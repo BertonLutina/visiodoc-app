@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Button, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
@@ -8,7 +8,13 @@ import { formatMoney, typeLabel } from '@/utils/format';
 import { getCountry, type CountryConfig } from '@/config/countries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
-import { getPastConsultations, getUpcomingConsultations } from '@/services/patientApi';
+import {
+  getPastConsultations,
+  getUpcomingConsultations,
+  payExistingConsultation,
+} from '@/services/patientApi';
+import { PaymentConfirmationError } from '@/services/paymentAttempt';
+import { createOpenPaymentWidget, isPaymentWidgetAvailable } from '@/services/paymentWidget';
 import type { Consultation, ConsultationStatus } from '@/types';
 import { useLanguage, useT } from '@/i18n';
 
@@ -20,9 +26,20 @@ const statusBadge: Record<ConsultationStatus, { label: string; tone: 'green' | '
   cancelled: { label: 'Annulée', tone: 'slate' },
 };
 
-function Row({ c, joinable, country }: { c: Consultation; joinable: boolean; country: CountryConfig }) {
+function Row({
+  c,
+  joinable,
+  country,
+  onPay,
+}: {
+  c: Consultation;
+  joinable: boolean;
+  country: CountryConfig;
+  onPay: (c: Consultation) => void;
+}) {
   const t = useT();
-  const sb = statusBadge[c.status];
+  // `pending_payment` : réservée mais pas payée → jamais présentée comme confirmée ni rejoignable.
+  const sb = c.awaitingPayment ? { label: 'Paiement en attente', tone: 'amber' as const } : statusBadge[c.status];
   return (
     <Card className="mb-3">
       <View className="flex-row items-center">
@@ -39,7 +56,10 @@ function Row({ c, joinable, country }: { c: Consultation; joinable: boolean; cou
       <Text className="font-sans text-sm text-muted mt-0.5">
         {typeLabel(c.type)} · {c.durationMin} {t('min')} · {formatMoney(c.fee, country)}
       </Text>
-      {joinable && c.status !== 'pending' && (
+      {c.awaitingPayment && (
+        <Button label={t('Payer maintenant')} className="mt-3" onPress={() => onPay(c)} />
+      )}
+      {joinable && c.status !== 'pending' && !c.awaitingPayment && (
         <Button
           label={t('Rejoindre la consultation')}
           className="mt-3"
@@ -60,6 +80,49 @@ export default function Appointments() {
   const up = useAsync(() => getUpcomingConsultations(uid), [uid, lang]);
   const pastReq = useAsync(() => getPastConsultations(uid), [uid, lang]);
   const data = (tab === 'upcoming' ? up.data : pastReq.data) ?? [];
+
+  // Relit toujours la base au retour sur l'écran (après un paiement, `scheduled`/`paid` viennent du serveur).
+  useFocusEffect(
+    useCallback(() => {
+      up.refresh();
+      pastReq.refresh();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+
+  const { user: payer } = useAuth();
+  const onPay = async (c: Consultation) => {
+    if (!c.currency || !isPaymentWidgetAvailable()) {
+      Alert.alert(t('Paiement indisponible.'), t("Le paiement n'est pas disponible pour le moment. Réessaie plus tard."));
+      return;
+    }
+    try {
+      const result = await payExistingConsultation(
+        c.id,
+        createOpenPaymentWidget({
+          amount: c.fee,
+          currency: c.currency,
+          customerId: payer?.id ?? '',
+          customerName: payer ? `${payer.firstName} ${payer.lastName}` : '',
+          customerEmail: payer?.email ?? '',
+          payItemName: t('Consultation'),
+        }),
+      );
+      if (result.status === 'cancelled') {
+        Alert.alert(
+          t('Paiement non effectué'),
+          t('Ta consultation est réservée mais en attente de paiement. Tu peux payer plus tard depuis Mes consultations.'),
+        );
+      }
+    } catch (e: any) {
+      Alert.alert(
+        e instanceof PaymentConfirmationError ? t('Paiement en cours de confirmation') : t('Paiement non démarré'),
+        e?.message ?? t('Réessayez plus tard.'),
+      );
+    } finally {
+      await Promise.all([up.refresh(), pastReq.refresh()]);
+    }
+  };
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -96,7 +159,7 @@ export default function Appointments() {
         }
       >
         {data.map((c) => (
-          <Row key={c.id} c={c} joinable={tab === 'upcoming'} country={country} />
+          <Row key={c.id} c={c} joinable={tab === 'upcoming'} country={country} onPay={onPay} />
         ))}
         {data.length === 0 && (
           <Text className="text-center font-sans text-muted mt-10">

@@ -26,6 +26,14 @@ describe('weeklyCapacity', () => {
 describe('computeDashboardOverview', () => {
   const o = (rows: any[], capacity = 10) => computeDashboardOverview(rows, { now, feeRate: 0.1, weeklyCapacity: capacity });
 
+  it('une consultation pending_payment (non payée) n\'est jamais la prochaine consultation ni un rendez-vous à venir', () => {
+    const unpaid = row({ id: 'unpaid', patient_id: 'a', status: 'pending_payment', payment_status: 'pending', scheduled_at: iso(2026, 9, 15, 9) });
+    const paid = row({ id: 'paid', patient_id: 'b', status: 'scheduled', payment_status: 'paid', scheduled_at: iso(2026, 9, 16, 9) });
+    expect(o([unpaid, paid]).nextRowId).toBe('paid');
+    expect(o([unpaid]).nextRowId).toBeNull();
+    expect(o([unpaid]).pendingPayment).toBe(1);
+  });
+
   it('compte les patients distincts hors annulations et les nouveaux du mois', () => {
     const r = o([
       row({ patient_id: 'a', scheduled_at: iso(2026, 8, 1) }),

@@ -1,58 +1,75 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import * as Linking from 'expo-linking';
+import { router, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-// TODO: réactiver quand react-native-webview sera de nouveau installé
-// import { WebView } from 'react-native-webview';
+import { WebView } from 'react-native-webview';
 import { ChevronLeft } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { useT } from '@/i18n';
-import { buildPaymentFormHtml } from '@/utils/paymentForm';
-import { RETURN_PATH } from '@/services/patientApi';
+import { buildInlineCheckoutHtml, parseWidgetMessage } from '@/utils/paymentForm';
+import { getPendingPaymentWidget, settlePaymentWidget } from '@/services/paymentWidget';
 
-/** Reçoit `intent` (PaymentIntent sérialisé en JSON) et le soumet à la passerelle. */
+/**
+ * Exécute le widget de paiement dans une WebView et rapporte l'issue (succès + payRef, annulation, erreur)
+ * à la promesse `openPaymentWidget` de la réservation. Cet écran ne confirme rien et n'écrit rien :
+ * `confirm-consultation-payment` est appelé par l'appelant, qui relit ensuite la consultation en base.
+ */
 export default function PaymentScreen() {
   const t = useT();
-  const { intent } = useLocalSearchParams<{ intent?: string }>();
-  const returnUrl = useMemo(() => Linking.createURL(RETURN_PATH), []);
+  // La demande est lue une seule fois : elle est consommée dès que le widget a répondu.
+  const pending = useMemo(() => getPendingPaymentWidget(), []);
 
   const html = useMemo(() => {
+    if (!pending) return null;
     try {
-      return intent ? buildPaymentFormHtml(JSON.parse(intent)) : null;
+      return buildInlineCheckoutHtml(pending.config, pending.request);
     } catch {
       return null;
     }
-  }, [intent]);
+  }, [pending]);
 
-  const done = () => router.replace('/(patient)/appointments');
+  const finish = (message: Parameters<typeof settlePaymentWidget>[0]) => {
+    settlePaymentWidget(message);
+    router.back();
+  };
+
+  // Ouverture sans demande en cours (lien direct, rechargement) : retour immédiat.
+  useEffect(() => {
+    if (!html) router.back();
+  }, [html]);
+
+  // Fermeture par un retour système / geste sans réponse du widget = annulation (sans effet si déjà réglé).
+  const navigation = useNavigation();
+  useEffect(() => navigation.addListener('beforeRemove', () => settlePaymentWidget({ kind: 'cancelled' })), [navigation]);
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="flex-row items-center px-5 pt-2 pb-2">
-        <Pressable onPress={done} className="p-1 mr-2">
+        <Pressable onPress={() => finish({ kind: 'cancelled' })} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
         <Text className="font-sans-bold text-lg text-ink">{t('Paiement')}</Text>
       </View>
-      {/* WebView désactivée temporairement (react-native-webview) :
-      {html ? (
+      {html && pending ? (
         <WebView
           originWhitelist={['*']}
           source={{ html }}
+          javaScriptEnabled
+          onMessage={(event) => {
+            const message = parseWidgetMessage(event.nativeEvent.data);
+            if (message.kind !== 'ignore') finish(message);
+          }}
           onShouldStartLoadWithRequest={(req) => {
-            if (req.url.startsWith(returnUrl) || req.url.startsWith('visiodoc://')) {
-              done();
-              return false;
-            }
+            // Retour de la passerelle vers l'app (deep link) : l'issue vient du widget (onComplete).
+            if (req.url.startsWith(pending.config.redirectUrl) || req.url.startsWith('visiodoc://')) return false;
             return true;
           }}
         />
-      ) : null}
-      */}
-      <View className="flex-1 items-center justify-center px-6">
-        <Text className="font-sans text-muted text-center">{t('Paiement indisponible.')}</Text>
-      </View>
+      ) : (
+        <View className="flex-1 items-center justify-center px-6">
+          <Text className="font-sans text-muted text-center">{t('Paiement indisponible.')}</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }

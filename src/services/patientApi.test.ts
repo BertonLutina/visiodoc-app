@@ -15,22 +15,36 @@ describe('SlotUnavailableError', () => {
   });
 });
 
-describe('bookConsultation', () => {
+describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', () => {
   const insertMock = jest.fn();
+  const updateMock = jest.fn();
+  const upsertMock = jest.fn();
   const singleMock = jest.fn();
   const selectMock = jest.fn();
   const fromMock = jest.fn();
   const invokeMock = jest.fn();
 
+  const booking = {
+    patientId: 'p1',
+    doctorId: 'd1',
+    scheduledAt: '2026-10-15T09:00:00.000Z',
+    type: 'video' as const,
+    fee: 30000,
+    currencyCode: 'CDF',
+    duration: 30,
+  };
+  const widgetOk = () => jest.fn(async () => ({ status: 'success' as const, payRef: 'ISW_PAY_REF_987654' }));
+  const load = () => require('./patientApi');
+  const insertedPayload = () => insertMock.mock.calls[0][0];
+
   beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
-    invokeMock.mockResolvedValue({ data: { txnRef: 'T0' }, error: null });
-    jest.doMock('expo-linking', () => ({ createURL: (path: string) => `visiodoc://${path}` }));
+    invokeMock.mockResolvedValue({ data: { success: true }, error: null });
     singleMock.mockResolvedValue({ data: { id: 'consult-1' }, error: null });
     selectMock.mockReturnValue({ single: singleMock });
     insertMock.mockReturnValue({ select: selectMock });
-    fromMock.mockReturnValue({ insert: insertMock });
+    fromMock.mockReturnValue({ insert: insertMock, update: updateMock, upsert: upsertMock });
     jest.doMock('@/lib/supabase', () => ({
       supabase: { from: fromMock, functions: { invoke: invokeMock } },
       supabasePublic: null,
@@ -40,70 +54,111 @@ describe('bookConsultation', () => {
 
   afterEach(() => {
     jest.dontMock('@/lib/supabase');
-    jest.dontMock('expo-linking');
   });
 
   it('persists the actual appointment duration, not a hardcoded default', async () => {
-    const { bookConsultation: bookConsultationFresh } = require('./patientApi');
-    await bookConsultationFresh({
-      patientId: 'p1',
-      doctorId: 'd1',
-      scheduledAt: '2026-10-15T09:00:00.000Z',
-      type: 'video',
-      fee: 5000,
-      duration: 60,
-    });
+    await load().bookConsultation({ ...booking, duration: 60 });
     expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({ duration: 60 }));
   });
 
-  it('inserts status "scheduled" (valid CHECK value) with payment_status "pending"', async () => {
-    invokeMock.mockResolvedValue({ data: { txnRef: 'T1' }, error: null });
-    const { bookConsultation: b } = require('./patientApi');
-    await b({ patientId: 'p1', doctorId: 'd1', scheduledAt: '2026-10-15T09:00:00.000Z', type: 'video', fee: 5000, duration: 30 });
-    expect(insertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'scheduled', payment_status: 'pending' }),
-    );
-  });
-
-  it('calls payment-initiate-v2 with the payload the Edge Function requires', async () => {
-    invokeMock.mockResolvedValue({ data: { txnRef: 'T1' }, error: null });
-    const { bookConsultation: b } = require('./patientApi');
-    const res = await b({ patientId: 'p1', doctorId: 'd1', scheduledAt: '2026-10-15T09:00:00.000Z', type: 'video', fee: 5000, duration: 30, countryCode: 'CD' });
-    expect(invokeMock).toHaveBeenCalledWith('payment-initiate-v2', {
-      body: expect.objectContaining({
-        countryCode: 'CD',
-        method: 'MOBILE_MONEY',
-        amountSmallestUnit: 500000,
-        patientId: 'p1',
-        providerId: 'd1',
-        consultationId: 'consult-1',
-        callbackUrl: expect.any(String),
-      }),
+  it('inserts status "pending_payment" with payment_status "pending" (guide: valid CHECK value)', async () => {
+    await load().bookConsultation(booking);
+    expect(fromMock).toHaveBeenCalledWith('consultations');
+    expect(insertedPayload()).toMatchObject({
+      patient_id: 'p1',
+      doctor_id: 'd1',
+      scheduled_at: '2026-10-15T09:00:00.000Z',
+      duration: 30,
+      consultation_type: 'video',
+      status: 'pending_payment',
+      payment_status: 'pending',
     });
-    expect(res.paymentIntent).toEqual({ txnRef: 'T1' });
   });
 
-  it('throws PaymentInitiationError when the payment function fails', async () => {
-    invokeMock.mockResolvedValue({ data: { error: 'INTEGRATOR_NOT_IMPLEMENTED' }, error: null });
-    const { bookConsultation: b } = require('./patientApi');
-    await expect(
-      b({ patientId: 'p1', doctorId: 'd1', scheduledAt: '2026-10-15T09:00:00.000Z', type: 'video', fee: 5000, duration: 30 }),
-    ).rejects.toMatchObject({ name: 'PaymentInitiationError', consultationId: 'consult-1' });
+  it('inserts the amount and currency displayed by public_provider_listing, without recomputing a fee', async () => {
+    await load().bookConsultation({ ...booking, fee: 27500, currencyCode: 'USD' });
+    expect(insertedPayload()).toMatchObject({ payment_amount: 27500, currency: 'USD' });
+    expect(Object.keys(insertedPayload())).not.toContain('fee_percent_at_booking');
+    expect(Object.keys(insertedPayload())).not.toContain('payment_reference');
   });
 
-  it('maps a Postgres exclusion-violation (23P01) to SlotUnavailableError("overlap")', async () => {
+  it('refuses to insert when the listing gave no tariff (visitor view: fee/currency null)', async () => {
+    await expect(load().bookConsultation({ ...booking, fee: null, currencyCode: null })).rejects.toThrow();
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it('bookConsultation only inserts: no Edge Function call at all, no payment-initiate(-v2)', async () => {
+    const res = await load().bookConsultation(booking);
+    expect(res).toEqual({ id: 'consult-1' });
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('bookAndPayConsultation: insert → register → widget → confirm, in that order, never payment-initiate-v2', async () => {
+    const order: string[] = [];
+    insertMock.mockImplementation((payload: unknown) => {
+      order.push('insert');
+      return { select: selectMock };
+    });
+    invokeMock.mockImplementation(async (name: string) => {
+      order.push(name);
+      return { data: { success: true }, error: null };
+    });
+    const openPaymentWidget = jest.fn(async (txnRef: string) => {
+      order.push(`widget:${txnRef.slice(0, 3)}`);
+      return { status: 'success' as const, payRef: 'ISW_PAY_REF_987654' };
+    });
+    const res = await load().bookAndPayConsultation(booking, openPaymentWidget);
+    expect(order).toEqual(['insert', 'register-payment-attempt', 'widget:VDC', 'confirm-consultation-payment']);
+    const txnRef = openPaymentWidget.mock.calls[0][0];
+    expect(invokeMock).toHaveBeenNthCalledWith(1, 'register-payment-attempt', {
+      body: { consultationId: 'consult-1', txnRef, useWallet: false },
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, 'confirm-consultation-payment', {
+      body: { consultationId: 'consult-1', txnRef, payRef: 'ISW_PAY_REF_987654', useWallet: false },
+    });
+    expect(invokeMock.mock.calls.map((c) => c[0])).not.toContain('payment-initiate-v2');
+    expect(invokeMock.mock.calls.map((c) => c[0])).not.toContain('payment-initiate');
+    expect(res).toEqual({ id: 'consult-1', payment: 'confirmed', txnRef });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('widget cancelled: consultation stays pending_payment, confirm not called, nothing updated', async () => {
+    const openPaymentWidget = jest.fn(async () => ({ status: 'cancelled' as const }));
+    const res = await load().bookAndPayConsultation(booking, openPaymentWidget);
+    expect(res).toMatchObject({ id: 'consult-1', payment: 'cancelled' });
+    expect(invokeMock.mock.calls.map((c) => c[0])).toEqual(['register-payment-attempt']);
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(upsertMock).not.toHaveBeenCalled();
+  });
+
+  it('NOT_PAYABLE: widget not opened, confirm not called, the error propagates with the consultation id', async () => {
+    invokeMock.mockResolvedValue({ data: { success: false, code: 'NOT_PAYABLE' }, error: null });
+    const openPaymentWidget = jest.fn();
+    await expect(load().bookAndPayConsultation(booking, openPaymentWidget)).rejects.toMatchObject({
+      name: 'PaymentNotPayableError',
+      code: 'NOT_PAYABLE',
+      consultationId: 'consult-1',
+    });
+    expect(openPaymentWidget).not.toHaveBeenCalled();
+    expect(invokeMock.mock.calls.map((c) => c[0])).toEqual(['register-payment-attempt']);
+  });
+
+  it('a widget that cannot launch leaves the booked consultation pending_payment (error carries its id)', async () => {
+    const openPaymentWidget = jest.fn().mockRejectedValue(new Error('widget unavailable'));
+    await expect(load().bookAndPayConsultation(booking, openPaymentWidget)).rejects.toMatchObject({
+      message: 'widget unavailable',
+      consultationId: 'consult-1',
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('maps a Postgres exclusion-violation (23P01) to the existing overlap message', async () => {
     singleMock.mockResolvedValue({ data: null, error: { code: '23P01', message: 'exclusion' } });
-    const { bookConsultation: bookConsultationFresh, SlotUnavailableError: ErrFresh } = require('./patientApi');
-    await expect(
-      bookConsultationFresh({
-        patientId: 'p1',
-        doctorId: 'd1',
-        scheduledAt: '2026-10-15T09:00:00.000Z',
-        type: 'video',
-        fee: 5000,
-        duration: 30,
-      }),
-    ).rejects.toThrow(ErrFresh);
+    const { bookConsultation, SlotUnavailableError: Err } = load();
+    const err = await bookConsultation(booking).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Err);
+    expect(err.reason).toBe('overlap');
+    expect(err.message).toBe("Ce créneau vient d'être réservé, choisissez-en un autre.");
   });
 
   it('maps the specific one_booking_per_provider_per_day unique violation to SlotUnavailableError("daily-limit")', async () => {
@@ -111,21 +166,13 @@ describe('bookConsultation', () => {
       data: null,
       error: {
         code: '23505',
-        message:
-          'duplicate key value violates unique constraint "one_booking_per_provider_per_day"',
+        message: 'duplicate key value violates unique constraint "one_booking_per_provider_per_day"',
       },
     });
-    const { bookConsultation: bookConsultationFresh } = require('./patientApi');
-    await expect(
-      bookConsultationFresh({
-        patientId: 'p1',
-        doctorId: 'd1',
-        scheduledAt: '2026-10-15T09:00:00.000Z',
-        type: 'video',
-        fee: 5000,
-        duration: 30,
-      }),
-    ).rejects.toMatchObject({ name: 'SlotUnavailableError', reason: 'daily-limit' });
+    await expect(load().bookConsultation(booking)).rejects.toMatchObject({
+      name: 'SlotUnavailableError',
+      reason: 'daily-limit',
+    });
   });
 
   it('does not misreport an unrelated unique-violation (23505) as the daily-limit conflict', async () => {
@@ -133,17 +180,137 @@ describe('bookConsultation', () => {
       data: null,
       error: { code: '23505', message: 'duplicate key value violates unique constraint "some_other_index"' },
     });
-    const { bookConsultation: bookConsultationFresh } = require('./patientApi');
-    await expect(
-      bookConsultationFresh({
-        patientId: 'p1',
-        doctorId: 'd1',
-        scheduledAt: '2026-10-15T09:00:00.000Z',
-        type: 'video',
-        fee: 5000,
-        duration: 30,
-      }),
-    ).rejects.toMatchObject({ code: '23505', message: expect.stringContaining('some_other_index') });
+    await expect(load().bookConsultation(booking)).rejects.toMatchObject({
+      code: '23505',
+      message: expect.stringContaining('some_other_index'),
+    });
+  });
+
+  it.each([
+    ['payment_fields_locked', '42501', 'payment_locked'],
+    ['insert_amount_out_of_range', 'P0001', 'amount_out_of_range'],
+  ])('%s surfaces a clear error and is never retried by a client update', async (marker, code, reason) => {
+    singleMock.mockResolvedValue({ data: null, error: { code, message: `${marker}: rejected by trigger` } });
+    const { bookConsultation, BookingRejectedError } = load();
+    const err = await bookConsultation(booking).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BookingRejectedError);
+    expect(err.reason).toBe(reason);
+    expect(err.message).not.toMatch(/payment_fields_locked|insert_amount_out_of_range/);
+    expect(err.message.length).toBeGreaterThan(20);
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(upsertMock).not.toHaveBeenCalled();
+    expect(insertMock).toHaveBeenCalledTimes(1);
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('through bookAndPayConsultation a locked insert never reaches register / widget / update', async () => {
+    singleMock.mockResolvedValue({ data: null, error: { code: '42501', message: 'payment_fields_locked' } });
+    const openPaymentWidget = jest.fn();
+    await expect(load().bookAndPayConsultation(booking, openPaymentWidget)).rejects.toMatchObject({
+      name: 'BookingRejectedError',
+    });
+    expect(openPaymentWidget).not.toHaveBeenCalled();
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('the client never sends payment_status "paid" or status "scheduled" in any captured payload', async () => {
+    await load().bookAndPayConsultation(booking, widgetOk());
+    await load().bookAndPayConsultation(booking, jest.fn(async () => ({ status: 'cancelled' as const })));
+    const payloads = [
+      ...insertMock.mock.calls.map((c) => c[0]),
+      ...invokeMock.mock.calls.map((c) => c[1].body),
+      ...updateMock.mock.calls.map((c) => c[0]),
+    ];
+    expect(payloads.length).toBeGreaterThan(0);
+    for (const payload of payloads) {
+      expect(payload.payment_status).not.toBe('paid');
+      expect(payload.status).not.toBe('scheduled');
+      expect(JSON.stringify(payload)).not.toMatch(/"paid"|"scheduled"/);
+    }
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('getConsultationById (re-read after payment)', () => {
+  const maybeSingleMock = jest.fn();
+  const eqMock = jest.fn();
+  const selectMock = jest.fn();
+  const fromMock = jest.fn();
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    eqMock.mockReturnValue({ maybeSingle: maybeSingleMock });
+    selectMock.mockReturnValue({ eq: eqMock });
+    fromMock.mockReturnValue({ select: selectMock });
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: fromMock, functions: { invoke: jest.fn() } },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+  });
+  afterEach(() => jest.dontMock('@/lib/supabase'));
+
+  it('reads the row from the database: status/payment are the server values, never local state', async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: {
+        id: 'c1',
+        doctor_id: 'd1',
+        scheduled_at: '2026-10-15T09:00:00.000Z',
+        status: 'scheduled',
+        payment_status: 'paid',
+        payment_amount: 30000,
+        currency: 'CDF',
+        doctor: { id: 'd1', first_name: 'A', last_name: 'B' },
+      },
+      error: null,
+    });
+    const c = await require('./patientApi').getConsultationById('c1');
+    expect(fromMock).toHaveBeenCalledWith('consultations');
+    expect(eqMock).toHaveBeenCalledWith('id', 'c1');
+    expect(c).toMatchObject({ id: 'c1', status: 'confirmed', awaitingPayment: false });
+  });
+
+  it('still pending_payment when the server has not confirmed yet', async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: { id: 'c1', doctor_id: 'd1', scheduled_at: '2026-10-15T09:00:00.000Z', status: 'pending_payment', payment_status: 'pending' },
+      error: null,
+    });
+    const c = await require('./patientApi').getConsultationById('c1');
+    expect(c).toMatchObject({ status: 'pending', awaitingPayment: true });
+  });
+
+  it('returns null when the row is not visible', async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+    expect(await require('./patientApi').getConsultationById('c1')).toBeNull();
+  });
+});
+
+describe('mapConsultation (payment lock)', () => {
+  const row = (over: Record<string, unknown>) => ({
+    id: 'c1',
+    doctor_id: 'd1',
+    scheduled_at: '2026-10-15T09:00:00.000Z',
+    duration: 30,
+    consultation_type: 'video',
+    payment_amount: 30000,
+    currency: 'CDF',
+    status: 'scheduled',
+    payment_status: 'paid',
+    ...over,
+  });
+  it('a pending_payment consultation is awaiting payment, not confirmed', () => {
+    const { mapConsultation } = require('./patientApi');
+    const c = mapConsultation(row({ status: 'pending_payment', payment_status: 'pending' }));
+    expect(c.status).toBe('pending');
+    expect(c.awaitingPayment).toBe(true);
+    expect(c.currency).toBe('CDF');
+  });
+  it('status and payment come from the database row: scheduled + paid is confirmed', () => {
+    const { mapConsultation } = require('./patientApi');
+    const c = mapConsultation(row({}));
+    expect(c.status).toBe('confirmed');
+    expect(c.awaitingPayment).toBe(false);
   });
 });
 
