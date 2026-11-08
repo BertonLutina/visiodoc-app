@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { handleLoadError } from './asyncError';
 
 /**
  * Petit hook de chargement de données async.
@@ -25,7 +26,11 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
     fnRef
       .current()
       .then((res) => active && setData(res))
-      .catch((e) => active && setError(e?.message ?? 'Erreur de chargement'))
+      .catch((e) => {
+        // Signaler même si l'écran est démonté : la session expirée concerne toute l'application.
+        const message = handleLoadError(e);
+        if (active) setError(message);
+      })
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
@@ -39,8 +44,8 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[] = []) {
     try {
       const res = await fnRef.current();
       setData(res);
-    } catch (e: any) {
-      setError(e?.message ?? 'Erreur de chargement');
+    } catch (e) {
+      setError(handleLoadError(e));
     } finally {
       setRefreshing(false);
     }
