@@ -220,6 +220,39 @@ describe('isAllowedRoomNavigation', () => {
     }
   });
 
+  it("allows the top frame on the serverUrl host, whatever it is", () => {
+    const own = 'https://meet.example.com/';
+    expect(isAllowedRoomNavigation('https://meet.example.com/room?jwt=a', own, true)).toBe(true);
+    expect(isAllowedRoomNavigation('https://other.example.com/room', own, true)).toBe(false);
+  });
+
+  it('additionally allows the 8x8 hosts (8x8.vc, *.8x8.vc, jaas.8x8.vc) for the top frame', () => {
+    const own = 'https://meet.example.com';
+    for (const url of [
+      'https://8x8.vc/room',
+      'https://jaas.8x8.vc/vpaas-magic-cookie-x/Room',
+      'https://meet.8x8.vc/x',
+      'https://JAAS.8X8.VC/x',
+    ]) {
+      expect(isAllowedRoomNavigation(url, own, true)).toBe(true);
+    }
+  });
+
+  it('blocks look-alikes of the 8x8 hosts and http for the top frame', () => {
+    const own = 'https://meet.example.com';
+    for (const url of [
+      'http://8x8.vc/room',
+      'http://jaas.8x8.vc/room',
+      'https://evil8x8.vc/x',
+      'https://8x8.vc.evil.example/x',
+      'https://jaas.8x8.vc.evil.example/x',
+      'https://evil.example/?u=https://8x8.vc/',
+      'https://user@evil.example/8x8.vc',
+    ]) {
+      expect(isAllowedRoomNavigation(url, own, true)).toBe(false);
+    }
+  });
+
   it('lets embedded frames load other https origins but never http', () => {
     expect(isAllowedRoomNavigation('https://cdn.example/frame', server, false)).toBe(true);
     expect(isAllowedRoomNavigation('http://cdn.example/frame', server, false)).toBe(false);

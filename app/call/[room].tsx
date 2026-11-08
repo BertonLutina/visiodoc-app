@@ -139,11 +139,16 @@ export default function VideoCall() {
           {phase.kind === 'ready' ? (
             <WebView
               source={{ uri: phase.url }}
-              // La salle (jeton dans l'URL) ne navigue que sur l'hôte du serveur vidéo reçu de `get-video-token`.
+              // La salle (jeton dans l'URL) ne navigue que sur l'hôte du serveur vidéo reçu de `get-video-token` ou sur 8x8.vc.
               originWhitelist={['https://*']}
-              onShouldStartLoadWithRequest={(req) =>
-                isAllowedRoomNavigation(req.url, phase.serverUrl, req.isTopFrame !== false)
-              }
+              onShouldStartLoadWithRequest={(req) => {
+                const topFrame = req.isTopFrame !== false;
+                const allowed = isAllowedRoomNavigation(req.url, phase.serverUrl, topFrame);
+                // Navigation de page bloquée : sans retour d'état, l'écran resterait vide. On affiche l'erreur
+                // (avec « Réessayer ») sans journaliser l'URL (elle contient le jeton).
+                if (!allowed && topFrame) setPhase({ kind: 'failed', failure: unavailableFailure(t) });
+                return allowed;
+              }}
               javaScriptEnabled
               domStorageEnabled
               setSupportMultipleWindows={false}

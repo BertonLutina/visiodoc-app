@@ -108,15 +108,18 @@ const httpsHost = (url: string): string | null => {
   return m ? m[1].toLowerCase() : null;
 };
 
+/** Hôtes 8x8 / JaaS (`8x8.vc`, `*.8x8.vc`, dont `jaas.8x8.vc`) : redirections légitimes du serveur vidéo. */
+const isEightByEightHost = (host: string): boolean => host === '8x8.vc' || host.endsWith('.8x8.vc');
+
 /**
  * Navigations autorisées dans la WebView de la visio : la page principale reste sur l'hôte du serveur vidéo
- * (`about:blank` toléré) ; les cadres intégrés peuvent charger n'importe quel https ; jamais d'http ni d'autre schéma.
+ * ou sur un hôte 8x8 (`about:blank` toléré) ; les cadres intégrés peuvent charger n'importe quel https ; jamais d'http ni d'autre schéma.
  */
 export function isAllowedRoomNavigation(url: string, serverUrl: string, isTopFrame: boolean): boolean {
   if (url === 'about:blank') return true;
   const host = httpsHost(url);
   if (!host) return false;
-  return isTopFrame ? host === httpsHost(serverUrl) : true;
+  return isTopFrame ? host === httpsHost(serverUrl) || isEightByEightHost(host) : true;
 }
 
 /** Échec réessayable (réseau, 5xx, réponse inattendue) : ce n'est pas un refus du serveur. */
