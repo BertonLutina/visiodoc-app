@@ -1,4 +1,5 @@
 import { passwordIssue, passwordStrength } from './passwordPolicy';
+import { setCurrentLangCode } from '@/i18n/core';
 import { authErrorMessage, pwnedPasswordMessage } from '@/utils/authError';
 
 const PWNED = 'Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.';
@@ -61,6 +62,19 @@ describe('pwnedPasswordMessage (HTTP 422 weak_password / pwned)', () => {
     expect(pwnedPasswordMessage(null)).toBeNull();
     expect(pwnedPasswordMessage(undefined)).toBeNull();
     expect(pwnedPasswordMessage('boom')).toBeNull();
+  });
+
+  describe('translated copy (guide MOB-0612-2 §3)', () => {
+    afterEach(() => setCurrentLangCode('fr'));
+
+    it.each([
+      ['en', 'This password has previously appeared in a data leak, please choose a different one.'],
+      ['ln', 'Mot de passe oyo ebimi déjà na Internet, pona mosusu.'],
+      ['sw', 'Nenosiri hili limeshavuja kwenye Mtandao, chagua jingine.'],
+    ] as const)('shows the guide text in %s', (code, expected) => {
+      setCurrentLangCode(code);
+      expect(pwnedPasswordMessage({ error_code: 'weak_password', reasons: ['pwned'] })).toBe(expected);
+    });
   });
 
   it('is what authErrorMessage shows for a pwned refusal', () => {

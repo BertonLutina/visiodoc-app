@@ -237,7 +237,7 @@ export const sw: Record<string, string> = {
   "Le mot de passe doit contenir au moins une lettre et un chiffre.": "Nenosiri lazima liwe na angalau herufi moja na tarakimu moja.",
   "Le mot de passe doit comporter au moins 10 caractères et inclure au moins une lettre et un chiffre.": "Nenosiri lazima liwe na angalau herufi 10 na lijumuishe angalau herufi moja na tarakimu moja.",
   "Le mot de passe ne doit pas dépasser 72 caractères.": "Nenosiri halipaswi kuzidi herufi 72.",
-  "Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.": "Nenosiri hili tayari limevuja mtandaoni, chagua jingine.",
+  "Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.": "Nenosiri hili limeshavuja kwenye Mtandao, chagua jingine.",
   "Faible": "Dhaifu",
   "Correct": "Wastani",
   "Fort": "Imara",

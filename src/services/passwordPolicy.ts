@@ -1,14 +1,16 @@
 import { translate } from '@/i18n/core';
 
 /** Politique commune web/mobile (guide MOB-0611-3) : 10 à 72 caractères, une lettre, un chiffre. */
-const PASSWORD_REGEX = /^(?=.*[a-zA-Z])(?=.*[0-9]).{10,72}$/;
+const MIN_LEN = 10;
+const MAX_LEN = 72;
+const PASSWORD_REGEX = new RegExp(`^(?=.*[a-zA-Z])(?=.*[0-9]).{${MIN_LEN},${MAX_LEN}}$`);
 
 export type PasswordIssue = 'too_short' | 'too_long' | 'needs_letter_and_digit';
 
 /** `null` si le mot de passe respecte la politique, sinon la première règle non respectée. */
 export function passwordIssue(password: string): PasswordIssue | null {
-  if (password.length < 10) return 'too_short';
-  if (password.length > 72) return 'too_long';
+  if (password.length < MIN_LEN) return 'too_short';
+  if (password.length > MAX_LEN) return 'too_long';
   if (!PASSWORD_REGEX.test(password)) return 'needs_letter_and_digit';
   return null;
 }

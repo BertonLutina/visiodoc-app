@@ -237,7 +237,7 @@ export const ln: Record<string, string> = {
   "Le mot de passe doit contenir au moins une lettre et un chiffre.": "Mot de passe esengeli kozala na ata elembo moko ya alfabe mpe motango moko.",
   "Le mot de passe doit comporter au moins 10 caractères et inclure au moins une lettre et un chiffre.": "Mot de passe esengeli kozala na bokoma 10 ata mpe na ata elembo moko ya alfabe mpe motango moko.",
   "Le mot de passe ne doit pas dépasser 72 caractères.": "Mot de passe esengeli koleka bokoma 72 te.",
-  "Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.": "Mot de passe oyo ewuti na Internet liboso, pona mosusu.",
+  "Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.": "Mot de passe oyo ebimi déjà na Internet, pona mosusu.",
   "Faible": "Moke makasi",
   "Correct": "Malamu",
   "Fort": "Makasi",

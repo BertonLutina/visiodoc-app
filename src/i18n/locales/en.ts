@@ -237,7 +237,7 @@ export const en: Record<string, string> = {
   "Le mot de passe doit contenir au moins une lettre et un chiffre.": "The password must contain at least one letter and one digit.",
   "Le mot de passe doit comporter au moins 10 caractères et inclure au moins une lettre et un chiffre.": "The password must be at least 10 characters long and include at least one letter and one digit.",
   "Le mot de passe ne doit pas dépasser 72 caractères.": "The password must not exceed 72 characters.",
-  "Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.": "This password has already leaked on the Internet, please choose another one.",
+  "Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.": "This password has previously appeared in a data leak, please choose a different one.",
   "Faible": "Weak",
   "Correct": "Fair",
   "Fort": "Strong",
