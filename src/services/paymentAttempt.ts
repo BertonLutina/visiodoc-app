@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { appEnv } from '@/config/appEnv';
 import { translate } from '@/i18n/core';
 import { edgeFunctionError, readHttpError } from '@/utils/authError';
 import { reportSessionExpiry } from './sessionExpiry';
@@ -201,7 +202,7 @@ export type ProviderPaymentRegistration = {
 
 /** Simulation locale : JAMAIS en build de production (`EXPO_PUBLIC_APP_ENV` doit valoir `development`). */
 const isProviderPaymentSimulated = (): boolean =>
-  process.env.EXPO_PUBLIC_APP_ENV === 'development' && process.env.EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT === 'true';
+  appEnv() === 'development' && process.env.EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT === 'true';
 
 /**
  * `POST /functions/v1/register-provider-payment-attempt`. Le corps envoyé est reconstruit champ par champ :

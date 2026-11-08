@@ -22,6 +22,27 @@ npx expo start
 Ouvrir avec **Expo Go** (Android/iOS) pour l'UI. La visio (WebView + caméra/micro) et le paiement
 nécessitent un **dev build** (`npx expo prebuild` + EAS/local) ; Expo Go ne suffit pas pour tester les permissions.
 
+## Environnements EAS (UAT / Production)
+
+`eas.json` sépare les builds de test de la Production et **ne contient aucune clé** :
+
+| Profil | `EXPO_PUBLIC_APP_ENV` | Projet Supabase (`EXPO_PUBLIC_SUPABASE_URL`) |
+|--------|-----------------------|----------------------------------------------|
+| `development` | `development` | UAT — `pslypdfjmjetjhtpzwip` |
+| `preview` | `uat` | UAT — `pslypdfjmjetjhtpzwip` |
+| `production` | `production` | Production — `cftqxuxhsellvquidpxr` |
+
+Aucun test, compte factice ni paiement d'essai sur Production. Les variables ci-dessous sont à définir
+dans EAS (`eas env:create` ou le tableau de bord, **une valeur par environnement** `development` /
+`preview` / `production`) **avant** de lancer un build. Ne jamais les écrire dans le dépôt.
+
+- `EXPO_PUBLIC_SUPABASE_ANON_KEY` : clé anonyme du projet Supabase correspondant (UAT pour `development` et `preview`, Production pour `production`). Sans elle, l'app retombe en mode mock.
+- Paiement (widget Interswitch, voir `src/services/paymentWidget.ts`) : `EXPO_PUBLIC_ISW_MODE` (`TEST` ou `LIVE`), `EXPO_PUBLIC_ISW_MERCHANT_CODE`, `EXPO_PUBLIC_ISW_PAY_ITEM_ID`. Optionnelles : `EXPO_PUBLIC_ISW_SCRIPT_URL`, `EXPO_PUBLIC_ISW_REDIRECT_URL`. Valeurs à obtenir du backend ; sans elles le widget n'est pas configuré.
+- `EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT` : `true` uniquement en `development` pour simuler localement le paiement prestataire ; ignorée dans les autres environnements.
+
+`EXPO_PUBLIC_APP_ENV` vient de `eas.json` ; une valeur absente ou inconnue vaut `production`
+(`src/config/appEnv.ts`). L'application n'a pas de sélecteur d'environnement : un build est lié à un seul projet.
+
 ## Avancement (4 phases)
 
 | Phase | Contenu | État |
