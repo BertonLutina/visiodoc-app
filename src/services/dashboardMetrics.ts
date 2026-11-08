@@ -125,7 +125,7 @@ export function computeProviderEarnings(
 export function computeDashboardOverview(
   rows: DashboardRow[],
   { now, weeklyCapacity: capacity }: DashboardInput,
-): Omit<DashboardOverview, 'next' | 'earnings'> & { nextRowId: string | null } {
+): Omit<DashboardOverview, 'next' | 'earnings' | 'earningsError'> & { nextRowId: string | null } {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);

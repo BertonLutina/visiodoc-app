@@ -27,6 +27,15 @@ export function formatDoctorFee(
   return `${fee.toLocaleString(appLocale())} ${currencyCode}`;
 }
 
+/**
+ * Montant d'un revenu avec SA devise. Devise absente : le nombre seul, sans symbole — on ne lui
+ * prête jamais la devise du pays actif (ce serait inventer une devise).
+ */
+export function formatAmountInCurrency(amount: number, currencyCode: string | null | undefined): string {
+  if (!currencyCode) return amount.toLocaleString(appLocale());
+  return formatDoctorFee(amount, currencyCode) ?? amount.toLocaleString(appLocale());
+}
+
 /** Équivalent USD arrondi d'un montant en devise locale, ex: "~$9". */
 export function formatUsd(amountLocal: number, country: CountryConfig = activeCountry): string {
   const usd = amountLocal / country.currency.usdRate;

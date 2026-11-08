@@ -205,6 +205,18 @@ describe('computeProviderEarnings (contrat : consultations payées + provider_pa
     ]);
   });
 
+  it('les lignes sans devise restent dans leur propre ligne (currency null), jamais fusionnées avec USD', () => {
+    const e = computeProviderEarnings(
+      [c({ payment_amount: 30, currency: null }), c({ payment_amount: 20, currency: undefined }), c({ payment_amount: 100, currency: 'USD' })],
+      [payout({ net_amount: 5, currency_code: null })],
+    );
+    expect(e.inProgress).toEqual([
+      { currency: null, amount: 50 },
+      { currency: 'USD', amount: 100 },
+    ]);
+    expect(e.paid).toEqual([{ currency: null, amount: 5 }]);
+  });
+
   it('liste vide : aucune ligne, jamais NaN', () => {
     expect(computeProviderEarnings([], [])).toEqual({ inProgress: [], paid: [] });
   });

@@ -27,7 +27,7 @@ import {
 } from '@/services/providerApi';
 import { buildAlerts, countdownLabel } from '@/services/dashboardMetrics';
 import { currentProvider } from '@/data/mockProvider';
-import { formatDoctorFee, formatMoney, typeLabel } from '@/utils/format';
+import { formatAmountInCurrency, typeLabel } from '@/utils/format';
 import { translate } from '@/i18n';
 import type { ProviderConsultation } from '@/types/provider';
 import { useLanguage, useT } from '@/i18n';
@@ -269,7 +269,7 @@ export default function ProviderDashboard() {
                 onPress={() => router.push('/(provider)/consultations')}
               />
               <Stat
-                value={formatDoctorFee(ov.netRevenue, ov.revenueCurrency) ?? formatMoney(ov.netRevenue)}
+                value={formatAmountInCurrency(ov.netRevenue, ov.revenueCurrency)}
                 label={t('Revenus du mois')}
                 hint={t('consultations payées')}
               />
@@ -341,25 +341,27 @@ export default function ProviderDashboard() {
                   </Text>
                 )}
               </Card>
-              {(ov.earnings.inProgress.length > 0 || ov.earnings.paid.length > 0) && (
+              {ov.earningsError ? (
+                <Text className="font-sans text-xs text-muted mt-3">{t('Revenus indisponibles')}</Text>
+              ) : (ov.earnings.inProgress.length > 0 || ov.earnings.paid.length > 0) && (
                 <Card className="mt-3">
-                  <Text className="font-sans-semibold text-sm text-ink">{t('Pas encore versé')}</Text>
+                  <Text className="font-sans-semibold text-sm text-ink">{t('Encaissé brut, avant frais de service')}</Text>
                   {ov.earnings.inProgress.length === 0 ? (
                     <Text className="font-sans text-xs text-muted mt-1">—</Text>
                   ) : (
                     ov.earnings.inProgress.map((e) => (
                       <Text key={`ip-${e.currency ?? ''}`} className="font-serif-bold text-primary text-lg mt-1">
-                        {formatDoctorFee(e.amount, e.currency) ?? formatMoney(e.amount)}
+                        {formatAmountInCurrency(e.amount, e.currency)}
                       </Text>
                     ))
                   )}
-                  <Text className="font-sans-semibold text-sm text-ink mt-3">{t('Déjà versé')}</Text>
+                  <Text className="font-sans-semibold text-sm text-ink mt-3">{t('Net versé')}</Text>
                   {ov.earnings.paid.length === 0 ? (
                     <Text className="font-sans text-xs text-muted mt-1">—</Text>
                   ) : (
                     ov.earnings.paid.map((e) => (
                       <Text key={`pd-${e.currency ?? ''}`} className="font-serif-bold text-primary text-lg mt-1">
-                        {formatDoctorFee(e.amount, e.currency) ?? formatMoney(e.amount)}
+                        {formatAmountInCurrency(e.amount, e.currency)}
                       </Text>
                     ))
                   )}

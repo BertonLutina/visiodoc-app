@@ -126,6 +126,8 @@ export interface DashboardOverview {
   revenueSeries: { label: string; amount: number }[];
   /** En cours (consultations payées non versées) et versés (`provider_payouts` payés), par devise. */
   earnings: ProviderEarnings;
+  /** `true` quand la lecture des revenus a échoué : afficher « indisponibles », jamais « aucun revenu ». */
+  earningsError: boolean;
   /** % sur les 90 derniers jours, `null` s'il n'y a aucun rendez-vous passé. */
   cancellationRate: number | null;
   noShowRate: number | null;

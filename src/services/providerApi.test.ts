@@ -436,9 +436,10 @@ describe('getProviderEarnings (revenus : consultations payées + provider_payout
   const makeQuery = (table: string) => {
     calls[table] = [];
     const q: any = {};
-    for (const m of ['select', 'eq', 'in', 'neq', 'gte', 'lt', 'order']) {
+    for (const m of ['select', 'eq', 'in', 'neq', 'gte', 'lt', 'order', 'range', 'not']) {
       q[m] = jest.fn((...args: unknown[]) => {
         calls[table].push({ method: m, args });
+        log.push({ table, method: m, args });
         return q;
       });
     }
@@ -446,10 +447,13 @@ describe('getProviderEarnings (revenus : consultations payées + provider_payout
       Promise.resolve(Array.isArray(results[table]) ? (results[table] as Res[]).shift() : results[table]).then(resolve, reject);
     return q;
   };
+  const log: { table: string; method: string; args: unknown[] }[] = [];
+  const logged = (table: string, method: string) => log.filter((c) => c.table === table && c.method === method).map((c) => c.args);
   const filters = (table: string, method: string) => calls[table].filter((c) => c.method === method).map((c) => c.args);
 
   beforeEach(() => {
     jest.resetModules();
+    log.length = 0;
     results.consultations = { data: [], error: null };
     results.provider_payouts = { data: [], error: null };
     jest.doMock('@/lib/supabase', () => ({
@@ -508,5 +512,145 @@ describe('getProviderEarnings (revenus : consultations payées + provider_payout
     const e = await require('./providerApi').getProviderEarnings('doc-1');
     expect(e.paid).toEqual([{ currency: 'USD', amount: 80 }]);
     expect(filters('provider_payouts', 'eq')).toEqual([['provider_id', 'doc-1']]);
+    // Sans colonne status, la ligne n'est « versée » que si paid_at est renseigné.
+    expect(filters('provider_payouts', 'not')).toEqual([['paid_at', 'is', null]]);
+    expect(String(filters('provider_payouts', 'select')[0][0])).not.toContain('status');
+  });
+
+  it('détecte l’absence de colonne status par le code Postgres 42703 même si le message est différent', async () => {
+    results.provider_payouts = [
+      { data: null, error: { code: '42703', message: 'undefined column' } },
+      { data: [{ period_start: '2026-09-01', period_end: '2026-09-15', net_amount: 10, currency_code: 'USD' }], error: null },
+    ];
+    expect((await require('./providerApi').getProviderEarnings('doc-1')).paid).toEqual([{ currency: 'USD', amount: 10 }]);
+  });
+
+  it('une autre erreur sur provider_payouts (ex. RLS 42501) est propagée, sans retry', async () => {
+    results.provider_payouts = [{ data: null, error: { code: '42501', message: 'permission denied for table provider_payouts' } }];
+    await expect(require('./providerApi').getProviderEarnings('doc-1')).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it('mémorise « pas de colonne status » : le second chargement n’envoie plus la requête qui échoue', async () => {
+    const payout = { period_start: '2026-09-01', period_end: '2026-09-15', net_amount: 10, currency_code: 'USD' };
+    results.provider_payouts = [
+      { data: null, error: { code: '42703', message: 'column provider_payouts.status does not exist' } },
+      { data: [payout], error: null },
+      { data: [payout], error: null },
+    ];
+    const api = require('./providerApi');
+    await api.getProviderEarnings('doc-1');
+    log.length = 0;
+    const second = await api.getProviderEarnings('doc-1');
+    expect(second.paid).toEqual([{ currency: 'USD', amount: 10 }]);
+    expect(logged('provider_payouts', 'eq')).toEqual([['provider_id', 'doc-1']]);
+    expect(logged('provider_payouts', 'select')).toHaveLength(1);
+  });
+});
+
+describe('pagination des lectures de revenus (plafond PostgREST de 1000 lignes)', () => {
+  type Res = { data: unknown; error: unknown };
+  const results: Record<string, Res[]> = {};
+  const log: { table: string; method: string; args: unknown[] }[] = [];
+  const makeQuery = (table: string) => {
+    const q: any = {};
+    for (const m of ['select', 'eq', 'in', 'neq', 'gte', 'lt', 'order', 'range', 'not']) {
+      q[m] = jest.fn((...args: unknown[]) => {
+        log.push({ table, method: m, args });
+        return q;
+      });
+    }
+    q.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+      Promise.resolve((results[table] ?? []).shift() ?? { data: [], error: null }).then(resolve, reject);
+    return q;
+  };
+  const rows = (n: number, amount = 10) =>
+    Array.from({ length: n }, () => ({
+      status: 'completed',
+      payment_status: 'paid',
+      payment_amount: amount,
+      currency: 'USD',
+      scheduled_at: '2026-10-05T09:00:00.000Z',
+    }));
+  const ranges = (table: string) => log.filter((c) => c.table === table && c.method === 'range').map((c) => c.args);
+
+  beforeEach(() => {
+    jest.resetModules();
+    log.length = 0;
+    for (const k of Object.keys(results)) delete results[k];
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: jest.fn((table: string) => makeQuery(table)) },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+  });
+  afterEach(() => jest.dontMock('@/lib/supabase'));
+
+  it('1000 + 250 lignes : les 1250 sont additionnées (12 500)', async () => {
+    results.consultations = [
+      { data: rows(1000), error: null },
+      { data: rows(250), error: null },
+    ];
+    const e = await require('./providerApi').getProviderEarnings('doc-1');
+    expect(e.inProgress).toEqual([{ currency: 'USD', amount: 12500 }]);
+    expect(ranges('consultations')).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+  });
+
+  it('exactement 1000 lignes : une seconde requête est faite, une page vide termine la lecture', async () => {
+    results.consultations = [
+      { data: rows(1000), error: null },
+      { data: [], error: null },
+    ];
+    const e = await require('./providerApi').getProviderEarnings('doc-1');
+    expect(e.inProgress).toEqual([{ currency: 'USD', amount: 10000 }]);
+    expect(ranges('consultations')).toHaveLength(2);
+  });
+
+  it('une erreur sur la page 2 est propagée : jamais de total partiel', async () => {
+    results.consultations = [
+      { data: rows(1000), error: null },
+      { data: null, error: { code: '57014', message: 'statement timeout' } },
+    ];
+    await expect(require('./providerApi').getProviderEarnings('doc-1')).rejects.toMatchObject({ code: '57014' });
+  });
+
+  it('au-delà de 100 pages : erreur explicite plutôt qu’un total tronqué', async () => {
+    results.consultations = Array.from({ length: 101 }, () => ({ data: rows(1000, 1), error: null }));
+    await expect(require('./providerApi').getProviderEarnings('doc-1')).rejects.toThrow(/trop de lignes|too many/i);
+    expect(ranges('consultations')).toHaveLength(100);
+  });
+
+  it('getDashboardOverview pagine aussi sa lecture (1000 + 250 consultations)', async () => {
+    jest.doMock('./availabilityApi', () => ({
+      ...jest.requireActual('./availabilityApi'),
+      getSchedulingSettings: jest.fn().mockResolvedValue({ appointmentDurationMinutes: 30 }),
+    }));
+    const recent = (n: number) =>
+      Array.from({ length: n }, () => ({
+        id: 'c', patient_id: 'p', duration: 30, status: 'cancelled', payment_status: 'pending', payment_amount: 0, currency: 'USD',
+        scheduled_at: new Date().toISOString(),
+      }));
+    results.consultations = [
+      { data: recent(1000), error: null },
+      { data: recent(250), error: null },
+    ];
+    const ov = await require('./providerApi').getDashboardOverview('doc-1');
+    // 2 lectures d'aperçu (pages 1 et 2) + les lectures de revenus ; les plages de l'aperçu commencent à 0 puis 1000.
+    expect(ranges('consultations')[0]).toEqual([0, 999]);
+    expect(ranges('consultations').some((r) => r[0] === 1000)).toBe(true);
+    expect(ov.earningsError).toBe(false);
+  });
+
+  it('un échec de lecture des revenus lève earningsError au lieu d’afficher « aucun revenu »', async () => {
+    jest.doMock('./availabilityApi', () => ({
+      ...jest.requireActual('./availabilityApi'),
+      getSchedulingSettings: jest.fn().mockResolvedValue({ appointmentDurationMinutes: 30 }),
+    }));
+    results.provider_payouts = [{ data: null, error: { code: '42501', message: 'permission denied' } }];
+    const ov = await require('./providerApi').getDashboardOverview('doc-1');
+    expect(ov.earningsError).toBe(true);
+    expect(ov.earnings).toEqual({ inProgress: [], paid: [] });
   });
 });

@@ -79,67 +79,121 @@ export async function getDashboardStats(doctorId: string): Promise<ProviderStats
 }
 
 /* ---------- Revenus (contrat serveur : consultations payées + provider_payouts payés) ---------- */
+const PAGE_SIZE = 1000; // plafond PostgREST par requête
+const MAX_PAGES = 100;
+
+/**
+ * Lit toutes les pages d'une requête (`.range`), jusqu'à une page courte ou vide.
+ * Une erreur sur n'importe quelle page est propagée : jamais de total partiel silencieux.
+ */
+async function fetchAllPages<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+): Promise<T[]> {
+  const all: T[] = [];
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const { data, error } = await page(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1);
+    if (error) throw error;
+    const rows = data ?? [];
+    all.push(...rows);
+    if (rows.length < PAGE_SIZE) return all;
+  }
+  throw new Error(`Lecture interrompue : trop de lignes (plus de ${MAX_PAGES * PAGE_SIZE}).`);
+}
+
 /**
  * Lecture seule, avec le client de SESSION (RLS : le prestataire ne voit que ses lignes).
  * Aucune commission n'est appliquée ici : on lit `payment_amount`, tel que stocké par le serveur.
  * - en cours : `consultations` du médecin, `status in ('completed','no_show')`, `payment_status = 'paid'` ;
- * - versé : `provider_payouts` du médecin au statut `paid`.
+ * - versé : `provider_payouts` du médecin (statut `paid`, ou ligne existante si la table n'a pas de statut).
  */
 export async function getProviderEarnings(doctorId: string): Promise<ProviderEarnings> {
   if (useMock()) return mock.dashboardOverview.earnings;
 
-  const payoutCols = 'status, period_start, period_end, net_amount, currency_code';
   const [consultations, payouts] = await Promise.all([
-    supabase!
-      .from('consultations')
-      .select('status, payment_status, payment_amount, currency, scheduled_at')
-      .eq('doctor_id', doctorId)
-      .in('status', [...EARNING_STATUSES])
-      .eq('payment_status', EARNING_PAYMENT_STATUS),
-    readPaidPayouts(doctorId, payoutCols),
+    fetchAllPages<DashboardRow>((from, to) =>
+      supabase!
+        .from('consultations')
+        .select('id, status, payment_status, payment_amount, currency, scheduled_at')
+        .eq('doctor_id', doctorId)
+        .in('status', [...EARNING_STATUSES])
+        .eq('payment_status', EARNING_PAYMENT_STATUS)
+        .order('scheduled_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{ data: DashboardRow[] | null; error: any }>,
+    ),
+    readPaidPayouts(doctorId),
   ]);
-  if (consultations.error) throw consultations.error;
-  return computeProviderEarnings((consultations.data ?? []) as DashboardRow[], payouts);
+  return computeProviderEarnings(consultations, payouts);
 }
 
-async function readPaidPayouts(doctorId: string, cols: string): Promise<PayoutRow[]> {
+/** `null` = pas encore su ; `false` = la table n'a pas de colonne `status` (schéma 20261025150000). */
+let payoutsHaveStatus: boolean | null = null;
+
+/** 42703 = colonne inconnue (Postgres) ; PGRST204 = colonne absente du schema cache (PostgREST). */
+function isMissingStatusColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === '42703' || error.code === 'PGRST204') return true;
+  const m = error.message ?? '';
+  return /status/i.test(m) && /column|does not exist|schema cache/i.test(m);
+}
+
+async function readPaidPayouts(doctorId: string): Promise<PayoutRow[]> {
+  const withoutStatus = async () => {
+    const retry = await supabase!
+      .from('provider_payouts')
+      .select('period_start, period_end, net_amount, currency_code')
+      .eq('provider_id', doctorId)
+      // Sans colonne status, une ligne n'est « versée » que si paid_at est renseigné.
+      .not('paid_at', 'is', null);
+    if (retry.error) throw retry.error;
+    payoutsHaveStatus = false;
+    return ((retry.data ?? []) as unknown as PayoutRow[]).map((p) => ({ ...p, status: PAYOUT_PAID_STATUS }));
+  };
+
+  if (payoutsHaveStatus === false) return withoutStatus();
+
   const first = await supabase!
     .from('provider_payouts')
-    .select(cols)
+    .select('status, period_start, period_end, net_amount, currency_code')
     .eq('provider_id', doctorId)
     .eq('status', PAYOUT_PAID_STATUS);
-  if (!first.error) return (first.data ?? []) as unknown as PayoutRow[];
-  // Certains schémas n'ont pas de colonne `status` : l'existence d'une ligne y vaut « versé ».
-  if (!/status/i.test(first.error.message ?? '') || !/column|does not exist|schema cache/i.test(first.error.message ?? '')) {
-    throw first.error;
+  if (!first.error) {
+    payoutsHaveStatus = true;
+    return (first.data ?? []) as unknown as PayoutRow[];
   }
-  const retry = await supabase!
-    .from('provider_payouts')
-    .select('period_start, period_end, net_amount, currency_code')
-    .eq('provider_id', doctorId);
-  if (retry.error) throw retry.error;
-  return ((retry.data ?? []) as unknown as PayoutRow[]).map((p) => ({ ...p, status: PAYOUT_PAID_STATUS }));
+  if (!isMissingStatusColumn(first.error)) throw first.error;
+  return withoutStatus();
 }
 
 /* ---------- Dashboard enrichi ---------- */
 export async function getDashboardOverview(doctorId: string): Promise<DashboardOverview> {
   if (useMock()) return mock.dashboardOverview;
 
-  const [{ data, error }, earnings, rules, settings] = await Promise.all([
-    supabase!
-      .from('consultations')
-      .select('id, patient_id, scheduled_at, duration, status, payment_status, payment_amount, currency')
-      .eq('doctor_id', doctorId)
-      .gte('scheduled_at', new Date(Date.now() - 200 * 86_400_000).toISOString()),
-    // Un échec de lecture des revenus ne masque pas le reste du tableau de bord.
-    getProviderEarnings(doctorId).catch((): ProviderEarnings => ({ inProgress: [], paid: [] })),
+  const since = new Date(Date.now() - 200 * 86_400_000).toISOString();
+  const [data, earningsResult, rules, settings] = await Promise.all([
+    fetchAllPages<DashboardRow>((from, to) =>
+      supabase!
+        .from('consultations')
+        .select('id, patient_id, scheduled_at, duration, status, payment_status, payment_amount, currency')
+        .eq('doctor_id', doctorId)
+        .gte('scheduled_at', since)
+        .order('scheduled_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{ data: DashboardRow[] | null; error: any }>,
+    ),
+    // Un échec de lecture des revenus ne masque pas le reste du tableau de bord, mais il est signalé
+    // (`earningsError`) pour ne jamais passer pour « aucun revenu ».
+    getProviderEarnings(doctorId).then(
+      (earnings) => ({ earnings, failed: false }),
+      (): { earnings: ProviderEarnings; failed: boolean } => ({ earnings: { inProgress: [], paid: [] }, failed: true }),
+    ),
     getAvailability(doctorId),
     getSchedulingSettings(doctorId),
   ]);
-  if (error) throw error;
+  const { earnings, failed: earningsError } = earningsResult;
 
   const slotMinutes = settings.appointmentDurationMinutes;
-  const { nextRowId, ...rest } = computeDashboardOverview((data ?? []) as DashboardRow[], {
+  const { nextRowId, ...rest } = computeDashboardOverview(data, {
     now: new Date(),
     weeklyCapacity: weeklyCapacity(rules, slotMinutes),
   });
@@ -153,7 +207,7 @@ export async function getDashboardOverview(doctorId: string): Promise<DashboardO
       .maybeSingle();
     if (row) next = mapConsultation(row);
   }
-  return { ...rest, earnings, next };
+  return { ...rest, earnings, earningsError, next };
 }
 
 /** Statut de validation du compte prestataire (`provider_profiles.status`), `null` si inconnu. */
