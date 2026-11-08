@@ -91,11 +91,6 @@ export const providerExceptions: AvailabilityException[] = [
   { id: 'e1', label: '🏖 Exception · Congé', dateLabel: '25 – 28 juin 2026 · Repos' },
 ];
 
-export const feeConfig = {
-  currentFee: 15000,
-  platformFeeRate: 0.04, // 4%
-};
-
 export const subscriptionPlans: SubscriptionPlan[] = [
   {
     id: 'annual',

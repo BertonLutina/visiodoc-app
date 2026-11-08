@@ -595,4 +595,6 @@ export const sw: Record<string, string> = {
   "On vous envoie un code de confirmation par WhatsApp.": "Tunakutumia msimbo wa uthibitisho kupitia WhatsApp.",
   "L'abonnement sera bientôt disponible dans l'application. Ton accès est limité en attendant.": "Usajili utapatikana hivi karibuni kwenye programu. Kwa sasa, ufikiaji wako ni mdogo.",
   "Abonnement actif": "Usajili unatumika",
+  "La gestion du tarif sera bientôt disponible dans l'application.": "Usimamizi wa ada utapatikana hivi karibuni kwenye programu.",
+  "Retour": "Rudi",
 };

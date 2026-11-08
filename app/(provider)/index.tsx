@@ -7,7 +7,6 @@ import {
   CalendarClock,
   CalendarOff,
   ChevronRight,
-  Coins,
   FolderHeart,
   Info,
   Star,
@@ -35,7 +34,6 @@ import { useLanguage, useT } from '@/i18n';
 const SHORTCUTS: { label: string; icon: typeof Users; href: Href }[] = [
   { label: 'Disponibilités', icon: CalendarClock, href: '/provider/availability' },
   { label: 'Congés', icon: CalendarOff, href: '/provider/availability-overrides' },
-  { label: 'Tarif', icon: Coins, href: '/provider/fee' },
   { label: 'Patients', icon: Users, href: '/(provider)/patients' },
   { label: 'Dossiers', icon: FolderHeart, href: '/(provider)/records' },
   { label: 'Abonnement', icon: Wallet, href: '/provider/subscription' },

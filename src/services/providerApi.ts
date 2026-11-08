@@ -741,16 +741,6 @@ export async function deleteOverride(doctorId: string, date: string): Promise<vo
 /* ---------- Réglages de réservation ---------- */
 export { getSchedulingSettings, saveSchedulingSettings } from './availabilityApi';
 
-/* ---------- Tarif (payment_fee_config) ---------- */
-export async function getFeeConfig(): Promise<{ currentFee: number; platformFeeRate: number }> {
-  if (useMock()) return mock.feeConfig;
-  const { data } = await supabase!.from('payment_fee_config').select('*').limit(1).single();
-  return {
-    currentFee: mock.feeConfig.currentFee,
-    platformFeeRate: (data?.platform_fee_percentage ?? 4) / 100,
-  };
-}
-
 export async function appendMedicalRecordAttachment(
   id: string,
   existing: MedicalRecordAttachment[],

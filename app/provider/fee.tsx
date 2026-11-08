@@ -1,86 +1,34 @@
-import React, { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import React from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft } from 'lucide-react-native';
-import { Button, Card, Field, SectionTitle } from '@/components/ui';
-import { formatMoney, formatUsd } from '@/utils/format';
-import { activeCountry } from '@/config/countries';
+import { ChevronLeft, Coins } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
-import { useAsync } from '@/hooks/useAsync';
-import { getFeeConfig } from '@/services/providerApi';
-import { appLocale } from '@/i18n';
-import { feeConfig as mockFee } from '@/data/mockProvider';
 import { useT } from '@/i18n';
 
+/**
+ * Aucune source réelle de tarif ni d'écriture n'est branchée côté application : cet écran n'affiche
+ * ni tarif, ni calcul de frais, ni bouton d'enregistrement (accessible uniquement par lien profond).
+ */
 export default function FeeScreen() {
   const t = useT();
-  const { data } = useAsync(getFeeConfig, []);
-  const feeConfig = data ?? mockFee;
-  const [fee, setFee] = useState(String(mockFee.currentFee));
-  const value = Number(fee) || 0;
-  const platformFee = Math.round(value * feeConfig.platformFeeRate);
-  const net = value - platformFee;
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="flex-row items-center px-5 pt-2 pb-2">
-        <Pressable onPress={() => router.back()} className="p-1 mr-2">
+        <Pressable onPress={() => router.back()} className="p-1 mr-2" accessibilityRole="button" accessibilityLabel={t('Retour')}>
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
         <Text className="font-sans-bold text-lg text-ink">{t('Tarif consultation')}</Text>
       </View>
-
-      <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 8 }}>
-        <View className="rounded-[28px] bg-accent p-6 mb-5 overflow-hidden">
-          <View
-            className="absolute -right-8 -top-8 w-36 h-36 rounded-full"
-            style={{ backgroundColor: '#F97316', opacity: 0.5 }}
-          />
-          <Text className="text-white/80 text-xs font-sans-bold">{t('Tarif actuel')}</Text>
-          <Text className="text-white font-serif-bold mt-1" style={{ fontSize: 38 }}>
-            {feeConfig.currentFee.toLocaleString(appLocale())}
-          </Text>
-          <Text className="text-white/80 text-sm font-sans">
-            {activeCountry.currency.symbol} {t('par consultation')} · {formatUsd(feeConfig.currentFee)}
-          </Text>
+      <View className="flex-1 items-center justify-center px-8">
+        <View className="w-16 h-16 rounded-full bg-accent-50 items-center justify-center mb-5">
+          <Coins color={colors.accent} size={28} />
         </View>
-
-        <SectionTitle>{t('Décomposition des frais')}</SectionTitle>
-        <Card className="mb-5">
-          <View className="flex-row justify-between py-1">
-            <Text className="font-sans text-muted">{t('Tarif brut')}</Text>
-            <Text className="font-sans-semibold text-ink">{formatMoney(value)}</Text>
-          </View>
-          <View className="flex-row justify-between py-1">
-            <Text className="font-sans text-muted">{t('Frais plateforme')} ({feeConfig.platformFeeRate * 100}%)</Text>
-            <Text className="font-sans-semibold text-danger">- {formatMoney(platformFee)}</Text>
-          </View>
-          <View className="h-px bg-line my-2" />
-          <View className="flex-row justify-between items-end py-1">
-            <Text className="font-sans-bold text-ink">{t('Votre revenu net')}</Text>
-            <View className="items-end">
-              <Text className="font-serif-bold text-primary text-lg">{formatMoney(net)}</Text>
-              <Text className="font-sans text-xs text-muted">{formatUsd(net)}</Text>
-            </View>
-          </View>
-        </Card>
-
-        <SectionTitle>{t('Modifier le tarif')}</SectionTitle>
-        <Field
-          label={t('Nouveau tarif ({currency})', { currency: activeCountry.currency.symbol })}
-          keyboardType="number-pad"
-          value={fee}
-          onChangeText={setFee}
-        />
-        <Button label={t('Enregistrer le tarif')} variant="accent" onPress={() => router.back()} />
-
-        <View className="bg-accent-50 rounded-2xl p-4 mt-5">
-          <Text className="font-sans text-sm leading-5" style={{ color: '#9A3412' }}>
-            {t("ℹ Le tarif s'applique uniquement aux nouvelles consultations. Les RDV déjà confirmés ne sont pas affectés.")}
-          </Text>
-        </View>
-      </ScrollView>
+        <Text className="font-sans text-base text-ink text-center" style={{ lineHeight: 24 }}>
+          {t("La gestion du tarif sera bientôt disponible dans l'application.")}
+        </Text>
+      </View>
     </SafeAreaView>
   );
 }

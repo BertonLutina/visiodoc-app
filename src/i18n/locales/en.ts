@@ -595,4 +595,6 @@ export const en: Record<string, string> = {
   "On vous envoie un code de confirmation par WhatsApp.": "We send you a confirmation code by WhatsApp.",
   "L'abonnement sera bientôt disponible dans l'application. Ton accès est limité en attendant.": "Subscriptions will soon be available in the app. Your access is limited in the meantime.",
   "Abonnement actif": "Subscription active",
+  "La gestion du tarif sera bientôt disponible dans l'application.": "Fee management will soon be available in the app.",
+  "Retour": "Back",
 };

@@ -159,3 +159,16 @@ describe('language helpers', () => {
     ]);
   });
 });
+
+describe('provider notices are translated (no mock fee / subscription content)', () => {
+  it.each([
+    "La gestion du tarif sera bientôt disponible dans l'application.",
+    "L'abonnement sera bientôt disponible dans l'application. Ton accès est limité en attendant.",
+    'Retour',
+  ])('has en, sw and ln for %s', (key) => {
+    for (const dict of [en, sw, ln]) {
+      expect(typeof dict[key]).toBe('string');
+      expect(dict[key]).not.toBe(key);
+    }
+  });
+});
