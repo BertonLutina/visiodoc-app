@@ -50,6 +50,15 @@ describe('session expiry tracker', () => {
     expect(t.onSignedOut(false)).toEqual({ kind: 'ignored', notify: false });
   });
 
+  it('claimExpiryNotice(false) (visitor who never had a session) shows nothing and does not use up the notice', () => {
+    const t = createSessionExpiryTracker();
+    expect(t.claimExpiryNotice(false)).toBe(false);
+    expect(t.claimExpiryNotice(false)).toBe(false);
+    // La vraie expiration d'une session ultérieure affiche toujours le message.
+    expect(t.claimExpiryNotice(true)).toBe(true);
+    expect(t.claimExpiryNotice(true)).toBe(false);
+  });
+
   it('claimExpiryNotice (restore error / data-call report) shares the once-only flag', () => {
     const t = createSessionExpiryTracker();
     expect(t.claimExpiryNotice()).toBe(true);

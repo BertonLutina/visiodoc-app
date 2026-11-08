@@ -41,8 +41,13 @@ export function createSessionExpiryTracker() {
       return { kind: 'expired', notify: this.claimExpiryNotice() };
     },
 
-    /** Vrai une seule fois par expiration (restauration, `SIGNED_OUT`, signalement d'un service). */
-    claimExpiryNotice(): boolean {
+    /**
+     * Vrai une seule fois par expiration (restauration, `SIGNED_OUT`, signalement d'un service).
+     * `hadSession` faux (visiteur qui n'a jamais eu de session, ex. lien profond) : jamais de message, et le
+     * message reste disponible pour une vraie expiration ultérieure.
+     */
+    claimExpiryNotice(hadSession = true): boolean {
+      if (!hadSession) return false;
       if (noticeShown) return false;
       noticeShown = true;
       return true;

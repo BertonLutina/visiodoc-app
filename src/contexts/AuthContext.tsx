@@ -279,6 +279,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // message affiché une seule fois. `signOut` n'est pas awaité (verrou interne du SDK, cf. `logout`).
     const handleSessionExpired = () => {
       if (!active) return;
+      // Message seulement si une session existait (utilisateur, verrou biométrique en attente ou
+      // restauration d'une session persistée) : jamais pour un visiteur (ex. lien profond vers /call/x).
+      const hadSession = restoringRef.current || !!userRef.current || !!pendingUserRef.current;
       setUser(null);
       setPendingUser(null);
       setLocked(false);
@@ -288,7 +291,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           /* ignore : l'état local est déjà nettoyé */
         });
       }, 0);
-      if (expiryTracker.claimExpiryNotice()) {
+      if (expiryTracker.claimExpiryNotice(hadSession)) {
         Alert.alert(translate('Ta session a expiré, reconnecte-toi.'));
       }
     };
@@ -743,12 +746,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const profile = pendingUser;
     setPendingUser(null);
     setLocked(false);
-    // pendingUser vient d'une restauration déjà filtrée ; on re-vérifie le rôle avant d'ouvrir l'espace.
+    // pendingUser vient d'une restauration déjà filtrée (profil lu au démarrage, NON relu ici) : on
+    // re-contrôle seulement le rôle et la garde prestataire sur ce profil mémorisé. Un `doctor_status`
+    // modifié côté serveur depuis le démarrage n'est pas revu avant la prochaine connexion ou restauration.
     if (!mobileRole(profile.role)) {
       dropForbiddenSession();
       throw roleNotAllowedError();
     }
-    // Un médecin dont le statut ne permet plus l'accès est déconnecté (lève un refus par statut).
+    // Un médecin dont le statut mémorisé ne permet pas l'accès est déconnecté (lève un refus par statut).
     await guardProvider(profile);
     setUser(profile);
     logAuthEvent(
