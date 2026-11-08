@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Check } from 'lucide-react-native';
+import { ChevronLeft, Check, Lock } from 'lucide-react-native';
 import { Button } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { activeCountry } from '@/config/countries';
@@ -10,20 +10,46 @@ import { appLocale } from '@/i18n';
 import { subscriptionPlans } from '@/data/mockProvider';
 import { useT } from '@/i18n';
 import { useAuth } from '@/contexts/AuthContext';
-import { providerHomeHref } from '@/services/accessPolicy';
+import { subscriptionScreenMode } from '@/services/accessPolicy';
 
 const cur = activeCountry.currency.symbol;
 
 export default function Subscription() {
   const t = useT();
   const { user, logout } = useAuth();
-  // Prestataire sans accès complet : cet écran est son point d'arrivée, il doit pouvoir en sortir.
-  const restricted = !!user && providerHomeHref(user) === '/provider/subscription';
+  // Prestataire sans accès complet : cet écran est son point d'arrivée. Aucun paiement d'abonnement
+  // n'existe dans l'application : on explique, sans plans ni prix factices, et on laisse se déconnecter.
+  const restricted = subscriptionScreenMode(user) === 'restricted';
   const onLogout = async () => {
     await logout();
     router.replace('/(auth)/login-provider');
   };
   const [selected, setSelected] = useState(subscriptionPlans[0].id);
+
+  if (restricted) {
+    return (
+      <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
+        <View className="flex-row items-center px-5 pt-2 pb-2">
+          <Text className="font-sans-bold text-lg text-ink">{t('Abonnement')}</Text>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 24, paddingBottom: 32 }}>
+          <View className="items-center">
+            <View className="w-16 h-16 rounded-full bg-accent-50 items-center justify-center mb-5">
+              <Lock color={colors.accent} size={28} />
+            </View>
+            <Text className="font-sans text-base text-ink text-center" style={{ lineHeight: 24 }}>
+              {t("L'abonnement sera bientôt disponible dans l'application. Ton accès est limité en attendant.")}
+            </Text>
+          </View>
+          {user ? (
+            <Pressable onPress={onLogout} className="py-4 items-center mt-6">
+              <Text className="font-sans-bold text-muted">{t('Se déconnecter')}</Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
@@ -75,11 +101,6 @@ export default function Subscription() {
         })}
 
         <Button label={t("S'abonner maintenant")} variant="accent" onPress={() => router.back()} className="mt-2" />
-        {restricted ? (
-          <Pressable onPress={onLogout} className="py-4 items-center mt-2">
-            <Text className="font-sans-bold text-muted">{t('Se déconnecter')}</Text>
-          </Pressable>
-        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

@@ -79,3 +79,15 @@ export function providerRefusalReason(user: {
   const gate = providerGate(user.doctorStatus, user.isActive);
   return gate === 'full' || gate === 'subscribe' ? null : gate;
 }
+
+/**
+ * Contenu de l'écran Abonnement. Aucun paiement d'abonnement n'est branché dans l'application :
+ * un prestataire à accès limité (garde `subscribe`) ou sans session voit une explication, jamais de
+ * plans ni de prix factices ; seul un prestataire à accès complet garde le contenu existant.
+ */
+export function subscriptionScreenMode(
+  user: { role: string; doctorStatus?: string | null; isActive?: boolean } | null | undefined,
+): 'restricted' | 'full' {
+  if (!user || user.role !== 'provider') return 'restricted';
+  return providerGate(user.doctorStatus, user.isActive) === 'full' ? 'full' : 'restricted';
+}

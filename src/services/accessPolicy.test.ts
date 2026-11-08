@@ -1,4 +1,7 @@
-import { mobileRole, providerGate, providerHomeHref, providerRefusalReason } from './accessPolicy';
+import { mobileRole, providerGate, providerHomeHref, providerRefusalReason, subscriptionScreenMode } from './accessPolicy';
+import { en } from '@/i18n/locales/en';
+import { sw } from '@/i18n/locales/sw';
+import { ln } from '@/i18n/locales/ln';
 import {
   ROLE_NOT_ALLOWED,
   authErrorMessage,
@@ -194,5 +197,29 @@ describe('provider refusal messages', () => {
     expect(providerRefusal(new Error('Invalid login credentials'))).toBeNull();
     expect(providerRefusal(roleNotAllowedError())).toBeNull();
     expect(providerRefusal(null)).toBeNull();
+  });
+});
+
+describe('subscriptionScreenMode (no mock plans for restricted providers)', () => {
+  it("is 'restricted' for a provider whose gate is 'subscribe'", () => {
+    expect(subscriptionScreenMode({ role: 'provider', doctorStatus: 'VALIDE_SANS_ABO', isActive: true })).toBe('restricted');
+    expect(subscriptionScreenMode({ role: 'provider', doctorStatus: 'profil_valide', isActive: true })).toBe('restricted');
+  });
+
+  it("is 'full' for a provider with an active subscription", () => {
+    expect(subscriptionScreenMode({ role: 'provider', doctorStatus: 'VALIDE_ABO_ACTIF', isActive: true })).toBe('full');
+  });
+
+  it("is 'restricted' without a user (never shows mock prices to a visitor)", () => {
+    expect(subscriptionScreenMode(null)).toBe('restricted');
+  });
+
+  it('ships the restricted-access notice in en, sw and ln', () => {
+    const key = "L'abonnement sera bientôt disponible dans l'application. Ton accès est limité en attendant.";
+    for (const dict of [en, sw, ln]) {
+      expect(typeof dict[key]).toBe('string');
+      expect(dict[key].length).toBeGreaterThan(10);
+      expect(dict[key]).not.toBe(key);
+    }
   });
 });

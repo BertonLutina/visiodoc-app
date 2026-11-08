@@ -593,4 +593,5 @@ export const sw: Record<string, string> = {
   "Un e-mail de confirmation t'a été envoyé à {email}. Clique sur le lien pour pouvoir te connecter aussi avec ton e-mail.": "Barua pepe ya uthibitisho imetumwa kwa {email}. Bofya kiungo ili uweze kuingia pia kwa barua pepe yako.",
   "Un e-mail de connexion est déjà associé à ce compte.": "Barua pepe ya kuingia tayari imeunganishwa na akaunti hii.",
   "On vous envoie un code de confirmation par WhatsApp.": "Tunakutumia msimbo wa uthibitisho kupitia WhatsApp.",
+  "L'abonnement sera bientôt disponible dans l'application. Ton accès est limité en attendant.": "Usajili utapatikana hivi karibuni kwenye programu. Kwa sasa, ufikiaji wako ni mdogo.",
 };
