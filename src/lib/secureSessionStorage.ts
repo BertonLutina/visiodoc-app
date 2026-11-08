@@ -116,12 +116,16 @@ async function deleteGeneration(key: string, gen: Generation): Promise<unknown> 
 /**
  * Borne le journal : conserve les `MAX_STALE_GENERATIONS` générations périmées les plus récentes ; pour les plus
  * anciennes (écartées), une dernière tentative de suppression au mieux avant de les oublier.
+ * La génération VIVANTE (`liveNonce`, celle que pointe l'enregistrement actif) n'est jamais candidate : après
+ * des écritures en échec consécutives elle serait sinon la plus ancienne et ses fragments seraient supprimés.
  */
-async function pruneStale(key: string, stale: Generation[]): Promise<Generation[]> {
-  if (stale.length <= MAX_STALE_GENERATIONS) return stale;
-  const dropped = stale.slice(0, stale.length - MAX_STALE_GENERATIONS);
+async function pruneStale(key: string, stale: Generation[], liveNonce?: string): Promise<Generation[]> {
+  const live = stale.filter((g) => g.nonce === liveNonce);
+  const candidates = stale.filter((g) => g.nonce !== liveNonce);
+  if (candidates.length <= MAX_STALE_GENERATIONS) return stale;
+  const dropped = candidates.slice(0, candidates.length - MAX_STALE_GENERATIONS);
   for (const gen of dropped) await deleteGeneration(key, gen);
-  return stale.slice(-MAX_STALE_GENERATIONS);
+  return [...live, ...candidates.slice(-MAX_STALE_GENERATIONS)];
 }
 
 async function writeKeychain(key: string, value: string): Promise<void> {
@@ -130,7 +134,7 @@ async function writeKeychain(key: string, value: string): Promise<void> {
   const previousMeta = await readMeta(key).catch(() => null);
   const previous = await readJournal(key);
   if (previousMeta && !previous.some((g) => g.nonce === previousMeta.nonce)) previous.push(previousMeta);
-  const tracked = await pruneStale(key, previous);
+  const tracked = await pruneStale(key, previous, previousMeta?.nonce);
 
   // 1. Journal (ancien + nouveau) AVANT les fragments : aucun fragment n'est jamais introuvable pour un nettoyage.
   await SecureStore.setItemAsync(journalKey(key), serializeJournal([...tracked, { nonce, count: chunks.length }]), writeOptions());
@@ -141,7 +145,7 @@ async function writeKeychain(key: string, value: string): Promise<void> {
   // 3. Interrupteur unique : l'enregistrement pointe sur la nouvelle génération.
   await SecureStore.setItemAsync(metaKey(key), `v2:${nonce}:${chunks.length}:${value.length}`, writeOptions());
 
-  // 4. Nettoyage au mieux des générations précédentes ; une panne ici ne remet pas en cause l'écriture.
+  // 4. Nettoyage au mieux des générations précédentes (l'ancienne vivante est désormais périmée) ; une panne ici ne remet pas en cause l'écriture.
   try {
     const stillStale: Generation[] = [];
     for (const gen of tracked) if ((await deleteGeneration(key, gen)) !== null) stillStale.push(gen);

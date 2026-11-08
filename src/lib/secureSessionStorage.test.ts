@@ -270,6 +270,21 @@ describe('secureSessionStorage', () => {
       expect(secureMap.size).toBe(3); // journal + métadonnée + un fragment : rien d'orphelin
     });
 
+    it('never prunes the live generation: 11 consecutive failed writes keep the old value readable', async () => {
+      await secureSessionStorage.setItem(KEY, OLD);
+      // Chaque échec écrit le journal puis échoue sur un fragment : une génération périmée de plus à suivre.
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(async (k: string, v: string) => {
+        if (/\.g[A-Za-z0-9]+\.__\d+$/.test(k)) throw new Error('chunk write failed');
+        return impl.set(k, v);
+      });
+      for (let i = 0; i < 11; i += 1) {
+        await expect(secureSessionStorage.setItem(KEY, NEW)).rejects.toThrow('chunk write failed');
+      }
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(impl.set);
+
+      expect(await secureSessionStorage.getItem(KEY)).toBe(OLD);
+    });
+
     it('writes with AFTER_FIRST_UNLOCK so a locked device does not log the user out', async () => {
       await secureSessionStorage.setItem(KEY, bigSession());
 
