@@ -276,7 +276,7 @@ export async function getReviewSummary(doctorId: string, limit = 5): Promise<Rev
 }
 
 /* ---------- Consultations ---------- */
-function mapConsultation(row: any): ProviderConsultation {
+export function mapConsultation(row: any): ProviderConsultation {
   const p = row.patient ?? {};
   return {
     id: row.id,
@@ -298,7 +298,7 @@ function mapConsultation(row: any): ProviderConsultation {
     status: normalizeConsultationStatus(row.status),
     rawStatus: row.status,
     scheduledAt: row.scheduled_at,
-    roomId: row.video_room_id ?? undefined,
+    roomId: row.video_room_id || undefined,
   };
 }
 
@@ -340,10 +340,11 @@ export async function getTodayConsultations(doctorId: string): Promise<ProviderC
 
 export async function startConsultation(id: string): Promise<void> {
   if (useMock()) return;
-  await supabase!
+  const { error } = await supabase!
     .from('consultations')
     .update({ status: 'in_progress', started_at: new Date().toISOString() })
     .eq('id', id);
+  if (error) throw error;
 }
 
 /* ---------- Patients ---------- */

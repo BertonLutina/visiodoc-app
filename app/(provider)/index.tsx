@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -136,6 +136,8 @@ export default function ProviderDashboard() {
     try {
       await startConsultation(c.id);
       router.push(`/call/${c.roomId ?? c.id}`);
+    } catch {
+      Alert.alert(t('Erreur'), t('Impossible de démarrer la consultation. Réessaie.'));
     } finally {
       setStarting(false);
     }

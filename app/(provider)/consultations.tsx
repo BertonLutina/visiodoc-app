@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Card } from '@/components/ui';
@@ -48,8 +48,12 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
         <View className="flex-row mt-3">
           <Pressable
             onPress={async () => {
-              await startConsultation(c.id);
-              router.push(`/call/${c.roomId ?? c.id}`);
+              try {
+                await startConsultation(c.id);
+                router.push(`/call/${c.roomId ?? c.id}`);
+              } catch {
+                Alert.alert(t('Erreur'), t('Impossible de démarrer la consultation. Réessaie.'));
+              }
             }}
             className="flex-1 bg-accent rounded-2xl py-3.5 items-center mr-2"
           >

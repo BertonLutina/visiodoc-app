@@ -475,6 +475,14 @@ describe('getProviderEarnings (revenus : consultations payées + provider_payout
     expect(String(filters('consultations', 'select')[0][0])).not.toMatch(/fee/);
   });
 
+  it('ordonne les lectures de consultations par scheduled_at puis id (pagination stable)', async () => {
+    await require('./providerApi').getProviderEarnings('doc-1');
+    expect(filters('consultations', 'order')).toEqual([
+      ['scheduled_at', { ascending: true }],
+      ['id', { ascending: true }],
+    ]);
+  });
+
   it('lit provider_payouts du prestataire au statut paid, lecture seule', async () => {
     await require('./providerApi').getProviderEarnings('doc-1');
     expect(filters('provider_payouts', 'eq')).toEqual([
@@ -652,5 +660,42 @@ describe('pagination des lectures de revenus (plafond PostgREST de 1000 lignes)'
     const ov = await require('./providerApi').getDashboardOverview('doc-1');
     expect(ov.earningsError).toBe(true);
     expect(ov.earnings).toEqual({ inProgress: [], paid: [] });
+  });
+});
+
+describe('provider consultation mapping and startConsultation', () => {
+  afterEach(() => jest.dontMock('@/lib/supabase'));
+
+  it('maps an empty video_room_id to undefined and audio to the phone type', () => {
+    jest.resetModules();
+    const { mapConsultation } = require('./providerApi');
+    const base = { id: 'c1', scheduled_at: '2099-01-01T09:00:00Z', status: 'scheduled', patient: { id: 'p1' } };
+    expect(mapConsultation({ ...base, video_room_id: '' }).roomId).toBeUndefined();
+    expect(mapConsultation({ ...base, video_room_id: 'room-9' }).roomId).toBe('room-9');
+    expect(mapConsultation({ ...base, consultation_type: 'audio' }).type).toBe('phone');
+  });
+
+  const mockUpdate = (result: { error: unknown }) => {
+    jest.resetModules();
+    const eq = jest.fn().mockResolvedValue(result);
+    const update = jest.fn(() => ({ eq }));
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: jest.fn(() => ({ update })) },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+    return { update, eq };
+  };
+
+  it('startConsultation sets in_progress for that consultation', async () => {
+    const { update, eq } = mockUpdate({ error: null });
+    await require('./providerApi').startConsultation('c1');
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: 'in_progress' }));
+    expect(eq).toHaveBeenCalledWith('id', 'c1');
+  });
+
+  it('startConsultation throws the database error instead of ignoring it', async () => {
+    mockUpdate({ error: { code: '42501', message: 'denied' } });
+    await expect(require('./providerApi').startConsultation('c1')).rejects.toMatchObject({ code: '42501' });
   });
 });

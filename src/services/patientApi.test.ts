@@ -102,6 +102,13 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
     expect(load().mapConsultation({ ...base, consultation_type: 'audio' }).type).toBe('phone');
   });
 
+  it('maps an empty video_room_id to undefined (it would break the call route), keeps a real one', () => {
+    const base = { id: 'c1', doctor_id: 'd1', scheduled_at: '2099-01-01T09:00:00Z', status: 'scheduled' };
+    expect(load().mapConsultation({ ...base, video_room_id: '' }).roomId).toBeUndefined();
+    expect(load().mapConsultation({ ...base, video_room_id: null }).roomId).toBeUndefined();
+    expect(load().mapConsultation({ ...base, video_room_id: 'room-1' }).roomId).toBe('room-1');
+  });
+
   it('inserts the amount and currency displayed by public_provider_listing, without recomputing a fee', async () => {
     await load().bookConsultation({ ...booking, fee: 27500, currencyCode: 'USD' });
     expect(insertedPayload()).toMatchObject({ payment_amount: 27500, currency: 'USD' });
@@ -496,6 +503,64 @@ describe('getWallet', () => {
     expect(wallet.transactions).toHaveLength(2);
     expect(wallet.transactions[0].amount).toBe(-20000);
     expect(wallet.aiCreditsLeft).toBe(0);
+  });
+});
+
+describe('getWallet embed fallback (PGRST200: relationship not found)', () => {
+  const fromMock = jest.fn();
+  const selects: string[] = [];
+  const results: { data: unknown; error: unknown }[] = [];
+
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    selects.length = 0;
+    results.length = 0;
+    fromMock.mockImplementation(() => ({
+      select: (sel: string) => {
+        selects.push(sel);
+        const q: any = {};
+        q.eq = () => q;
+        q.order = () => q;
+        q.limit = () => Promise.resolve(results.shift());
+        return q;
+      },
+    }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+  });
+  afterEach(() => jest.dontMock('@/lib/supabase'));
+
+  const row = { id: 'p1', amount: 100_000, status: 'SUCCESS', created_at: '2026-06-10T10:00:00.000Z' };
+
+  it('retries WITHOUT the provider embed on PGRST200 and still returns the wallet (names absent)', async () => {
+    results.push(
+      { data: null, error: { code: 'PGRST200', message: "Could not find a relationship between 'payment_transactions_v2' and 'provider_identity'" } },
+      { data: [row], error: null },
+    );
+    const wallet = await require('./patientApi').getWallet('pat-1');
+    expect(selects).toHaveLength(2);
+    expect(selects[0]).toContain('provider_identity');
+    expect(selects[1]).not.toContain('provider_identity');
+    expect(wallet.balance).toBe(1000);
+    expect(wallet.transactions).toHaveLength(1);
+    expect(wallet.transactions[0].method).toBeUndefined();
+  });
+
+  it('does not retry for any other error code: it still throws', async () => {
+    results.push({ data: null, error: { code: '42501', message: 'permission denied' } });
+    await expect(require('./patientApi').getWallet('pat-1')).rejects.toMatchObject({ code: '42501' });
+    expect(selects).toHaveLength(1);
+  });
+
+  it('throws when the retry itself fails', async () => {
+    results.push({ data: null, error: { code: 'PGRST200', message: 'x' } }, { data: null, error: { code: '500', message: 'boom' } });
+    await expect(require('./patientApi').getWallet('pat-1')).rejects.toMatchObject({ message: 'boom' });
+  });
+
+  it('does a single query when the embed works', async () => {
+    results.push({ data: [row], error: null });
+    await require('./patientApi').getWallet('pat-1');
+    expect(selects).toHaveLength(1);
   });
 });
 

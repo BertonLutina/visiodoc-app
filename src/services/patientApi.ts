@@ -144,7 +144,7 @@ export function mapConsultation(row: any): Consultation {
       row.status === 'scheduled' && row.payment_status === 'pending'
         ? 'pending'
         : normalizeConsultationStatus(row.status),
-    roomId: row.video_room_id ?? undefined,
+    roomId: row.video_room_id || undefined,
   };
 }
 
@@ -406,17 +406,24 @@ const emptyWallet = (): Wallet => ({
 
 export async function getWallet(patientId: string): Promise<Wallet> {
   if (useMock() || !patientId) return emptyWallet();
-  const { data, error } = await supabase!
-    .from('payment_transactions_v2')
-    .select(
-      `id, amount, status, created_at,
+  const read = (select: string) =>
+    supabase!
+      .from('payment_transactions_v2')
+      .select(select)
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+      .limit(30);
+  let { data, error } = await read(
+    `id, amount, status, created_at,
        provider:provider_identity!provider_id ( first_name, last_name )`,
-    )
-    .eq('patient_id', patientId)
-    .order('created_at', { ascending: false })
-    .limit(30);
+  );
+  // PGRST200 = relation introuvable pour l'embed (indication de jointure à confirmer sur UAT) : on relit
+  // sans le prestataire (noms absents) plutôt que de casser tout le portefeuille. Aucun autre code n'est réessayé.
+  if (error?.code === 'PGRST200') {
+    ({ data, error } = await read('id, amount, status, created_at'));
+  }
   if (error) throw error;
-  const rows = data ?? [];
+  const rows = (data ?? []) as any[];
   const transactions = rows.map(mapPaymentRow);
   const balance = rows
     .filter((row: { status?: string | null }) => row.status === 'SUCCESS')
