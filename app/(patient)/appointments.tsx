@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,8 +13,11 @@ import {
   getUpcomingConsultations,
   payExistingConsultation,
 } from '@/services/patientApi';
-import { PaymentConfirmationError } from '@/services/paymentAttempt';
-import { createOpenPaymentWidget, isPaymentWidgetAvailable } from '@/services/paymentWidget';
+import { PaymentConfirmationError, reconcilePendingPayments } from '@/services/paymentAttempt';
+import { listPendingAttempts } from '@/services/pendingPaymentAttempt';
+import { createOpenPaymentWidget, paymentWidgetPreflight } from '@/services/paymentWidget';
+import { createBusyLock } from '@/utils/busyLock';
+import { canPayNow } from '@/utils/canPayNow';
 import type { Consultation, ConsultationStatus } from '@/types';
 import { useLanguage, useT } from '@/i18n';
 
@@ -31,11 +34,15 @@ function Row({
   joinable,
   country,
   onPay,
+  paying,
+  canPay,
 }: {
   c: Consultation;
   joinable: boolean;
   country: CountryConfig;
   onPay: (c: Consultation) => void;
+  paying: boolean;
+  canPay: boolean;
 }) {
   const t = useT();
   // `pending_payment` : réservée mais pas payée → jamais présentée comme confirmée ni rejoignable.
@@ -56,8 +63,14 @@ function Row({
       <Text className="font-sans text-sm text-muted mt-0.5">
         {typeLabel(c.type)} · {c.durationMin} {t('min')} · {formatMoney(c.fee, country)}
       </Text>
-      {c.awaitingPayment && (
-        <Button label={t('Payer maintenant')} className="mt-3" onPress={() => onPay(c)} />
+      {canPay && (
+        <Button
+          label={t('Payer maintenant')}
+          className="mt-3"
+          loading={paying}
+          disabled={paying}
+          onPress={() => onPay(c)}
+        />
       )}
       {joinable && c.status !== 'pending' && !c.awaitingPayment && (
         <Button
@@ -81,18 +94,34 @@ export default function Appointments() {
   const pastReq = useAsync(() => getPastConsultations(uid), [uid, lang]);
   const data = (tab === 'upcoming' ? up.data : pastReq.data) ?? [];
 
-  // Relit toujours la base au retour sur l'écran (après un paiement, `scheduled`/`paid` viennent du serveur).
+  // Tentatives de paiement mémorisées (AsyncStorage) : débit possible sans confirmation reçue.
+  const attempts = useAsync(() => listPendingAttempts(), []);
+  const attemptIds = new Set((attempts.data ?? []).map((a) => a.consultationId));
+
+  // Au retour sur l'écran : rejoue `confirm` pour un paiement resté non confirmé (même txnRef / payRef), puis
+  // relit la base (après un paiement, `scheduled`/`paid` viennent du serveur).
   useFocusEffect(
     useCallback(() => {
-      up.refresh();
-      pastReq.refresh();
+      let active = true;
+      (async () => {
+        await reconcilePendingPayments();
+        if (!active) return;
+        await Promise.all([up.refresh(), pastReq.refresh(), attempts.refresh()]);
+      })();
+      return () => {
+        active = false;
+      };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []),
   );
 
   const { user: payer } = useAuth();
-  const onPay = async (c: Consultation) => {
-    if (!c.currency || !isPaymentWidgetAvailable()) {
+  const payLock = useRef(createBusyLock()).current; // verrou synchrone : un double appui ne lance qu'un paiement
+  const [payingId, setPayingId] = useState<string | null>(null);
+
+  const pay = async (c: Consultation, override: boolean) => {
+    const check = paymentWidgetPreflight(c.currency);
+    if (!check.ok) {
       Alert.alert(t('Paiement indisponible.'), t("Le paiement n'est pas disponible pour le moment. Réessaie plus tard."));
       return;
     }
@@ -101,18 +130,30 @@ export default function Appointments() {
         c.id,
         createOpenPaymentWidget({
           amount: c.fee,
-          currency: c.currency,
+          currency: c.currency!,
           customerId: payer?.id ?? '',
           customerName: payer ? `${payer.firstName} ${payer.lastName}` : '',
           customerEmail: payer?.email ?? '',
           payItemName: t('Consultation'),
         }),
+        { override },
       );
       if (result.status === 'cancelled') {
         Alert.alert(
           t('Paiement non effectué'),
           t('Ta consultation est réservée mais en attente de paiement. Tu peux payer plus tard depuis Mes consultations.'),
         );
+      } else if (result.status === 'verifying') {
+        const message = t('Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.');
+        if (result.canOverride) {
+          // Plus de 15 min : reprise possible mais explicite (le serveur libère alors le créneau).
+          Alert.alert(t('Paiement en cours de confirmation'), message, [
+            { text: t('Annuler'), style: 'cancel' },
+            { text: t('Payer quand même'), style: 'destructive', onPress: () => void payLock.run(() => pay(c, true)) },
+          ]);
+        } else {
+          Alert.alert(t('Paiement en cours de confirmation'), message);
+        }
       }
     } catch (e: any) {
       Alert.alert(
@@ -120,8 +161,19 @@ export default function Appointments() {
         e?.message ?? t('Réessayez plus tard.'),
       );
     } finally {
-      await Promise.all([up.refresh(), pastReq.refresh()]);
+      await Promise.all([up.refresh(), pastReq.refresh(), attempts.refresh()]);
     }
+  };
+
+  const onPay = (c: Consultation) => {
+    void payLock.run(async () => {
+      setPayingId(c.id);
+      try {
+        await pay(c, false);
+      } finally {
+        setPayingId(null);
+      }
+    });
   };
 
   const [refreshing, setRefreshing] = useState(false);
@@ -159,7 +211,15 @@ export default function Appointments() {
         }
       >
         {data.map((c) => (
-          <Row key={c.id} c={c} joinable={tab === 'upcoming'} country={country} onPay={onPay} />
+          <Row
+            key={c.id}
+            c={c}
+            joinable={tab === 'upcoming'}
+            country={country}
+            onPay={onPay}
+            paying={payingId === c.id}
+            canPay={canPayNow(c, Date.now(), attemptIds.has(c.id))}
+          />
         ))}
         {data.length === 0 && (
           <Text className="text-center font-sans text-muted mt-10">

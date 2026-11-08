@@ -65,6 +65,8 @@ export interface Consultation {
   fee: number;
   /** `consultations.currency` (ISO), utile pour repayer une consultation en attente. */
   currency?: string;
+  /** `consultations.created_at` (ISO) : âge d'une réservation impayée. */
+  createdAt?: string;
   /** `status = 'pending_payment'` : réservée mais pas encore payée, ni confirmée. */
   awaitingPayment?: boolean;
   status: ConsultationStatus;

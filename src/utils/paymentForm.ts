@@ -80,13 +80,19 @@ export function buildInlineCheckoutHtml(config: InlineCheckoutConfig, request: I
 
 export type WidgetMessage =
   | { kind: 'success'; payRef: string }
+  | { kind: 'paid_unconfirmed' }
   | { kind: 'cancelled' }
   | { kind: 'declined'; code: string; desc: string }
   | { kind: 'error'; desc: string }
   | { kind: 'ignore' };
 
-/** Interprète un message de la WebView : `resp === '00'` + `payRef` = succès, `X1` = annulé (codes du web). */
-export function parseWidgetMessage(raw: unknown): WidgetMessage {
+/**
+ * Interprète un message de la WebView (codes du web : `resp === '00'` = payé, `X1` = annulé).
+ * Le `txnref` renvoyé par le widget doit être EXACTEMENT celui de la demande (comparaison sensible à la
+ * casse) : sinon le message est ignoré (un résultat étranger ne peut pas régler cette demande).
+ * `00` sans `payRef` = le patient a été débité mais on ne peut pas confirmer : `paid_unconfirmed`.
+ */
+export function parseWidgetMessage(raw: unknown, expectedTxnRef: string): WidgetMessage {
   let msg: any;
   try {
     msg = typeof raw === 'string' ? JSON.parse(raw) : null;
@@ -96,11 +102,32 @@ export function parseWidgetMessage(raw: unknown): WidgetMessage {
   if (!msg || typeof msg !== 'object') return { kind: 'ignore' };
   if (msg.type === 'error') return { kind: 'error', desc: String(msg.desc ?? '') };
   if (msg.type !== 'complete') return { kind: 'ignore' };
+  if (typeof msg.txnref !== 'string' || msg.txnref !== expectedTxnRef) return { kind: 'ignore' };
   const resp = String(msg.resp ?? '');
   if (resp === '00') {
     const payRef = typeof msg.payRef === 'string' ? msg.payRef.trim() : '';
-    return payRef ? { kind: 'success', payRef } : { kind: 'error', desc: 'payRef manquant' };
+    return payRef ? { kind: 'success', payRef } : { kind: 'paid_unconfirmed' };
   }
   if (resp === 'X1') return { kind: 'cancelled' };
   return { kind: 'declined', code: resp, desc: String(msg.desc ?? '') };
+}
+
+const httpsHost = (url: string): string | null => {
+  const m = /^https:\/\/([^/?#:@\s]+)(?::\d+)?(?:[/?#]|$)/i.exec(url);
+  return m ? m[1].toLowerCase() : null;
+};
+
+/**
+ * Liste blanche de navigation de la WebView de paiement : `about:blank`, l'hôte du script du widget et
+ * ses sous-domaines frères (même domaine enregistrable, ex. `*.isw.la`), en https uniquement. Tout le
+ * reste (autres hôtes, http, schémas exotiques, deep link de l'app) est bloqué.
+ */
+export function isAllowedWidgetUrl(url: string, config: { scriptUrl: string; redirectUrl: string }): boolean {
+  if (url === 'about:blank') return true;
+  const host = httpsHost(url);
+  const scriptHost = httpsHost(config.scriptUrl);
+  if (!host || !scriptHost) return false;
+  if (host === scriptHost) return true;
+  const registrable = scriptHost.split('.').slice(-2).join('.');
+  return host.endsWith(`.${registrable}`);
 }

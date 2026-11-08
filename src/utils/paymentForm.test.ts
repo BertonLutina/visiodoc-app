@@ -13,7 +13,7 @@ describe('buildPaymentFormHtml', () => {
   });
 });
 
-import { buildInlineCheckoutHtml, parseWidgetMessage } from './paymentForm';
+import { buildInlineCheckoutHtml, isAllowedWidgetUrl, parseWidgetMessage } from './paymentForm';
 
 describe('buildInlineCheckoutHtml (same webpayCheckout call as the web InterswitchCheckoutButton)', () => {
   const config = {
@@ -53,34 +53,70 @@ describe('buildInlineCheckoutHtml (same webpayCheckout call as the web Interswit
   });
 
   it('refuses a non-https script URL', () => {
-    expect(() => buildInlineCheckoutHtml({ ...config, scriptUrl: 'http://evil.example/x.js' }, request)).toThrow();
+    expect(() => buildInlineCheckoutHtml({ ...config, scriptUrl: 'http://evil.example/x.js' }, request)).toThrow(
+      'URL du script non sécurisée',
+    );
   });
 });
 
 describe('parseWidgetMessage', () => {
-  it('resp "00" with a payRef is a success carrying the payRef', () => {
-    expect(
-      parseWidgetMessage(JSON.stringify({ type: 'complete', resp: '00', payRef: 'ISW_PAY_REF_987654', txnref: 'T' })),
-    ).toEqual({ kind: 'success', payRef: 'ISW_PAY_REF_987654' });
+  const TXN = 'VDC-1730745600000-ABC1234';
+  const complete = (o: Record<string, unknown>) => JSON.stringify({ type: 'complete', txnref: TXN, ...o });
+
+  it('resp "00" with a payRef and the matching txnref is a success carrying the payRef', () => {
+    expect(parseWidgetMessage(complete({ resp: '00', payRef: 'ISW_PAY_REF_987654' }), TXN)).toEqual({
+      kind: 'success',
+      payRef: 'ISW_PAY_REF_987654',
+    });
   });
 
-  it('resp "00" WITHOUT a payRef is not a success (confirm needs the provider reference)', () => {
-    expect(parseWidgetMessage(JSON.stringify({ type: 'complete', resp: '00', payRef: '' })).kind).toBe('error');
+  it('a result whose txnref differs (case-sensitive) or is absent is ignored, whatever its resp', () => {
+    expect(parseWidgetMessage(complete({ resp: '00', payRef: 'P', txnref: 'VDC-1730745600000-OTHER00' }), TXN)).toEqual({ kind: 'ignore' });
+    expect(parseWidgetMessage(complete({ resp: '00', payRef: 'P', txnref: TXN.toLowerCase() }), TXN)).toEqual({ kind: 'ignore' });
+    expect(parseWidgetMessage(JSON.stringify({ type: 'complete', resp: '00', payRef: 'P' }), TXN)).toEqual({ kind: 'ignore' });
+    expect(parseWidgetMessage(complete({ resp: 'X1', txnref: 'VDC-OTHER' }), TXN)).toEqual({ kind: 'ignore' });
+  });
+
+  it('resp "00" WITHOUT a payRef = the patient was charged: paid_unconfirmed, never "unavailable"', () => {
+    expect(parseWidgetMessage(complete({ resp: '00', payRef: '' }), TXN)).toEqual({ kind: 'paid_unconfirmed' });
+    expect(parseWidgetMessage(complete({ resp: '00' }), TXN)).toEqual({ kind: 'paid_unconfirmed' });
   });
 
   it('X1 is a user cancellation; Z6 / TO are declines', () => {
-    expect(parseWidgetMessage(JSON.stringify({ type: 'complete', resp: 'X1' }))).toEqual({ kind: 'cancelled' });
-    expect(parseWidgetMessage(JSON.stringify({ type: 'complete', resp: 'Z6', desc: 'declined' }))).toEqual({
+    expect(parseWidgetMessage(complete({ resp: 'X1' }), TXN)).toEqual({ kind: 'cancelled' });
+    expect(parseWidgetMessage(complete({ resp: 'Z6', desc: 'declined' }), TXN)).toEqual({
       kind: 'declined',
       code: 'Z6',
       desc: 'declined',
     });
-    expect(parseWidgetMessage(JSON.stringify({ type: 'complete', resp: 'TO' })).kind).toBe('declined');
+    expect(parseWidgetMessage(complete({ resp: 'TO' }), TXN).kind).toBe('declined');
   });
 
   it('script load failure and garbage are handled', () => {
-    expect(parseWidgetMessage(JSON.stringify({ type: 'error', desc: 'script' }))).toEqual({ kind: 'error', desc: 'script' });
-    expect(parseWidgetMessage('not json')).toEqual({ kind: 'ignore' });
-    expect(parseWidgetMessage(undefined)).toEqual({ kind: 'ignore' });
+    expect(parseWidgetMessage(JSON.stringify({ type: 'error', desc: 'script' }), TXN)).toEqual({ kind: 'error', desc: 'script' });
+    expect(parseWidgetMessage('not json', TXN)).toEqual({ kind: 'ignore' });
+    expect(parseWidgetMessage(undefined, TXN)).toEqual({ kind: 'ignore' });
+  });
+});
+
+describe('isAllowedWidgetUrl (WebView navigation allow-list)', () => {
+  const config = {
+    scriptUrl: 'https://webpay-ui.k8.isw.la/inline-checkout.js',
+    redirectUrl: 'visiodoc://(patient)/appointments',
+  };
+  it('allows about:blank and the gateway host (and its sibling subdomains)', () => {
+    expect(isAllowedWidgetUrl('about:blank', config)).toBe(true);
+    expect(isAllowedWidgetUrl('https://webpay-ui.k8.isw.la/inline-checkout.js', config)).toBe(true);
+    expect(isAllowedWidgetUrl('https://pay.k8.isw.la/checkout', config)).toBe(true);
+  });
+  it('blocks other hosts, look-alikes, plain http, other schemes and the app deep link', () => {
+    expect(isAllowedWidgetUrl('https://evil.example/phish', config)).toBe(false);
+    expect(isAllowedWidgetUrl('https://isw.la.evil.example/', config)).toBe(false);
+    expect(isAllowedWidgetUrl('https://notisw.la/', config)).toBe(false);
+    expect(isAllowedWidgetUrl('http://webpay-ui.k8.isw.la/', config)).toBe(false);
+    expect(isAllowedWidgetUrl('javascript:alert(1)', config)).toBe(false);
+    expect(isAllowedWidgetUrl('intent://x', config)).toBe(false);
+    expect(isAllowedWidgetUrl('visiodoc://(patient)/appointments', config)).toBe(false);
+    expect(isAllowedWidgetUrl('', config)).toBe(false);
   });
 });

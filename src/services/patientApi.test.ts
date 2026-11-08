@@ -23,6 +23,7 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
   const selectMock = jest.fn();
   const fromMock = jest.fn();
   const invokeMock = jest.fn();
+  const rowMock = jest.fn();
 
   const booking = {
     patientId: 'p1',
@@ -44,9 +45,16 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
     singleMock.mockResolvedValue({ data: { id: 'consult-1' }, error: null });
     selectMock.mockReturnValue({ single: singleMock });
     insertMock.mockReturnValue({ select: selectMock });
-    fromMock.mockReturnValue({ insert: insertMock, update: updateMock, upsert: upsertMock });
+    // Relecture après confirm : la base dit `scheduled` + `paid` (valeurs serveur).
+    rowMock.mockResolvedValue({ data: { id: 'consult-1', status: 'scheduled', payment_status: 'paid', scheduled_at: '2099-01-01T09:00:00Z' }, error: null });
+    fromMock.mockReturnValue({
+      insert: insertMock,
+      update: updateMock,
+      upsert: upsertMock,
+      select: () => ({ eq: () => ({ maybeSingle: rowMock }) }),
+    });
     jest.doMock('@/lib/supabase', () => ({
-      supabase: { from: fromMock, functions: { invoke: invokeMock } },
+      supabase: { from: fromMock, functions: { invoke: invokeMock }, auth: { refreshSession: jest.fn() } },
       supabasePublic: null,
       supabaseConfigured: true,
     }));
@@ -83,7 +91,9 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
   });
 
   it('refuses to insert when the listing gave no tariff (visitor view: fee/currency null)', async () => {
-    await expect(load().bookConsultation({ ...booking, fee: null, currencyCode: null })).rejects.toThrow();
+    await expect(load().bookConsultation({ ...booking, fee: null, currencyCode: null })).rejects.toThrow(
+      'Connectez-vous pour voir le tarif et les disponibilités',
+    );
     expect(insertMock).not.toHaveBeenCalled();
   });
 
@@ -150,6 +160,26 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
       consultationId: 'consult-1',
     });
     expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  describe('payExistingConsultation', () => {
+    it('refuses to pay a consultation the database already shows as paid: no register, no widget', async () => {
+      const openPaymentWidget = jest.fn();
+      await expect(load().payExistingConsultation('consult-1', openPaymentWidget)).resolves.toEqual({ status: 'already_paid' });
+      expect(openPaymentWidget).not.toHaveBeenCalled();
+      expect(invokeMock).not.toHaveBeenCalled();
+    });
+
+    it('retries a pending_payment consultation with register → widget (new txnRef) and tags errors with the id', async () => {
+      rowMock.mockResolvedValue({ data: { id: 'consult-1', status: 'pending_payment', payment_status: 'pending' }, error: null });
+      const openPaymentWidget = jest.fn().mockRejectedValue(new Error('widget unavailable'));
+      await expect(load().payExistingConsultation('consult-1', openPaymentWidget)).rejects.toMatchObject({
+        message: 'widget unavailable',
+        consultationId: 'consult-1',
+      });
+      expect(invokeMock.mock.calls.map((c) => c[0])).toEqual(['register-payment-attempt']);
+      expect(updateMock).not.toHaveBeenCalled();
+    });
   });
 
   it('maps a Postgres exclusion-violation (23P01) to the existing overlap message', async () => {
@@ -305,6 +335,10 @@ describe('mapConsultation (payment lock)', () => {
     expect(c.status).toBe('pending');
     expect(c.awaitingPayment).toBe(true);
     expect(c.currency).toBe('CDF');
+  });
+  it('exposes created_at so an expired unpaid reservation can be recognised', () => {
+    const { mapConsultation } = require('./patientApi');
+    expect(mapConsultation(row({ created_at: '2026-11-08T10:00:00Z' })).createdAt).toBe('2026-11-08T10:00:00Z');
   });
   it('status and payment come from the database row: scheduled + paid is confirmed', () => {
     const { mapConsultation } = require('./patientApi');

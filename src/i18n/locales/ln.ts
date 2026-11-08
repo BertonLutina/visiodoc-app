@@ -554,4 +554,7 @@ export const ln: Record<string, string> = {
   "Cette référence de paiement a déjà été utilisée. Réessaie le paiement.": "Référence oyo ya kofuta esili esalelami. Meka kofuta lisusu.",
   "Ton paiement a bien été effectué, mais sa confirmation n'est pas encore arrivée. Ne paie pas une seconde fois : vérifie tes rendez-vous dans quelques instants.": "Kofuta mbongo na yo esalemi, kasi bondimisi eyei naino te. Kofuta mbala ya mibale te: tala rendez-vous na yo na mwa ngonga moke.",
   "Le paiement n'est pas disponible pour le moment. Ta consultation reste en attente de paiement.": "Kofuta mbongo ezali te sikoyo. Consultation na yo etikali kozela kofuta.",
+  "Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.": "Kofuta mbongo ezali kotalama, kofuta lisusu te. Meka lisusu na mwa miniti moke.",
+  "Payer quand même": "Futa nde",
+  "Paiement effectué, ne repaie pas. Nous vérifions ta transaction.": "Kofuta mbongo esalemi, kofuta lisusu te. Tozali kotala transaction na yo.",
 };

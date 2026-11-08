@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,7 +20,8 @@ import {
   SlotUnavailableError,
 } from '@/services/patientApi';
 import { PaymentConfirmationError } from '@/services/paymentAttempt';
-import { createOpenPaymentWidget, isPaymentWidgetAvailable } from '@/services/paymentWidget';
+import { createOpenPaymentWidget, paymentWidgetPreflight } from '@/services/paymentWidget';
+import { createBusyLock } from '@/utils/busyLock';
 import { getDaySlots, getMonthAvailability } from '@/services/availabilityApi';
 import { appLocale } from '@/i18n';
 import type { ConsultationType } from '@/types';
@@ -87,10 +88,12 @@ export default function DoctorProfile() {
 
   const activeSlot = (daySlots ?? []).find((s) => timeLabel(s.start) === time) ?? null;
 
-  const onBook = async () => {
+  const bookLock = useRef(createBusyLock()).current; // verrou synchrone anti double appui
+
+  const doBook = async () => {
     if (!doctor || !activeSlot || doctor.fee === null || !doctor.currencyCode || hideCommercial) return;
-    // Paiement indisponible (widget non configuré) : on ne crée pas de consultation impayable.
-    if (supabaseConfigured && !isPaymentWidgetAvailable()) {
+    // Widget non configuré OU devise inconnue : on ne crée pas de consultation impayable (avant l'insert).
+    if (supabaseConfigured && !paymentWidgetPreflight(doctor.currencyCode).ok) {
       Alert.alert(t('Paiement indisponible.'), t("Le paiement n'est pas disponible pour le moment. Réessaie plus tard."));
       return;
     }
@@ -148,6 +151,10 @@ export default function DoctorProfile() {
     } finally {
       setBooking(false);
     }
+  };
+
+  const onBook = () => {
+    void bookLock.run(doBook);
   };
 
   if (doctorLoading || !doctor) {
@@ -333,7 +340,7 @@ export default function DoctorProfile() {
                     })
                   : t('Réserver — {price}', { price: feeText ?? '' })
               }
-              disabled={!activeSlot}
+              disabled={!activeSlot || booking}
               loading={booking}
               onPress={onBook}
             />

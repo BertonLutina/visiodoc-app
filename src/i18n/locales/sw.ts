@@ -554,4 +554,7 @@ export const sw: Record<string, string> = {
   "Cette référence de paiement a déjà été utilisée. Réessaie le paiement.": "Rejeleo hili la malipo limeshatumika. Jaribu tena kulipa.",
   "Ton paiement a bien été effectué, mais sa confirmation n'est pas encore arrivée. Ne paie pas une seconde fois : vérifie tes rendez-vous dans quelques instants.": "Malipo yako yamefanyika, lakini uthibitisho bado haujafika. Usilipe mara ya pili: angalia miadi yako baada ya muda mfupi.",
   "Le paiement n'est pas disponible pour le moment. Ta consultation reste en attente de paiement.": "Malipo hayapatikani kwa sasa. Mashauriano yako yanabaki yakisubiri malipo.",
+  "Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.": "Malipo yanakaguliwa, usilipe tena. Jaribu tena baada ya dakika chache.",
+  "Payer quand même": "Lipa hata hivyo",
+  "Paiement effectué, ne repaie pas. Nous vérifions ta transaction.": "Malipo yamefanyika, usilipe tena. Tunakagua muamala wako.",
 };

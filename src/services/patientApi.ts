@@ -11,7 +11,12 @@ import type {
 import { isMedicalRecordKind } from './medicalRecordTaxonomy';
 import { normalizeConsultationStatus } from '@/utils/format';
 import { appLocale, translate } from '@/i18n/core';
-import { payConsultation, type OpenPaymentWidget, type PayConsultationResult } from './paymentAttempt';
+import {
+  payConsultation,
+  payExistingConsultation as payExisting,
+  type OpenPaymentWidget,
+  type PayExistingResult,
+} from './paymentAttempt';
 
 const useMock = () => !supabaseConfigured || !supabase;
 
@@ -131,6 +136,7 @@ export function mapConsultation(row: any): Consultation {
     durationMin: row.duration ?? 30,
     fee: row.payment_amount ?? 0,
     currency: row.currency ?? undefined,
+    createdAt: row.created_at ?? undefined,
     // Statut et paiement viennent de la base : `pending_payment` = en attente de paiement, jamais confirmé.
     awaitingPayment: row.status === 'pending_payment',
     status:
@@ -283,18 +289,27 @@ export async function bookAndPayConsultation(
 ): Promise<BookAndPayResult> {
   const { id } = await bookConsultation(input);
   if (useMock()) return { id, payment: 'confirmed', txnRef: 'mock-txn' };
-  const result = await payExistingConsultation(id, openPaymentWidget, options);
-  return { id, payment: result.status, txnRef: result.txnRef };
+  try {
+    const result = await payConsultation({ consultationId: id, openPaymentWidget, useWallet: options.useWallet });
+    return { id, payment: result.status, txnRef: result.txnRef };
+  } catch (e: any) {
+    if (e && typeof e === 'object') e.consultationId = e.consultationId ?? id;
+    throw e;
+  }
 }
 
-/** Repaie une consultation déjà `pending_payment` : nouvelle `txnRef`, même séquence verrouillée. */
+/**
+ * Repaie une consultation déjà créée : relit la ligne (refus si déjà payée), rejoue `confirm` si un paiement
+ * est resté non confirmé, ne rouvre pas de widget si une tentative incertaine existe (voir
+ * `payExistingConsultation` de `paymentAttempt.ts`), sinon nouvelle `txnRef` et même séquence verrouillée.
+ */
 export async function payExistingConsultation(
   consultationId: string,
   openPaymentWidget: OpenPaymentWidget,
-  options: { useWallet?: boolean } = {},
-): Promise<PayConsultationResult> {
+  options: { useWallet?: boolean; override?: boolean } = {},
+): Promise<PayExistingResult> {
   try {
-    return await payConsultation({ consultationId, openPaymentWidget, useWallet: options.useWallet });
+    return await payExisting({ consultationId, openPaymentWidget, useWallet: options.useWallet, override: options.override });
   } catch (e: any) {
     if (e && typeof e === 'object') e.consultationId = e.consultationId ?? consultationId;
     throw e;

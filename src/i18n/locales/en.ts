@@ -554,4 +554,7 @@ export const en: Record<string, string> = {
   "Cette référence de paiement a déjà été utilisée. Réessaie le paiement.": "This payment reference has already been used. Try the payment again.",
   "Ton paiement a bien été effectué, mais sa confirmation n'est pas encore arrivée. Ne paie pas une seconde fois : vérifie tes rendez-vous dans quelques instants.": "Your payment went through, but its confirmation has not arrived yet. Do not pay a second time: check your appointments in a few moments.",
   "Le paiement n'est pas disponible pour le moment. Ta consultation reste en attente de paiement.": "Payment is not available right now. Your consultation remains awaiting payment.",
+  "Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.": "Payment being verified, do not pay again. Try again in a few minutes.",
+  "Payer quand même": "Pay anyway",
+  "Paiement effectué, ne repaie pas. Nous vérifions ta transaction.": "Payment made, do not pay again. We are verifying your transaction.",
 };

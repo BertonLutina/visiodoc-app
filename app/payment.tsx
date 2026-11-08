@@ -1,23 +1,25 @@
 import React, { useEffect, useMemo } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { router, useNavigation } from 'expo-router';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { ChevronLeft } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { useT } from '@/i18n';
-import { buildInlineCheckoutHtml, parseWidgetMessage } from '@/utils/paymentForm';
+import { buildInlineCheckoutHtml, isAllowedWidgetUrl, parseWidgetMessage } from '@/utils/paymentForm';
 import { getPendingPaymentWidget, settlePaymentWidget } from '@/services/paymentWidget';
+import type { WidgetMessage } from '@/utils/paymentForm';
 
 /**
  * Exécute le widget de paiement dans une WebView et rapporte l'issue (succès + payRef, annulation, erreur)
- * à la promesse `openPaymentWidget` de la réservation. Cet écran ne confirme rien et n'écrit rien :
+ * à la promesse `openPaymentWidget` de la demande `txnRef`. Cet écran ne confirme rien et n'écrit rien :
  * `confirm-consultation-payment` est appelé par l'appelant, qui relit ensuite la consultation en base.
  */
 export default function PaymentScreen() {
   const t = useT();
+  const { txnRef } = useLocalSearchParams<{ txnRef?: string }>();
   // La demande est lue une seule fois : elle est consommée dès que le widget a répondu.
-  const pending = useMemo(() => getPendingPaymentWidget(), []);
+  const pending = useMemo(() => getPendingPaymentWidget(txnRef), [txnRef]);
 
   const html = useMemo(() => {
     if (!pending) return null;
@@ -28,8 +30,8 @@ export default function PaymentScreen() {
     }
   }, [pending]);
 
-  const finish = (message: Parameters<typeof settlePaymentWidget>[0]) => {
-    settlePaymentWidget(message);
+  const finish = (message: WidgetMessage) => {
+    if (txnRef) settlePaymentWidget(txnRef, message);
     router.back();
   };
 
@@ -40,7 +42,13 @@ export default function PaymentScreen() {
 
   // Fermeture par un retour système / geste sans réponse du widget = annulation (sans effet si déjà réglé).
   const navigation = useNavigation();
-  useEffect(() => navigation.addListener('beforeRemove', () => settlePaymentWidget({ kind: 'cancelled' })), [navigation]);
+  useEffect(
+    () =>
+      navigation.addListener('beforeRemove', () => {
+        if (txnRef) settlePaymentWidget(txnRef, { kind: 'cancelled' });
+      }),
+    [navigation, txnRef],
+  );
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
@@ -52,18 +60,20 @@ export default function PaymentScreen() {
       </View>
       {html && pending ? (
         <WebView
-          originWhitelist={['*']}
+          // Liste blanche : about:blank + hôtes de la passerelle (https). Non vérifié sur appareil.
+          originWhitelist={['https://*', 'about:blank']}
           source={{ html }}
           javaScriptEnabled
+          // Le widget Interswitch peut s'appuyer sur sessionStorage / localStorage ; popups interdites
+          // (tout reste dans cette WebView, donc sous la liste blanche). Non vérifié sur appareil.
+          domStorageEnabled
+          setSupportMultipleWindows={false}
           onMessage={(event) => {
-            const message = parseWidgetMessage(event.nativeEvent.data);
+            // Seul un résultat portant EXACTEMENT la `txnRef` de cette demande est pris en compte.
+            const message = parseWidgetMessage(event.nativeEvent.data, pending.request.txnRef);
             if (message.kind !== 'ignore') finish(message);
           }}
-          onShouldStartLoadWithRequest={(req) => {
-            // Retour de la passerelle vers l'app (deep link) : l'issue vient du widget (onComplete).
-            if (req.url.startsWith(pending.config.redirectUrl) || req.url.startsWith('visiodoc://')) return false;
-            return true;
-          }}
+          onShouldStartLoadWithRequest={(req) => isAllowedWidgetUrl(req.url, pending.config)}
         />
       ) : (
         <View className="flex-1 items-center justify-center px-6">

@@ -98,30 +98,47 @@ export interface PendingPaymentWidget {
   request: InlineCheckoutRequest;
 }
 
-let pending:
-  | (PendingPaymentWidget & { resolve: (r: Awaited<ReturnType<OpenPaymentWidget>>) => void; reject: (e: Error) => void })
-  | null = null;
+type WidgetOutcome = Awaited<ReturnType<OpenPaymentWidget>>;
+type PendingEntry = PendingPaymentWidget & { resolve: (r: WidgetOutcome) => void; reject: (e: Error) => void };
 
-/** Demande de paiement en cours, lue par `app/payment.tsx`. */
-export const getPendingPaymentWidget = (): PendingPaymentWidget | null =>
-  pending ? { config: pending.config, request: pending.request } : null;
+/** Demandes en cours, indexées par `txnRef` : un résultat pour A ne peut jamais régler B. */
+const pending = new Map<string, PendingEntry>();
 
-/** Le widget est-il utilisable ? À tester AVANT de créer une consultation. */
-export const isPaymentWidgetAvailable = (config: InlineCheckoutConfig | null = getPaymentWidgetConfig()): boolean =>
-  config !== null;
+/** Demande de paiement en cours pour cette `txnRef`, lue par `app/payment.tsx`. */
+export function getPendingPaymentWidget(txnRef: string | undefined): PendingPaymentWidget | null {
+  const entry = txnRef ? pending.get(txnRef) : undefined;
+  return entry ? { config: entry.config, request: entry.request } : null;
+}
+
+export type PaymentWidgetPreflight = { ok: true } | { ok: false; reason: 'not_configured' | 'unsupported_currency' };
 
 /**
- * Issue du widget, rapportée par l'écran de paiement. `success` → `{ status: 'success', payRef }` ;
- * `cancelled` / `declined` → `{ status: 'cancelled' }` (la consultation reste `pending_payment`) ;
- * `error` → `PaymentWidgetUnavailableError`.
+ * Vérifie, AVANT l'insertion d'une consultation `pending_payment`, que le widget pourra s'ouvrir :
+ * configuration présente et devise connue (même validation que `createOpenPaymentWidget`).
  */
-export function settlePaymentWidget(message: WidgetMessage): void {
-  const current = pending;
-  if (!current || message.kind === 'ignore') return;
-  pending = null;
-  if (message.kind === 'success') current.resolve({ status: 'success', payRef: message.payRef });
-  else if (message.kind === 'error') current.reject(new PaymentWidgetUnavailableError(message.desc));
-  else current.resolve({ status: 'cancelled' });
+export function paymentWidgetPreflight(
+  currency: string | null | undefined,
+  config: InlineCheckoutConfig | null = getPaymentWidgetConfig(),
+): PaymentWidgetPreflight {
+  if (!config) return { ok: false, reason: 'not_configured' };
+  if (!currency || currencyNumericCode(currency) === null) return { ok: false, reason: 'unsupported_currency' };
+  return { ok: true };
+}
+
+/**
+ * Issue du widget pour la demande `txnRef`, rapportée par l'écran de paiement. `success` →
+ * `{ status: 'success', payRef }` ; `paid_unconfirmed` → `{ status: 'paid_unconfirmed' }` (débité, sans
+ * `payRef`) ; `cancelled` / `declined` → `{ status: 'cancelled' }` (la consultation reste
+ * `pending_payment`) ; `error` → `PaymentWidgetUnavailableError`. Une `txnRef` inconnue ne règle rien.
+ */
+export function settlePaymentWidget(txnRef: string, message: WidgetMessage): void {
+  const entry = pending.get(txnRef);
+  if (!entry || message.kind === 'ignore') return;
+  pending.delete(txnRef);
+  if (message.kind === 'success') entry.resolve({ status: 'success', payRef: message.payRef });
+  else if (message.kind === 'paid_unconfirmed') entry.resolve({ status: 'paid_unconfirmed' });
+  else if (message.kind === 'error') entry.reject(new PaymentWidgetUnavailableError(message.desc));
+  else entry.resolve({ status: 'cancelled' });
 }
 
 /**
@@ -134,14 +151,21 @@ export function createOpenPaymentWidget(
 ): OpenPaymentWidget {
   return (txnRef) => {
     const config = options.config === undefined ? getPaymentWidgetConfig() : options.config;
-    const currencyNumeric = currencyNumericCode(details.currency);
-    if (!config) return Promise.reject(new PaymentWidgetUnavailableError());
-    if (currencyNumeric === null) return Promise.reject(new PaymentWidgetUnavailableError(details.currency));
+    const check = paymentWidgetPreflight(details.currency, config);
+    if (!check.ok) {
+      return Promise.reject(
+        new PaymentWidgetUnavailableError(check.reason === 'unsupported_currency' ? details.currency : undefined),
+      );
+    }
+    const currencyNumeric = currencyNumericCode(details.currency)!;
     return new Promise((resolve, reject) => {
-      // Une demande précédente jamais terminée est abandonnée (= annulée).
-      pending?.resolve({ status: 'cancelled' });
-      pending = {
-        config,
+      // Un seul widget à l'écran : toute demande précédente jamais terminée est abandonnée (= annulée).
+      for (const [oldRef, old] of [...pending]) {
+        pending.delete(oldRef);
+        old.resolve({ status: 'cancelled' });
+      }
+      pending.set(txnRef, {
+        config: config!,
         request: {
           txnRef,
           amount: toSmallestUnit(details.amount, details.currency),
@@ -153,8 +177,8 @@ export function createOpenPaymentWidget(
         },
         resolve,
         reject,
-      };
-      router.push('/payment');
+      });
+      router.push({ pathname: '/payment', params: { txnRef } });
     });
   };
 }

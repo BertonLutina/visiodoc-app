@@ -405,3 +405,28 @@ describe('provider-side patient gender (male | female | null)', () => {
     expect((await getPatientFresh('pat-1')).gender).toBe(expected);
   });
 });
+
+describe('getTodayConsultations (agenda du jour / onglet « En cours »)', () => {
+  const orderMock = jest.fn();
+  const query: any = {};
+  beforeEach(() => {
+    jest.resetModules();
+    orderMock.mockResolvedValue({ data: [], error: null });
+    for (const m of ['select', 'eq', 'in', 'gte', 'lt']) query[m] = jest.fn(() => query);
+    query.order = orderMock;
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: jest.fn(() => query) },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+  });
+  afterEach(() => jest.dontMock('@/lib/supabase'));
+
+  it('filters statuses in the query: never pending_payment (unpaid) nor cancelled', async () => {
+    await require('./providerApi').getTodayConsultations('d1');
+    expect(query.in).toHaveBeenCalledWith('status', ['scheduled', 'in_progress', 'completed']);
+    const statuses: string[] = query.in.mock.calls.find((c: unknown[]) => c[0] === 'status')[1];
+    expect(statuses).not.toContain('pending_payment');
+    expect(statuses).not.toContain('cancelled');
+  });
+});
