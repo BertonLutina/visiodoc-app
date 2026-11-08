@@ -34,3 +34,42 @@ describe('formatAmountInCurrency (revenus : jamais la devise du pays actif pour 
     expect(flat(formatAmountInCurrency(12.5, ''))).toBe('12,5');
   });
 });
+
+describe('consultation type mapping (DB CHECK allows only video | audio | chat)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const f = () => require('./format');
+
+  it('maps the UI "phone" choice to the DB value "audio" and keeps the others', () => {
+    expect(f().toDbConsultationType('phone')).toBe('audio');
+    expect(f().toDbConsultationType('video')).toBe('video');
+    expect(f().toDbConsultationType('chat')).toBe('chat');
+  });
+
+  it('maps DB values to UI types: audio -> phone, unknown/absent -> video', () => {
+    expect(f().fromDbConsultationType('audio')).toBe('phone');
+    expect(f().fromDbConsultationType('video')).toBe('video');
+    expect(f().fromDbConsultationType('chat')).toBe('chat');
+    expect(f().fromDbConsultationType('phone')).toBe('phone');
+    expect(f().fromDbConsultationType('hologram')).toBe('video');
+    expect(f().fromDbConsultationType(null)).toBe('video');
+    expect(f().fromDbConsultationType(undefined)).toBe('video');
+  });
+
+  it.each([
+    ['video', 'Vidéo', 'video'],
+    ['audio', 'Téléphone', 'phone'],
+    ['chat', 'Chat', 'message-circle'],
+    ['phone', 'Téléphone', 'phone'],
+  ])('every value (%s) has a label and an icon', (value, label, icon) => {
+    expect(f().typeLabel(value)).toBe(label);
+    expect(f().typeIcon(value)).toBe(icon);
+  });
+
+  it('never returns undefined for an unknown value', () => {
+    for (const v of ['', 'weird', null, undefined]) {
+      expect(typeof f().typeLabel(v)).toBe('string');
+      expect(f().typeLabel(v)).not.toBe('');
+      expect(typeof f().typeIcon(v)).toBe('string');
+    }
+  });
+});

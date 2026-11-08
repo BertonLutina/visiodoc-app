@@ -10,7 +10,7 @@ import type {
 } from '@/types';
 import { isMedicalRecordKind } from './medicalRecordTaxonomy';
 import { videoRoomId } from './videoToken';
-import { normalizeConsultationStatus } from '@/utils/format';
+import { fromDbConsultationType, normalizeConsultationStatus, toDbConsultationType } from '@/utils/format';
 import { appLocale, translate } from '@/i18n/core';
 import {
   payConsultation,
@@ -133,7 +133,7 @@ export function mapConsultation(row: any): Consultation {
       hour: '2-digit',
       minute: '2-digit',
     }),
-    type: (row.consultation_type as ConsultationType) ?? 'video',
+    type: fromDbConsultationType(row.consultation_type),
     durationMin: row.duration ?? 30,
     fee: row.payment_amount ?? 0,
     currency: row.currency ?? undefined,
@@ -252,7 +252,7 @@ export async function bookConsultation(input: BookConsultationInput): Promise<{ 
       doctor_id: input.doctorId,
       scheduled_at: input.scheduledAt,
       duration: input.duration,
-      consultation_type: input.type,
+      consultation_type: toDbConsultationType(input.type),
       status: 'pending_payment',
       payment_status: 'pending',
       payment_amount: input.fee,

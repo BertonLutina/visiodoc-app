@@ -4,7 +4,7 @@ import * as patientMock from '@/data/mock';
 import { logMedicalRecordEvent } from './auditLog';
 import { normalizeGender } from './registration';
 import { mapMedicalRecordRow } from './patientApi';
-import { normalizeConsultationStatus } from '@/utils/format';
+import { fromDbConsultationType, normalizeConsultationStatus, toDbConsultationType } from '@/utils/format';
 import { parseSpecializations, dedupeSpecializations, joinSpecializations } from './specializations';
 import type { ConsultationType } from '@/types';
 import type {
@@ -293,7 +293,7 @@ function mapConsultation(row: any): ProviderConsultation {
       hour: '2-digit',
       minute: '2-digit',
     }),
-    type: (row.consultation_type as ConsultationType) ?? 'video',
+    type: fromDbConsultationType(row.consultation_type),
     durationMin: row.duration ?? 30,
     status: normalizeConsultationStatus(row.status),
     rawStatus: row.status,

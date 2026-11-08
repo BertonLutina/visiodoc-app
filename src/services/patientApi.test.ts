@@ -87,6 +87,21 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
     });
   });
 
+  it('sends the DB value "audio" (not "phone") for a phone booking', async () => {
+    await load().bookConsultation({ ...booking, type: 'phone' as const });
+    expect(insertedPayload().consultation_type).toBe('audio');
+  });
+
+  it('keeps video and chat unchanged on insert', async () => {
+    await load().bookConsultation({ ...booking, type: 'chat' as const });
+    expect(insertedPayload().consultation_type).toBe('chat');
+  });
+
+  it('reads a DB row typed "audio" as the phone type', () => {
+    const base = { id: 'c1', doctor_id: 'd1', scheduled_at: '2099-01-01T09:00:00Z', status: 'scheduled' };
+    expect(load().mapConsultation({ ...base, consultation_type: 'audio' }).type).toBe('phone');
+  });
+
   it('inserts the amount and currency displayed by public_provider_listing, without recomputing a fee', async () => {
     await load().bookConsultation({ ...booking, fee: 27500, currencyCode: 'USD' });
     expect(insertedPayload()).toMatchObject({ payment_amount: 27500, currency: 'USD' });

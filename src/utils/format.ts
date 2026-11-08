@@ -65,24 +65,46 @@ export function normalizeConsultationStatus(status: string): ConsultationStatus 
   }
 }
 
-export function typeLabel(type: ConsultationType): string {
-  switch (type) {
-    case 'video':
-      return translate('Vidéo');
+/** Valeurs autorisées par le CHECK `consultations.consultation_type`. */
+export type DbConsultationType = 'video' | 'audio' | 'chat';
+
+/** UI → base : le choix « Tél. » (`phone`) est stocké `audio`. */
+export function toDbConsultationType(type: ConsultationType): DbConsultationType {
+  return type === 'phone' ? 'audio' : type;
+}
+
+/** Base → UI : `audio` s'affiche comme « Téléphone » ; absent ou inconnu → `video`. */
+export function fromDbConsultationType(value: string | null | undefined): ConsultationType {
+  switch (value) {
+    case 'audio':
+    case 'phone':
+      return 'phone';
+    case 'chat':
+      return 'chat';
+    default:
+      return 'video';
+  }
+}
+
+/** Libellé total : accepte aussi une valeur brute de la base (`audio`) ; jamais `undefined`. */
+export function typeLabel(type: string | null | undefined): string {
+  switch (fromDbConsultationType(type)) {
     case 'chat':
       return translate('Chat');
     case 'phone':
       return translate('Téléphone');
+    default:
+      return translate('Vidéo');
   }
 }
 
-export function typeIcon(type: ConsultationType): 'video' | 'message-circle' | 'phone' {
-  switch (type) {
-    case 'video':
-      return 'video';
+export function typeIcon(type: string | null | undefined): 'video' | 'message-circle' | 'phone' {
+  switch (fromDbConsultationType(type)) {
     case 'chat':
       return 'message-circle';
     case 'phone':
       return 'phone';
+    default:
+      return 'video';
   }
 }
