@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/core';
+import { isSessionExpiry } from '@/services/sessionExpiry';
 
 /** Refus de connexion d'un prestataire dont la garde (`providerGate`) ne donne pas d'accès. */
 export type ProviderRefusal = 'pending' | 'rejected' | 'incomplete' | 'suspended';
@@ -116,6 +117,7 @@ export function authErrorMessage(e: any): string {
   if (refusal) return providerRefusalMessage(refusal);
   const pwned = pwnedPasswordMessage(e);
   if (pwned) return pwned;
+  if (isSessionExpiry(e)) return translate('Ta session a expiré, reconnecte-toi.');
   if (lower.includes('invalid login credentials')) return translate('Email ou mot de passe incorrect.');
   if (
     lower.includes('already registered') ||

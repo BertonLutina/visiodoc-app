@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -19,6 +19,7 @@ import {
   type Gender,
 } from '@/services/registration';
 import { getServiceTypeCatalog } from '@/services/specializationCatalog';
+import { isSessionExpiry, onSessionExpired } from '@/services/sessionExpiry';
 import { COUNTRIES } from '@/config/countries';
 import { currentPatient } from '@/data/mock';
 import { currentProvider } from '@/data/mockProvider';
@@ -176,11 +177,28 @@ async function loadProfile(userId: string): Promise<ProfileResult> {
 }
 
 /**
+ * Nombre de `signOut` lancés PAR L'APPLICATION et pas encore terminés. Le SDK émet `SIGNED_OUT` aussi bien
+ * pour une déconnexion volontaire que pour un rafraîchissement de jeton définitivement refusé (expiration) :
+ * l'événement ne porte pas la cause. Tant que ce compteur est > 0, un `SIGNED_OUT` est le nôtre (le SDK
+ * l'émet avant que la promesse de `signOut` ne se résolve) ; sinon c'est le SDK qui a purgé la session.
+ */
+let appInitiatedSignOuts = 0;
+
+/** Ferme la session locale (`scope: 'local'`, sans dépendre du serveur) en marquant la déconnexion comme volontaire. */
+function localSignOut(): Promise<unknown> {
+  if (!supabase) return Promise.resolve();
+  appInitiatedSignOuts += 1;
+  return supabase.auth.signOut({ scope: 'local' }).finally(() => {
+    appInitiatedSignOuts -= 1;
+  });
+}
+
+/**
  * Ferme la session locale d'un compte au rôle non mobile. `signOut` n'est volontairement PAS
  * awaité (même raison que dans `logout()` : le verrou interne du SDK peut bloquer l'appelant).
  */
 function dropForbiddenSession() {
-  supabase?.auth.signOut({ scope: 'local' }).catch(() => {
+  localSignOut().catch(() => {
     /* ignore : aucun état utilisateur n'a été posé */
   });
 }
@@ -198,6 +216,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [biometricLabel, setBiometricLabel] = useState('Biométrie');
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
   const [justSignedIn, setJustSignedIn] = useState(false);
+
+  // Lecture de l'état courant depuis le listener d'auth (monté une seule fois, donc sans fermeture à jour).
+  const userRef = useRef<User | null>(null);
+  const pendingUserRef = useRef<User | null>(null);
+  userRef.current = user;
+  pendingUserRef.current = pendingUser;
+  // Vrai pendant la restauration de session au démarrage (session persistée en cours de rafraîchissement).
+  const restoringRef = useRef(!!supabase);
+  // Le message d'expiration ne s'affiche qu'une fois par expiration (rétabli à la prochaine connexion).
+  const expiryShownRef = useRef(false);
 
   useEffect(() => {
     if (!supabaseConfigured) return;
@@ -218,7 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user?.id]);
 
-  // Restaure la session persistée (AsyncStorage) au démarrage → reste connecté
+  // Restaure la session persistée (trousseau) au démarrage → reste connecté
   // après un reload / crash, sans avoir à se reconnecter.
   useEffect(() => {
     if (!supabase) {
@@ -226,10 +254,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     let active = true;
+
+    // Session expirée (rafraîchissement impossible) : état local vidé comme pour SIGNED_OUT, session locale
+    // fermée, retour à l'écran de connexion (les gardes d'écran redirigent dès que `user` est nul) et
+    // message affiché une seule fois. `signOut` n'est pas awaité (verrou interne du SDK, cf. `logout`).
+    const handleSessionExpired = () => {
+      if (!active) return;
+      setUser(null);
+      setPendingUser(null);
+      setLocked(false);
+      // Différé : le SDK interdit d'appeler ses méthodes async depuis son propre callback d'événement.
+      setTimeout(() => {
+        localSignOut().catch(() => {
+          /* ignore : l'état local est déjà nettoyé */
+        });
+      }, 0);
+      if (!expiryShownRef.current) {
+        expiryShownRef.current = true;
+        Alert.alert(translate('Ta session a expiré, reconnecte-toi.'));
+      }
+    };
+    // Cas « JWT expired » remonté par un appel de données (cf. `reportSessionExpiry`).
+    const offExpiryReports = onSessionExpired(handleSessionExpired);
+
     supabase.auth
       .getSession()
-      .then(async ({ data }) => {
-        if (active && data.session?.user) {
+      .then(async ({ data, error }) => {
+        if (active && isSessionExpiry(error)) {
+          // Jeton de rafraîchissement refusé au démarrage : jamais de restauration, message unique.
+          handleSessionExpired();
+        } else if (active && data.session?.user) {
           const result = await loadProfile(data.session.user.id);
           const refusal = result.status === 'ok' ? providerRefusalReason(result.user) : null;
           if (active && result.status === 'forbidden') {
@@ -253,11 +307,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       })
-      .finally(() => active && setInitializing(false));
+      .finally(() => {
+        restoringRef.current = false;
+        if (active) setInitializing(false);
+      });
 
     // Se déconnecte proprement si Supabase invalide la session (token expiré non renouvelable…)
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (active && event === 'SIGNED_OUT') {
+        // Déconnexion lancée par l'app (logout, refus de rôle ou de statut…) : pas de message.
+        const voluntary = appInitiatedSignOuts > 0;
+        const hadSession = restoringRef.current || !!userRef.current || !!pendingUserRef.current;
+        if (!voluntary && hadSession) {
+          // Le SDK a purgé la session après un rafraîchissement refusé : on explique pourquoi.
+          handleSessionExpired();
+          return;
+        }
         setUser(null);
         setPendingUser(null);
         setLocked(false);
@@ -265,6 +330,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     return () => {
       active = false;
+      offExpiryReports();
       sub.subscription.unsubscribe();
     };
   }, []);
@@ -272,6 +338,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Connexion active (mot de passe, OTP, OAuth, inscription) → jamais verrouillée,
   // et déclenche la proposition d'activer la biométrie.
   const signedIn = (profile: User, method?: AuthEventMethod) => {
+    expiryShownRef.current = false;
     setUser(profile);
     setJustSignedIn(true);
     logAuthEvent('auth:login', { id: profile.id, role: profile.role, countryId: countryIdForCode(profile.countryCode) }, method);
@@ -293,7 +360,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // manquante…) : ne JAMAIS retomber sur mockUser ici — ce serait connecter
           // la personne sous une fausse identité qui passe toujours guardProvider.
           try {
-            await supabase.auth.signOut({ scope: 'local' });
+            await localSignOut();
           } catch {
             /* ignore */
           }
@@ -322,7 +389,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const refusal = providerRefusalReason(profile);
     if (refusal) {
       try {
-        await supabase?.auth.signOut({ scope: 'local' });
+        await localSignOut();
       } catch {
         /* ignore */
       }
@@ -625,12 +692,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPendingUser(null);
     setLocked(false);
     setJustSignedIn(false);
-    // `scope: 'local'` supprime la session persistée (AsyncStorage) sans dépendre du
+    // `scope: 'local'` supprime la session persistée (trousseau) sans dépendre du
     // serveur. Volontairement NON awaité : le SDK Supabase peut rester bloqué en
     // attente de son verrou interne (lock d'auth) si un getSession()/refreshSession()
     // est déjà en cours, ce qui gèlerait `logout()` et empêcherait tout appelant
     // (ex. `router.replace('/')` juste après) de jamais s'exécuter.
-    supabase?.auth.signOut({ scope: 'local' }).catch(() => {
+    localSignOut().catch(() => {
       /* ignore : l'état local est déjà nettoyé */
     });
   };
