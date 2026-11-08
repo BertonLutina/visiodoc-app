@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { typeLabel } from '@/utils/format';
+import { canStartConsultation } from '@/utils/canStart';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getProviderConsultations, getTodayConsultations, startConsultation } from '@/services/providerApi';
@@ -30,6 +31,12 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
         </View>
         {unpaid ? (
           <Badge label={t('Paiement en attente')} tone="amber" />
+        ) : c.rawStatus === 'cancelled' ? (
+          <Badge label={t('Annulée')} tone="red" />
+        ) : c.rawStatus === 'no_show' ? (
+          <Badge label={t('Absent')} tone="red" />
+        ) : c.rawStatus === 'completed' ? (
+          <Badge label={t('Terminée')} tone="green" />
         ) : (
           <Badge label={c.status === 'pending' ? t('En attente') : t('Confirmée')} tone={c.status === 'pending' ? 'amber' : 'green'} />
         )}
@@ -37,7 +44,7 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
       <Text className="font-sans-semibold text-sm text-clay mt-3">
         {c.dateLabel} · {typeLabel(c.type)} · {c.durationMin} {t('min')}
       </Text>
-      {canStart && !unpaid && (
+      {canStart && canStartConsultation(c.rawStatus) && (
         <View className="flex-row mt-3">
           <Pressable
             onPress={async () => {

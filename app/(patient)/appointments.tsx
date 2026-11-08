@@ -18,6 +18,7 @@ import { listPendingAttempts } from '@/services/pendingPaymentAttempt';
 import { createOpenPaymentWidget, paymentWidgetPreflight } from '@/services/paymentWidget';
 import { createBusyLock } from '@/utils/busyLock';
 import { canPayNow } from '@/utils/canPayNow';
+import { showDismissedPaymentPrompt } from '@/utils/paymentPrompts';
 import type { Consultation, ConsultationStatus } from '@/types';
 import { useLanguage, useT } from '@/i18n';
 
@@ -143,6 +144,8 @@ export default function Appointments() {
           t('Paiement non effectué'),
           t('Ta consultation est réservée mais en attente de paiement. Tu peux payer plus tard depuis Mes consultations.'),
         );
+      } else if (result.status === 'dismissed') {
+        showDismissedPaymentPrompt(c.id, result.reason, t);
       } else if (result.status === 'verifying') {
         const message = t('Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.');
         if (result.canOverride) {

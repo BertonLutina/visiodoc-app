@@ -275,6 +275,8 @@ export async function bookConsultation(input: BookConsultationInput): Promise<{ 
 export type BookAndPayResult = { id: string } & (
   | { payment: 'confirmed'; txnRef: string }
   | { payment: 'cancelled'; txnRef: string }
+  /** Écran quitté / retour passerelle / timeout : issue inconnue, tentative conservée (voir `PaymentWidgetResult`). */
+  | { payment: 'dismissed'; txnRef: string; reason: 'user_left' | 'gateway_returned' | 'timeout' }
 );
 
 /**
@@ -291,6 +293,7 @@ export async function bookAndPayConsultation(
   if (useMock()) return { id, payment: 'confirmed', txnRef: 'mock-txn' };
   try {
     const result = await payConsultation({ consultationId: id, openPaymentWidget, useWallet: options.useWallet });
+    if (result.status === 'dismissed') return { id, payment: 'dismissed', txnRef: result.txnRef, reason: result.reason };
     return { id, payment: result.status, txnRef: result.txnRef };
   } catch (e: any) {
     if (e && typeof e === 'object') e.consultationId = e.consultationId ?? id;

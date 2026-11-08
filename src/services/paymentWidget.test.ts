@@ -115,8 +115,8 @@ describe('createOpenPaymentWidget (injected openPaymentWidget bridge)', () => {
   it('a result for request A can never resolve request B (settle is keyed by txnRef)', async () => {
     const a = open('VDC-A');
     const b = open('VDC-B');
-    // B supersedes A on screen: A is released as cancelled, B stays pending.
-    await expect(a).resolves.toEqual({ status: 'cancelled' });
+    // B supersedes A on screen: A is released as dismissed, B stays pending.
+    await expect(a).resolves.toEqual({ status: 'dismissed', reason: 'user_left' });
     expect(getPendingPaymentWidget('VDC-A')).toBeNull();
     settlePaymentWidget('VDC-A', { kind: 'success', payRef: 'PAYREF-A' });
     expect(getPendingPaymentWidget('VDC-B')).not.toBeNull();
@@ -135,12 +135,26 @@ describe('createOpenPaymentWidget (injected openPaymentWidget bridge)', () => {
     await p;
   });
 
-  it('cancelled and declined both resolve { status: "cancelled" }', async () => {
+  it('only an explicit gateway cancel / decline resolves { status: "cancelled" }', async () => {
     for (const msg of [{ kind: 'cancelled' as const }, { kind: 'declined' as const, code: 'Z6', desc: '' }]) {
       const promise = open('VDC-1');
       settlePaymentWidget('VDC-1', msg);
       await expect(promise).resolves.toEqual({ status: 'cancelled' });
     }
+  });
+
+  it('dismissed keeps its reason and resolves { status: "dismissed" } (never "cancelled")', async () => {
+    for (const reason of ['user_left', 'gateway_returned', 'timeout'] as const) {
+      const promise = open('VDC-1');
+      settlePaymentWidget('VDC-1', { kind: 'dismissed', reason });
+      await expect(promise).resolves.toEqual({ status: 'dismissed', reason });
+    }
+  });
+
+  it('a superseded request is released as dismissed (not a definitive cancel): its attempt is kept', async () => {
+    const a = open('VDC-A');
+    open('VDC-B');
+    await expect(a).resolves.toEqual({ status: 'dismissed', reason: 'user_left' });
   });
 
   it('paid_unconfirmed resolves { status: "paid_unconfirmed" }', async () => {

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  clearAllPendingAttempts,
   clearPendingAttempt,
   getPendingAttempt,
   listPendingAttempts,
@@ -46,5 +47,13 @@ describe('pendingPaymentAttempt (AsyncStorage)', () => {
     expect(await listPendingAttempts()).toEqual([]);
     await savePendingAttempt({ consultationId: 'c1', txnRef: 'T1' });
     expect(await getPendingAttempt('c1')).not.toBeNull();
+  });
+
+  it('clearAllPendingAttempts wipes the storage (sign-out)', async () => {
+    await savePendingAttempt({ consultationId: 'c1', txnRef: 'T1' });
+    await savePendingAttempt({ consultationId: 'c2', txnRef: 'T2' });
+    await clearAllPendingAttempts();
+    expect(await listPendingAttempts()).toEqual([]);
+    expect(await AsyncStorage.getItem(PENDING_PAYMENT_KEY)).toBeNull();
   });
 });

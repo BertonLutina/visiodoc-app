@@ -27,6 +27,7 @@ import { currentProvider } from '@/data/mockProvider';
 import * as biometrics from '@/services/biometrics';
 import { logAuthEvent, type AuthEventMethod } from '@/services/auditLog';
 import { translate } from '@/i18n/core';
+import { clearAllPendingAttempts } from '@/services/pendingPaymentAttempt';
 
 // Termine proprement une session OAuth ouverte dans le navigateur système.
 WebBrowser.maybeCompleteAuthSession();
@@ -182,6 +183,9 @@ const expiryTracker = createSessionExpiryTracker();
 
 /** Ferme la session locale (`scope: 'local'`, sans dépendre du serveur) en marquant la déconnexion comme volontaire. */
 function localSignOut(): Promise<unknown> {
+  // Les tentatives de paiement mémorisées appartiennent au compte qui se déconnecte volontairement
+  // (pas lors d'une expiration de session : le même patient peut les rejouer après reconnexion).
+  clearAllPendingAttempts().catch(() => undefined);
   if (!supabase) return Promise.resolve();
   const end = expiryTracker.beginAppSignOut();
   return supabase.auth.signOut({ scope: 'local' }).finally(end);

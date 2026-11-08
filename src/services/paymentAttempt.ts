@@ -2,7 +2,12 @@ import { supabase } from '@/lib/supabase';
 import { translate } from '@/i18n/core';
 import { edgeFunctionError } from '@/utils/authError';
 import { reportSessionExpiry } from './sessionExpiry';
-import { clearPendingAttempt, getPendingAttempt, listPendingAttempts, savePendingAttempt } from './pendingPaymentAttempt';
+import {
+  clearPendingAttempt,
+  getPendingAttempt,
+  listPendingAttempts,
+  savePendingAttempt,
+} from './pendingPaymentAttempt';
 import type { PendingPaymentAttempt } from './pendingPaymentAttempt';
 
 /* ------------------------------------------------------------------------------------------------
@@ -14,12 +19,20 @@ import type { PendingPaymentAttempt } from './pendingPaymentAttempt';
  * Ce module reste volontairement modulaire : les paiements prestataire (abonnement / avoir) viennent s'y ajouter.
  * ---------------------------------------------------------------------------------------------- */
 
-/** Résultat du widget de paiement (injecté : voir `src/services/paymentWidget.ts`). */
+/**
+ * Contrat du widget de paiement (injecté : voir `src/services/paymentWidget.ts`). Seul `cancelled` est
+ * DÉFINITIF et efface la tentative mémorisée ; toute autre issue sans `success` la conserve.
+ * - `success` : débité, `payRef` fourni → `confirm-consultation-payment`.
+ * - `paid_unconfirmed` : débité (`resp 00`) mais sans `payRef`.
+ * - `cancelled` : la passerelle a EXPLICITEMENT rapporté une annulation / un refus (X1, Z6…).
+ * - `dismissed` : aucune issue définitive (écran quitté, retour passerelle sans résultat, timeout `TO` qui peut
+ *   encore aboutir) → la tentative est conservée, on ne prétend pas « paiement non effectué ».
+ */
 export type PaymentWidgetResult =
   | { status: 'success'; payRef: string }
-  /** Le patient a été débité (`resp 00`) mais le widget n'a pas rendu de `payRef`. */
   | { status: 'paid_unconfirmed' }
-  | { status: 'cancelled' };
+  | { status: 'cancelled' }
+  | { status: 'dismissed'; reason: 'user_left' | 'gateway_returned' | 'timeout' };
 
 /** Ouvre le widget avec la référence de transaction et attend son issue. */
 export type OpenPaymentWidget = (txnRef: string) => Promise<PaymentWidgetResult>;
@@ -226,38 +239,84 @@ export async function readConsultationPayment(consultationId: string): Promise<C
 const readSafe = (consultationId: string) => readConsultationPayment(consultationId).catch(() => null);
 const isPaid = (row: ConsultationPaymentState) => row.paymentStatus === 'paid';
 
-/** Rejoue `confirm` avec la MÊME `txnRef` / `payRef` mémorisées. `handled` = le serveur répond NOT_PAYABLE (déjà traité). */
+/* ---------- Stockage « au mieux » : un disque plein ne doit jamais bloquer ni confirmer un paiement ---------- */
+
+const safeSave = (a: { consultationId: string; txnRef: string; payRef?: string }) =>
+  savePendingAttempt(a).catch(() => undefined);
+const safeClear = (consultationId: string) => clearPendingAttempt(consultationId).catch(() => undefined);
+
+/* ---------- Garde « en cours » par consultation (reconcile / pay / payExisting jamais en parallèle) ---------- */
+
+const inFlight = new Set<string>();
+
+/** Exécute `fn` si aucune opération n'est en cours pour cette consultation ; sinon renvoie `busy`. */
+async function guarded<T, B>(consultationId: string, busy: () => B, fn: () => Promise<T>): Promise<T | B> {
+  if (inFlight.has(consultationId)) return busy();
+  inFlight.add(consultationId);
+  try {
+    return await fn();
+  } finally {
+    inFlight.delete(consultationId);
+  }
+}
+
+/** Une autre opération de paiement est déjà en cours pour cette consultation. */
+export class PaymentInProgressError extends Error {
+  consultationId?: string;
+  constructor() {
+    super(translate('Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.'));
+    this.name = 'PaymentInProgressError';
+  }
+}
+
+const supportError = (consultationId: string, txnRef: string) =>
+  withContext(
+    new PaymentConfirmationError(
+      translate(
+        "Ton paiement a été reçu mais ta consultation n'est pas encore confirmée. Ne paie pas une seconde fois : contacte le support si cela dure.",
+      ),
+    ),
+    consultationId,
+    txnRef,
+  );
+
+/**
+ * Rejoue `confirm` avec la MÊME `txnRef` / `payRef` mémorisées. `handled` = le serveur répond NOT_PAYABLE
+ * (déjà traité) : la tentative n'est PAS effacée ici, l'appelant relit la ligne et ne l'efface que si elle est `paid`.
+ */
 async function confirmStoredAttempt(a: PendingPaymentAttempt, useWallet: boolean): Promise<'paid' | 'handled'> {
   try {
     await confirmConsultationPayment(a.consultationId, a.txnRef, a.payRef!, useWallet);
   } catch (e) {
-    if (e instanceof PaymentNotPayableError) {
-      await clearPendingAttempt(a.consultationId);
-      return 'handled';
-    }
+    if (e instanceof PaymentNotPayableError) return 'handled';
     throw e;
   }
   const row = await readSafe(a.consultationId);
   if (row && isPaid(row)) {
-    await clearPendingAttempt(a.consultationId);
+    await safeClear(a.consultationId);
     return 'paid';
   }
   // Confirmé mais la base ne l'affiche pas (encore) : on garde la tentative pour la prochaine reprise.
   throw withContext(new PaymentConfirmationError(), a.consultationId, a.txnRef);
 }
 
+/** Après `handled` : payée → on oublie la tentative ; sinon cas support (rien n'est rouvert, la tentative reste). */
+async function settleHandled(a: PendingPaymentAttempt): Promise<void> {
+  const row = await readSafe(a.consultationId);
+  if (row && isPaid(row)) {
+    await safeClear(a.consultationId);
+    return;
+  }
+  throw supportError(a.consultationId, a.txnRef);
+}
+
 export type PayConsultationResult =
   | { status: 'confirmed'; txnRef: string }
-  | { status: 'cancelled'; txnRef: string };
+  | { status: 'cancelled'; txnRef: string }
+  /** Issue inconnue : la tentative est conservée (voir `PaymentWidgetResult`). */
+  | { status: 'dismissed'; txnRef: string; reason: 'user_left' | 'gateway_returned' | 'timeout' };
 
-/**
- * Ordre imposé : nouvelle `txnRef` → `register-payment-attempt` (une seule régénération si `TXN_ALREADY_USED`,
- * jamais pour `NOT_PAYABLE`) → tentative mémorisée (sans `payRef`) → widget → (succès) tentative mémorisée avec
- * `payRef` PUIS `confirm-consultation-payment` → relecture en base ; la tentative n'est effacée qu'une fois la
- * ligne `paid`. Annulation du widget : aucune confirmation, aucune écriture, tentative effacée ; la
- * consultation reste `pending_payment`. Débité sans `payRef` : la tentative reste, on lève un message « ne repaie pas ».
- */
-export async function payConsultation(input: {
+async function payConsultationUnlocked(input: {
   consultationId: string;
   openPaymentWidget: OpenPaymentWidget;
   useWallet?: boolean;
@@ -273,17 +332,20 @@ export async function payConsultation(input: {
   }
 
   // Dès l'ouverture : un arrêt de l'app en plein paiement reste détectable (txnRef seule, sans payRef).
-  await savePendingAttempt({ consultationId, txnRef });
+  await safeSave({ consultationId, txnRef });
   let outcome: PaymentWidgetResult;
   try {
     outcome = await openPaymentWidget(txnRef);
   } catch (e) {
-    await clearPendingAttempt(consultationId); // le widget n'a pas pu démarrer : rien n'a été débité
+    await safeClear(consultationId); // le widget n'a pas pu démarrer : rien n'a été débité
     throw e;
   }
   if (outcome.status === 'cancelled') {
-    await clearPendingAttempt(consultationId);
+    await safeClear(consultationId); // annulation / refus EXPLICITE de la passerelle
     return { status: 'cancelled', txnRef };
+  }
+  if (outcome.status === 'dismissed') {
+    return { status: 'dismissed', txnRef, reason: outcome.reason }; // tentative conservée
   }
   if (outcome.status === 'paid_unconfirmed') {
     throw withContext(
@@ -293,16 +355,34 @@ export async function payConsultation(input: {
     );
   }
 
-  const attempt = { consultationId, txnRef, payRef: outcome.payRef };
-  await savePendingAttempt(attempt); // AVANT confirm
-  const stored = (await getPendingAttempt(consultationId)) ?? { ...attempt, at: Date.now() };
+  // Avant confirm, jamais bloquant : même si l'écriture échoue, confirm est TOUJOURS appelé.
+  const stored: PendingPaymentAttempt = { consultationId, txnRef, payRef: outcome.payRef, at: Date.now() };
+  await safeSave(stored);
   const result = await confirmStoredAttempt(stored, useWallet);
-  if (result === 'handled') {
-    const row = await readSafe(consultationId);
-    if (row && isPaid(row)) return { status: 'confirmed', txnRef };
-    throw new PaymentNotPayableError('NOT_PAYABLE');
-  }
+  if (result === 'handled') await settleHandled(stored);
   return { status: 'confirmed', txnRef };
+}
+
+/**
+ * Ordre imposé : nouvelle `txnRef` → `register-payment-attempt` (une seule régénération si `TXN_ALREADY_USED`,
+ * jamais pour `NOT_PAYABLE`) → tentative mémorisée (sans `payRef`) → widget → (succès) tentative mémorisée avec
+ * `payRef` PUIS `confirm-consultation-payment` → relecture en base ; la tentative n'est effacée qu'une fois la
+ * ligne `paid`. Annulation EXPLICITE : tentative effacée, la consultation reste `pending_payment`. Écran quitté /
+ * retour passerelle / timeout : tentative conservée. Débité sans `payRef` : tentative conservée, « ne repaie pas ».
+ * Une opération déjà en cours pour cette consultation → `PaymentInProgressError`.
+ */
+export async function payConsultation(input: {
+  consultationId: string;
+  openPaymentWidget: OpenPaymentWidget;
+  useWallet?: boolean;
+}): Promise<PayConsultationResult> {
+  return guarded(
+    input.consultationId,
+    () => {
+      throw new PaymentInProgressError();
+    },
+    () => payConsultationUnlocked(input),
+  );
 }
 
 export type PayExistingResult =
@@ -312,12 +392,14 @@ export type PayExistingResult =
   | { status: 'verifying'; canOverride: boolean };
 
 /**
- * Repaie une consultation déjà créée. Relit d'abord la ligne (déjà payée → refus ; plus `pending_payment` →
- * NOT_PAYABLE), rejoue `confirm` si une tentative AVEC `payRef` est mémorisée (même `txnRef` / `payRef`), ne
- * rouvre PAS de widget si une tentative SANS `payRef` est mémorisée (sauf `override` explicite après 15 min),
- * sinon retombe sur `payConsultation` avec une NOUVELLE `txnRef`.
+ * « Tu as été débité ? » après un `dismissed` : « Non » → la tentative est effacée (on peut repayer) ;
+ * « Oui » → conservée (message de vérification, reprise explicite possible après 15 min).
  */
-export async function payExistingConsultation(input: {
+export async function resolveDismissedAttempt(consultationId: string, debited: boolean): Promise<void> {
+  if (!debited) await safeClear(consultationId);
+}
+
+async function payExistingUnlocked(input: {
   consultationId: string;
   openPaymentWidget: OpenPaymentWidget;
   useWallet?: boolean;
@@ -327,7 +409,7 @@ export async function payExistingConsultation(input: {
   const row = await readConsultationPayment(consultationId);
   if (!row) throw new PaymentNotPayableError('NOT_PAYABLE');
   if (isPaid(row)) {
-    await clearPendingAttempt(consultationId);
+    await safeClear(consultationId);
     return { status: 'already_paid' };
   }
   if (row.status !== 'pending_payment') throw new PaymentNotPayableError('NOT_PAYABLE');
@@ -335,32 +417,59 @@ export async function payExistingConsultation(input: {
   const attempt = await getPendingAttempt(consultationId);
   if (attempt?.payRef) {
     const outcome = await confirmStoredAttempt(attempt, useWallet);
-    if (outcome === 'paid') return { status: 'confirmed', txnRef: attempt.txnRef };
-    const after = await readSafe(consultationId);
-    if (after && isPaid(after)) return { status: 'confirmed', txnRef: attempt.txnRef };
-    if (after && after.status !== 'pending_payment') throw new PaymentNotPayableError('NOT_PAYABLE');
-  } else if (attempt) {
+    if (outcome === 'handled') await settleHandled(attempt); // payée, ou cas support : jamais de nouveau widget
+    return { status: 'confirmed', txnRef: attempt.txnRef };
+  }
+  if (attempt) {
     const canOverride = Date.now() - attempt.at >= PAYMENT_ATTEMPT_STALE_MS;
     if (!(override && canOverride)) return { status: 'verifying', canOverride };
-    await clearPendingAttempt(consultationId);
+    await safeClear(consultationId);
   }
-  return payConsultation({ consultationId, openPaymentWidget, useWallet });
+  return payConsultationUnlocked({ consultationId, openPaymentWidget, useWallet });
+}
+
+/**
+ * Repaie une consultation déjà créée. Relit d'abord la ligne (déjà payée → refus ; plus `pending_payment` →
+ * NOT_PAYABLE), rejoue `confirm` si une tentative AVEC `payRef` est mémorisée (même `txnRef` / `payRef` ; si le
+ * serveur répond « déjà traité » mais que la ligne reste impayée : erreur support, jamais de nouveau widget), ne
+ * rouvre PAS de widget si une tentative SANS `payRef` est mémorisée (sauf `override` explicite après 15 min),
+ * sinon nouvelle `txnRef`. Une opération déjà en cours → `{ status: 'verifying' }`.
+ */
+export async function payExistingConsultation(input: {
+  consultationId: string;
+  openPaymentWidget: OpenPaymentWidget;
+  useWallet?: boolean;
+  override?: boolean;
+}): Promise<PayExistingResult> {
+  return guarded(
+    input.consultationId,
+    (): PayExistingResult => ({ status: 'verifying', canOverride: false }),
+    () => payExistingUnlocked(input),
+  );
 }
 
 /**
  * Au retour sur « Mes consultations » : pour chaque tentative mémorisée, relit la ligne ; payée → on oublie la
  * tentative ; `pending_payment` avec `payRef` → on rejoue `confirm` (même `txnRef` / `payRef`). Une tentative sans
- * `payRef` n'est jamais confirmée ici. Ne lève jamais.
+ * `payRef` n'est jamais confirmée ici ; une consultation déjà traitée par une autre opération est ignorée. Ne lève jamais.
  */
 export async function reconcilePendingPayments(): Promise<void> {
   for (const attempt of await listPendingAttempts()) {
-    try {
-      const row = await readConsultationPayment(attempt.consultationId);
-      if (!row) continue;
-      if (isPaid(row)) await clearPendingAttempt(attempt.consultationId);
-      else if (row.status === 'pending_payment' && attempt.payRef) await confirmStoredAttempt(attempt, false);
-    } catch {
-      /* réessayé au prochain retour sur l'écran */
-    }
+    await guarded(
+      attempt.consultationId,
+      () => undefined,
+      async () => {
+        try {
+          const row = await readConsultationPayment(attempt.consultationId);
+          if (!row) return;
+          if (isPaid(row)) await safeClear(attempt.consultationId);
+          else if (row.status === 'pending_payment' && attempt.payRef) {
+            if ((await confirmStoredAttempt(attempt, false)) === 'handled') await settleHandled(attempt);
+          }
+        } catch {
+          /* réessayé au prochain retour sur l'écran */
+        }
+      },
+    );
   }
 }

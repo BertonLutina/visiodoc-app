@@ -22,6 +22,7 @@ import {
 import { PaymentConfirmationError } from '@/services/paymentAttempt';
 import { createOpenPaymentWidget, paymentWidgetPreflight } from '@/services/paymentWidget';
 import { createBusyLock } from '@/utils/busyLock';
+import { showDismissedPaymentPrompt } from '@/utils/paymentPrompts';
 import { getDaySlots, getMonthAvailability } from '@/services/availabilityApi';
 import { appLocale } from '@/i18n';
 import type { ConsultationType } from '@/types';
@@ -125,6 +126,9 @@ export default function DoctorProfile() {
         if (reread && reread.awaitingPayment) {
           Alert.alert(t('Paiement en cours de confirmation'), t("Ton paiement est en cours de confirmation. Vérifie tes rendez-vous dans quelques instants."));
         }
+      } else if (result.payment === 'dismissed') {
+        // Issue inconnue (écran quitté…) : pas de « non effectué », tentative conservée.
+        showDismissedPaymentPrompt(result.id, result.reason, t);
       } else {
         Alert.alert(
           t('Paiement non effectué'),

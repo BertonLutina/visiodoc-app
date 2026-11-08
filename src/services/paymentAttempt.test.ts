@@ -9,10 +9,12 @@ import {
   PaymentNotPayableError,
   PaymentRegistrationError,
   reconcilePendingPayments,
+  resolveDismissedAttempt,
   registerConsultationPayment,
 } from './paymentAttempt';
-import { getPendingAttempt, savePendingAttempt } from './pendingPaymentAttempt';
+import { getPendingAttempt, listPendingAttempts, savePendingAttempt } from './pendingPaymentAttempt';
 import { onSessionExpired } from './sessionExpiry';
+import { clearPendingAttempt as clearAttempt } from './pendingPaymentAttempt';
 
 // Seule frontière simulée : `@/lib/supabase` (Edge Functions + garde-fou : aucune écriture directe).
 const mockInvoke = jest.fn();
@@ -497,7 +499,7 @@ describe('payExistingConsultation (re-read first, retry confirm before any new w
     expect(await getPendingAttempt(CONSULT)).toMatchObject({ payRef: PAY_REF });
   });
 
-  it('confirm answering NOT_PAYABLE means "already handled": attempt cleared, then a new widget may open', async () => {
+  it('confirm answering NOT_PAYABLE ("handled") with the row STILL unpaid: no new widget, support-case error, attempt kept', async () => {
     await savePendingAttempt({ consultationId: CONSULT, txnRef: TXN, payRef: PAY_REF });
     mockMaybeSingle.mockResolvedValue(PENDING_ROW);
     mockInvoke.mockImplementation(async (name: string) =>
@@ -506,10 +508,25 @@ describe('payExistingConsultation (re-read first, retry confirm before any new w
         : { data: { success: true }, error: null },
     );
     const openPaymentWidget = widget();
-    const result = await payExistingConsultation({ consultationId: CONSULT, openPaymentWidget });
-    expect(result.status).toBe('cancelled');
-    expect(openPaymentWidget).toHaveBeenCalledTimes(1);
-    expect(openPaymentWidget.mock.calls[0][0]).not.toBe(TXN);
+    const err = await payExistingConsultation({ consultationId: CONSULT, openPaymentWidget }).catch((e) => e);
+    expect(err).toBeInstanceOf(PaymentConfirmationError);
+    expect(err.message).toMatch(/support/);
+    expect(openPaymentWidget).not.toHaveBeenCalled();
+    expect(names()).toEqual(['confirm-consultation-payment']); // no register either
+    expect(await getPendingAttempt(CONSULT)).toMatchObject({ payRef: PAY_REF });
+  });
+
+  it('confirm answering NOT_PAYABLE but the re-read row is paid: confirmed and the attempt is cleared', async () => {
+    await savePendingAttempt({ consultationId: CONSULT, txnRef: TXN, payRef: PAY_REF });
+    mockMaybeSingle.mockResolvedValueOnce(PENDING_ROW).mockResolvedValue(PAID_ROW);
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(409, { success: false, code: 'NOT_PAYABLE' }) });
+    const openPaymentWidget = widget();
+    await expect(payExistingConsultation({ consultationId: CONSULT, openPaymentWidget })).resolves.toEqual({
+      status: 'confirmed',
+      txnRef: TXN,
+    });
+    expect(openPaymentWidget).not.toHaveBeenCalled();
+    expect(await getPendingAttempt(CONSULT)).toBeNull();
   });
 
   it('stored attempt WITHOUT payRef (< 15 min): do not open a widget, say it is being verified', async () => {
@@ -591,5 +608,145 @@ describe('reconcilePendingPayments (appointments screen focus)', () => {
     mockInvoke.mockResolvedValue({ data: null, error: networkError });
     await expect(reconcilePendingPayments()).resolves.toBeUndefined();
     expect(await getPendingAttempt(CONSULT)).toMatchObject({ payRef: PAY_REF });
+  });
+});
+
+
+describe('widget dismissed (user left the screen / gateway returned / timeout): the attempt is KEPT', () => {
+  const dismissed = (reason: 'user_left' | 'gateway_returned' | 'timeout') => async () => ({ status: 'dismissed' as const, reason });
+
+  it.each(['user_left', 'gateway_returned', 'timeout'] as const)(
+    '%s → no confirm, attempt (txnRef only) kept, result says dismissed with the reason',
+    async (reason) => {
+      const result = await payConsultation({ consultationId: CONSULT, openPaymentWidget: dismissed(reason) });
+      expect(result).toMatchObject({ status: 'dismissed', reason });
+      expect(mockInvoke.mock.calls.map((c) => c[0])).toEqual(['register-payment-attempt']);
+      const stored = await getPendingAttempt(CONSULT);
+      expect(stored).toMatchObject({ consultationId: CONSULT, txnRef: (result as any).txnRef });
+      expect(stored?.payRef).toBeUndefined();
+    },
+  );
+
+  it('a gateway cancel (explicit) still clears the attempt', async () => {
+    await payConsultation({ consultationId: CONSULT, openPaymentWidget: async () => ({ status: 'cancelled' as const }) });
+    expect(await getPendingAttempt(CONSULT)).toBeNull();
+  });
+
+  it('then "Payer maintenant" does NOT open a second widget: it reports verifying (no second charge)', async () => {
+    await payConsultation({ consultationId: CONSULT, openPaymentWidget: dismissed('user_left') });
+    mockMaybeSingle.mockResolvedValue(PENDING_ROW);
+    mockInvoke.mockClear();
+    const openPaymentWidget = jest.fn();
+    await expect(payExistingConsultation({ consultationId: CONSULT, openPaymentWidget })).resolves.toEqual({
+      status: 'verifying',
+      canOverride: false,
+    });
+    expect(openPaymentWidget).not.toHaveBeenCalled();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  describe('resolveDismissedAttempt ("Tu as été débité ?")', () => {
+    it('Non → the attempt is cleared (the user can pay again)', async () => {
+      await savePendingAttempt({ consultationId: CONSULT, txnRef: TXN });
+      await resolveDismissedAttempt(CONSULT, false);
+      expect(await getPendingAttempt(CONSULT)).toBeNull();
+    });
+    it('Oui → the attempt is kept (verifying message, 15-minute override later)', async () => {
+      await savePendingAttempt({ consultationId: CONSULT, txnRef: TXN });
+      await resolveDismissedAttempt(CONSULT, true);
+      expect(await getPendingAttempt(CONSULT)).toMatchObject({ txnRef: TXN });
+    });
+  });
+});
+
+describe('in-flight guard per consultation (reconcile / pay / payExisting never run concurrently)', () => {
+  it('a reconcile and a second payExisting started while a pay is in flight do nothing', async () => {
+    mockMaybeSingle.mockResolvedValue(PENDING_ROW);
+    let release!: (r: { status: 'cancelled' }) => void;
+    const slowWidget = jest.fn(
+      (_txnRef: string) => new Promise<{ status: 'cancelled' }>((resolve) => { release = resolve as unknown as typeof release; }),
+    );
+    const first = payExistingConsultation({ consultationId: CONSULT, openPaymentWidget: slowWidget });
+    await new Promise<void>((r) => setImmediate(() => r())); // let the first call reach the widget
+    expect(slowWidget).toHaveBeenCalledTimes(1);
+
+    await savePendingAttempt({ consultationId: CONSULT, txnRef: TXN, payRef: PAY_REF }); // would be re-confirmed if unguarded
+    mockInvoke.mockClear();
+    await reconcilePendingPayments();
+    const secondWidget = jest.fn();
+    await expect(payExistingConsultation({ consultationId: CONSULT, openPaymentWidget: secondWidget })).resolves.toEqual({
+      status: 'verifying',
+      canOverride: false,
+    });
+    await expect(payConsultation({ consultationId: CONSULT, openPaymentWidget: secondWidget })).rejects.toThrow(
+      'Paiement en cours de vérification',
+    );
+    expect(secondWidget).not.toHaveBeenCalled();
+    expect(mockInvoke).not.toHaveBeenCalled();
+
+    release({ status: 'cancelled' });
+    await first;
+    // lock released: a later call goes through
+    await clearAttempt(CONSULT);
+    const third = await payExistingConsultation({
+      consultationId: CONSULT,
+      openPaymentWidget: async () => ({ status: 'cancelled' as const }),
+    });
+    expect(third.status).toBe('cancelled');
+  });
+
+  it('the lock is released even when the guarded call throws', async () => {
+    mockMaybeSingle.mockResolvedValue(CANCELLED_ROW);
+    await expect(
+      payExistingConsultation({ consultationId: CONSULT, openPaymentWidget: jest.fn() }),
+    ).rejects.toBeInstanceOf(PaymentNotPayableError);
+    mockMaybeSingle.mockResolvedValue(PAID_ROW);
+    await expect(
+      payExistingConsultation({ consultationId: CONSULT, openPaymentWidget: jest.fn() }),
+    ).resolves.toEqual({ status: 'already_paid' });
+  });
+});
+
+describe('storage resilience', () => {
+  // AsyncStorage's jest mock is itself a jest.fn: spying on it replaces its implementation (and `mockRestore` would
+  // wipe it), so we capture the real implementation once and reinstall it after each test.
+  const setItemMock = AsyncStorage.setItem as unknown as jest.Mock;
+  const realSetItem = setItemMock.getMockImplementation() as (k: string, v: string) => Promise<void>;
+  afterEach(() => {
+    setItemMock.mockImplementation(realSetItem);
+  });
+
+  it('a failing post-widget save never stops confirm: confirm is ALWAYS called, payment still confirms', async () => {
+    let calls = 0;
+    setItemMock.mockImplementation(async (k: string, v: string) => {
+      calls += 1;
+      if (calls >= 2) throw new Error('disk full'); // 1st save (txnRef only) ok, then everything fails
+      return realSetItem(k, v);
+    });
+    const result = await payConsultation({
+      consultationId: CONSULT,
+      openPaymentWidget: async () => ({ status: 'success' as const, payRef: PAY_REF }),
+    });
+    expect(result.status).toBe('confirmed');
+    expect(mockInvoke).toHaveBeenCalledWith('confirm-consultation-payment', {
+      body: { consultationId: CONSULT, txnRef: result.txnRef, payRef: PAY_REF, useWallet: false },
+    });
+  });
+
+  it('a failing FIRST save does not block opening the widget either', async () => {
+    setItemMock.mockRejectedValue(new Error('disk full'));
+    const openPaymentWidget = jest.fn(async (_t: string) => ({ status: 'cancelled' as const }));
+    await expect(payConsultation({ consultationId: CONSULT, openPaymentWidget })).resolves.toMatchObject({ status: 'cancelled' });
+    expect(openPaymentWidget).toHaveBeenCalledTimes(1);
+  });
+
+  it('listing purges attempts older than 24 h', async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, 'now').mockReturnValue(now);
+    await savePendingAttempt({ consultationId: 'old', txnRef: 'T-old' });
+    (Date.now as jest.Mock).mockReturnValue(now + 25 * 3600_000);
+    await savePendingAttempt({ consultationId: 'fresh', txnRef: 'T-fresh' });
+    expect((await listPendingAttempts()).map((a) => a.consultationId)).toEqual(['fresh']);
+    expect(await getPendingAttempt('old')).toBeNull(); // really removed from storage, not just filtered
   });
 });

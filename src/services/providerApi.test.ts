@@ -412,7 +412,7 @@ describe('getTodayConsultations (agenda du jour / onglet « En cours »)', () =>
   beforeEach(() => {
     jest.resetModules();
     orderMock.mockResolvedValue({ data: [], error: null });
-    for (const m of ['select', 'eq', 'in', 'gte', 'lt']) query[m] = jest.fn(() => query);
+    for (const m of ['select', 'eq', 'in', 'neq', 'gte', 'lt']) query[m] = jest.fn(() => query);
     query.order = orderMock;
     jest.doMock('@/lib/supabase', () => ({
       supabase: { from: jest.fn(() => query) },
@@ -422,11 +422,9 @@ describe('getTodayConsultations (agenda du jour / onglet « En cours »)', () =>
   });
   afterEach(() => jest.dontMock('@/lib/supabase'));
 
-  it('filters statuses in the query: never pending_payment (unpaid) nor cancelled', async () => {
+  it('excludes only pending_payment in the query: no_show / cancelled stay visible (their badges exist)', async () => {
     await require('./providerApi').getTodayConsultations('d1');
-    expect(query.in).toHaveBeenCalledWith('status', ['scheduled', 'in_progress', 'completed']);
-    const statuses: string[] = query.in.mock.calls.find((c: unknown[]) => c[0] === 'status')[1];
-    expect(statuses).not.toContain('pending_payment');
-    expect(statuses).not.toContain('cancelled');
+    expect(query.neq).toHaveBeenCalledWith('status', 'pending_payment');
+    expect(query.in).not.toHaveBeenCalled();
   });
 });

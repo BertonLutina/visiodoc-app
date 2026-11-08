@@ -557,4 +557,9 @@ export const en: Record<string, string> = {
   "Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.": "Payment being verified, do not pay again. Try again in a few minutes.",
   "Payer quand même": "Pay anyway",
   "Paiement effectué, ne repaie pas. Nous vérifions ta transaction.": "Payment made, do not pay again. We are verifying your transaction.",
+  "Tu as été débité ?": "Were you charged?",
+  "Tu as quitté le paiement avant la fin. Nous ne savons pas si le paiement a abouti.": "You left the payment before it finished. We do not know whether the payment went through.",
+  "Oui": "Yes",
+  "Non": "No",
+  "Ton paiement a été reçu mais ta consultation n'est pas encore confirmée. Ne paie pas une seconde fois : contacte le support si cela dure.": "Your payment was received but your consultation is not confirmed yet. Do not pay a second time: contact support if this lasts.",
 };

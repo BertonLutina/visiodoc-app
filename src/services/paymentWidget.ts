@@ -128,8 +128,8 @@ export function paymentWidgetPreflight(
 /**
  * Issue du widget pour la demande `txnRef`, rapportée par l'écran de paiement. `success` →
  * `{ status: 'success', payRef }` ; `paid_unconfirmed` → `{ status: 'paid_unconfirmed' }` (débité, sans
- * `payRef`) ; `cancelled` / `declined` → `{ status: 'cancelled' }` (la consultation reste
- * `pending_payment`) ; `error` → `PaymentWidgetUnavailableError`. Une `txnRef` inconnue ne règle rien.
+ * `payRef`) ; `cancelled` / `declined` (explicites) → `{ status: 'cancelled' }` ; `dismissed` (écran quitté,
+ * retour passerelle sans résultat, timeout) → `{ status: 'dismissed', reason }`, la tentative est conservée ; `error` → `PaymentWidgetUnavailableError`. Une `txnRef` inconnue ne règle rien.
  */
 export function settlePaymentWidget(txnRef: string, message: WidgetMessage): void {
   const entry = pending.get(txnRef);
@@ -138,7 +138,8 @@ export function settlePaymentWidget(txnRef: string, message: WidgetMessage): voi
   if (message.kind === 'success') entry.resolve({ status: 'success', payRef: message.payRef });
   else if (message.kind === 'paid_unconfirmed') entry.resolve({ status: 'paid_unconfirmed' });
   else if (message.kind === 'error') entry.reject(new PaymentWidgetUnavailableError(message.desc));
-  else entry.resolve({ status: 'cancelled' });
+  else if (message.kind === 'dismissed') entry.resolve({ status: 'dismissed', reason: message.reason });
+  else entry.resolve({ status: 'cancelled' }); // cancelled / declined : explicites et définitifs
 }
 
 /**
@@ -162,7 +163,7 @@ export function createOpenPaymentWidget(
       // Un seul widget à l'écran : toute demande précédente jamais terminée est abandonnée (= annulée).
       for (const [oldRef, old] of [...pending]) {
         pending.delete(oldRef);
-        old.resolve({ status: 'cancelled' });
+        old.resolve({ status: 'dismissed', reason: 'user_left' }); // pas un refus explicite : tentative conservée
       }
       pending.set(txnRef, {
         config: config!,

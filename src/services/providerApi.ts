@@ -210,9 +210,6 @@ export async function getProviderConsultations(
   return (data ?? []).map(mapConsultation);
 }
 
-/** Statuts affichés dans l'agenda du jour / l'onglet « En cours » (valeurs exactes de `consultations.status`). */
-export const TODAY_STATUSES = ['scheduled', 'in_progress', 'completed'];
-
 export async function getTodayConsultations(doctorId: string): Promise<ProviderConsultation[]> {
   if (useMock()) return mock.providerTodayConsultations;
   const start = new Date();
@@ -223,8 +220,8 @@ export async function getTodayConsultations(doctorId: string): Promise<ProviderC
     .from('consultations')
     .select(`*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name )`)
     .eq('doctor_id', doctorId)
-    // Agenda du jour : jamais `pending_payment` (impayée) ni `cancelled` ; terminées conservées pour l'affichage.
-    .in('status', TODAY_STATUSES)
+    // Agenda du jour : seule `pending_payment` (impayée) est exclue ; annulées / absents restent visibles (badges existants).
+    .neq('status', 'pending_payment')
     .gte('scheduled_at', start.toISOString())
     .lt('scheduled_at', end.toISOString())
     .order('scheduled_at', { ascending: true });

@@ -13,7 +13,13 @@ describe('buildPaymentFormHtml', () => {
   });
 });
 
-import { buildInlineCheckoutHtml, isAllowedWidgetUrl, parseWidgetMessage } from './paymentForm';
+import {
+  buildInlineCheckoutHtml,
+  isAllowedWidgetUrl,
+  isWidgetRedirect,
+  parseWidgetMessage,
+  widgetOriginWhitelist,
+} from './paymentForm';
 
 describe('buildInlineCheckoutHtml (same webpayCheckout call as the web InterswitchCheckoutButton)', () => {
   const config = {
@@ -82,14 +88,17 @@ describe('parseWidgetMessage', () => {
     expect(parseWidgetMessage(complete({ resp: '00' }), TXN)).toEqual({ kind: 'paid_unconfirmed' });
   });
 
-  it('X1 is a user cancellation; Z6 / TO are declines', () => {
+  it('X1 is an explicit user cancellation; Z6 is an explicit decline', () => {
     expect(parseWidgetMessage(complete({ resp: 'X1' }), TXN)).toEqual({ kind: 'cancelled' });
     expect(parseWidgetMessage(complete({ resp: 'Z6', desc: 'declined' }), TXN)).toEqual({
       kind: 'declined',
       code: 'Z6',
       desc: 'declined',
     });
-    expect(parseWidgetMessage(complete({ resp: 'TO' }), TXN).kind).toBe('declined');
+  });
+
+  it('TO (gateway timeout) is NOT definitive: a timeout can still succeed, so it is "dismissed/timeout"', () => {
+    expect(parseWidgetMessage(complete({ resp: 'TO' }), TXN)).toEqual({ kind: 'dismissed', reason: 'timeout' });
   });
 
   it('script load failure and garbage are handled', () => {
@@ -99,24 +108,40 @@ describe('parseWidgetMessage', () => {
   });
 });
 
-describe('isAllowedWidgetUrl (WebView navigation allow-list)', () => {
-  const config = {
-    scriptUrl: 'https://webpay-ui.k8.isw.la/inline-checkout.js',
-    redirectUrl: 'visiodoc://(patient)/appointments',
-  };
-  it('allows about:blank and the gateway host (and its sibling subdomains)', () => {
-    expect(isAllowedWidgetUrl('about:blank', config)).toBe(true);
-    expect(isAllowedWidgetUrl('https://webpay-ui.k8.isw.la/inline-checkout.js', config)).toBe(true);
-    expect(isAllowedWidgetUrl('https://pay.k8.isw.la/checkout', config)).toBe(true);
+describe('isAllowedWidgetUrl (WebView navigation policy: never block a bank / 3-DS / mobile-money page)', () => {
+  it('allows about:blank and every https URL, whatever the domain (top-level and iframes)', () => {
+    expect(isAllowedWidgetUrl('about:blank')).toBe(true);
+    expect(isAllowedWidgetUrl('https://webpay-ui.k8.isw.la/inline-checkout.js')).toBe(true);
+    expect(isAllowedWidgetUrl('https://secure.mybank.example/3ds?x=1')).toBe(true);
+    expect(isAllowedWidgetUrl('https://pay.mobile-money.example:8443/otp')).toBe(true);
+    expect(isAllowedWidgetUrl('HTTPS://UPPER.EXAMPLE/')).toBe(true);
   });
-  it('blocks other hosts, look-alikes, plain http, other schemes and the app deep link', () => {
-    expect(isAllowedWidgetUrl('https://evil.example/phish', config)).toBe(false);
-    expect(isAllowedWidgetUrl('https://isw.la.evil.example/', config)).toBe(false);
-    expect(isAllowedWidgetUrl('https://notisw.la/', config)).toBe(false);
-    expect(isAllowedWidgetUrl('http://webpay-ui.k8.isw.la/', config)).toBe(false);
-    expect(isAllowedWidgetUrl('javascript:alert(1)', config)).toBe(false);
-    expect(isAllowedWidgetUrl('intent://x', config)).toBe(false);
-    expect(isAllowedWidgetUrl('visiodoc://(patient)/appointments', config)).toBe(false);
-    expect(isAllowedWidgetUrl('', config)).toBe(false);
+  it('blocks plain http, unknown custom schemes, javascript:, intent: and empty URLs', () => {
+    expect(isAllowedWidgetUrl('http://webpay-ui.k8.isw.la/')).toBe(false);
+    expect(isAllowedWidgetUrl('javascript:alert(1)')).toBe(false);
+    expect(isAllowedWidgetUrl('intent://x#Intent;end')).toBe(false);
+    expect(isAllowedWidgetUrl('tel:+243810000001')).toBe(false);
+    expect(isAllowedWidgetUrl('mailto:a@b.c')).toBe(false);
+    expect(isAllowedWidgetUrl('myapp://anything')).toBe(false);
+    expect(isAllowedWidgetUrl('')).toBe(false);
+  });
+});
+
+describe('isWidgetRedirect (site_redirect_url hit = gateway returned, outcome unknown)', () => {
+  it('matches URLs starting with the configured redirect URL only', () => {
+    expect(isWidgetRedirect('visiodoc://(patient)/appointments?x=1', 'visiodoc://(patient)/appointments')).toBe(true);
+    expect(isWidgetRedirect('https://x.example/back?ref=1', 'https://x.example/back')).toBe(true);
+    expect(isWidgetRedirect('https://x.example/other', 'https://x.example/back')).toBe(false);
+    expect(isWidgetRedirect('visiodoc://other', 'visiodoc://(patient)/appointments')).toBe(false);
+  });
+});
+
+describe('widgetOriginWhitelist', () => {
+  it('is https + about:blank, plus the custom scheme of the redirect URL', () => {
+    expect(widgetOriginWhitelist('visiodoc://(patient)/appointments')).toEqual(['https://*', 'about:blank', 'visiodoc://*']);
+    expect(widgetOriginWhitelist('exp://192.168.1.2:8081/--/appointments')).toEqual(['https://*', 'about:blank', 'exp://*']);
+  });
+  it('does not add anything for an https redirect URL', () => {
+    expect(widgetOriginWhitelist('https://x.example/back')).toEqual(['https://*', 'about:blank']);
   });
 });

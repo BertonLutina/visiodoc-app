@@ -78,11 +78,21 @@ export function buildInlineCheckoutHtml(config: InlineCheckoutConfig, request: I
 </script></body></html>`;
 }
 
+export type DismissReason = 'user_left' | 'gateway_returned' | 'timeout';
+
 export type WidgetMessage =
   | { kind: 'success'; payRef: string }
   | { kind: 'paid_unconfirmed' }
+  /** Le widget a EXPLICITEMENT rapporté une annulation (X1) : définitif, la tentative peut être oubliée. */
   | { kind: 'cancelled' }
+  /** Refus explicite de la banque (Z6…) : définitif. */
   | { kind: 'declined'; code: string; desc: string }
+  /**
+   * Aucune issue définitive : l'utilisateur a quitté l'écran (`user_left`), la passerelle est revenue sur
+   * `site_redirect_url` sans résultat (`gateway_returned`) ou a expiré (`TO`, qui peut encore aboutir) :
+   * la tentative est CONSERVÉE.
+   */
+  | { kind: 'dismissed'; reason: DismissReason }
   | { kind: 'error'; desc: string }
   | { kind: 'ignore' };
 
@@ -109,25 +119,29 @@ export function parseWidgetMessage(raw: unknown, expectedTxnRef: string): Widget
     return payRef ? { kind: 'success', payRef } : { kind: 'paid_unconfirmed' };
   }
   if (resp === 'X1') return { kind: 'cancelled' };
+  if (resp === 'TO') return { kind: 'dismissed', reason: 'timeout' };
   return { kind: 'declined', code: resp, desc: String(msg.desc ?? '') };
 }
 
-const httpsHost = (url: string): string | null => {
-  const m = /^https:\/\/([^/?#:@\s]+)(?::\d+)?(?:[/?#]|$)/i.exec(url);
-  return m ? m[1].toLowerCase() : null;
-};
-
 /**
- * Liste blanche de navigation de la WebView de paiement : `about:blank`, l'hôte du script du widget et
- * ses sous-domaines frères (même domaine enregistrable, ex. `*.isw.la`), en https uniquement. Tout le
- * reste (autres hôtes, http, schémas exotiques, deep link de l'app) est bloqué.
+ * Politique de navigation de la WebView de paiement : TOUT `https:` (pages de banque, 3-DS, mobile money, sur
+ * n'importe quel domaine, y compris les iframes) et `about:blank` ; `http:`, `javascript:`, `intent:`, `tel:`,
+ * `mailto:` et les schémas personnalisés sont bloqués. L'usurpation d'un résultat est déjà couverte par la
+ * correspondance exacte du `txnref` et la vérification serveur : bloquer un paiement légitime serait pire.
  */
-export function isAllowedWidgetUrl(url: string, config: { scriptUrl: string; redirectUrl: string }): boolean {
-  if (url === 'about:blank') return true;
-  const host = httpsHost(url);
-  const scriptHost = httpsHost(config.scriptUrl);
-  if (!host || !scriptHost) return false;
-  if (host === scriptHost) return true;
-  const registrable = scriptHost.split('.').slice(-2).join('.');
-  return host.endsWith(`.${registrable}`);
+export function isAllowedWidgetUrl(url: string): boolean {
+  return url === 'about:blank' || /^https:\/\//i.test(url);
+}
+
+/** `site_redirect_url` atteinte : la passerelle est revenue, issue inconnue (à traiter, jamais à charger). */
+export function isWidgetRedirect(url: string, redirectUrl: string): boolean {
+  return redirectUrl.length > 0 && url.startsWith(redirectUrl);
+}
+
+/** `originWhitelist` cohérent : https, about:blank et le schéma personnalisé de l'URL de retour (deep link). */
+export function widgetOriginWhitelist(redirectUrl: string): string[] {
+  const list = ['https://*', 'about:blank'];
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(redirectUrl)?.[1]?.toLowerCase();
+  if (scheme && scheme !== 'https' && scheme !== 'http') list.push(`${scheme}://*`);
+  return list;
 }

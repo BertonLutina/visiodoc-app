@@ -6,7 +6,13 @@ import { WebView } from 'react-native-webview';
 import { ChevronLeft } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { useT } from '@/i18n';
-import { buildInlineCheckoutHtml, isAllowedWidgetUrl, parseWidgetMessage } from '@/utils/paymentForm';
+import {
+  buildInlineCheckoutHtml,
+  isAllowedWidgetUrl,
+  isWidgetRedirect,
+  parseWidgetMessage,
+  widgetOriginWhitelist,
+} from '@/utils/paymentForm';
 import { getPendingPaymentWidget, settlePaymentWidget } from '@/services/paymentWidget';
 import type { WidgetMessage } from '@/utils/paymentForm';
 
@@ -40,12 +46,13 @@ export default function PaymentScreen() {
     if (!html) router.back();
   }, [html]);
 
-  // Fermeture par un retour système / geste sans réponse du widget = annulation (sans effet si déjà réglé).
+  // Fermeture par un retour système / geste sans réponse du widget = écran quitté (`dismissed`, tentative
+  // conservée : on ne sait pas si le patient a été débité). Sans effet si déjà réglé.
   const navigation = useNavigation();
   useEffect(
     () =>
       navigation.addListener('beforeRemove', () => {
-        if (txnRef) settlePaymentWidget(txnRef, { kind: 'cancelled' });
+        if (txnRef) settlePaymentWidget(txnRef, { kind: 'dismissed', reason: 'user_left' });
       }),
     [navigation, txnRef],
   );
@@ -53,15 +60,15 @@ export default function PaymentScreen() {
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="flex-row items-center px-5 pt-2 pb-2">
-        <Pressable onPress={() => finish({ kind: 'cancelled' })} className="p-1 mr-2">
+        <Pressable onPress={() => finish({ kind: 'dismissed', reason: 'user_left' })} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
         <Text className="font-sans-bold text-lg text-ink">{t('Paiement')}</Text>
       </View>
       {html && pending ? (
         <WebView
-          // Liste blanche : about:blank + hôtes de la passerelle (https). Non vérifié sur appareil.
-          originWhitelist={['https://*', 'about:blank']}
+          // https (toute page de banque / 3-DS / mobile money), about:blank et le schéma du deep link de retour.
+          originWhitelist={widgetOriginWhitelist(pending.config.redirectUrl)}
           source={{ html }}
           javaScriptEnabled
           // Le widget Interswitch peut s'appuyer sur sessionStorage / localStorage ; popups interdites
@@ -73,7 +80,15 @@ export default function PaymentScreen() {
             const message = parseWidgetMessage(event.nativeEvent.data, pending.request.txnRef);
             if (message.kind !== 'ignore') finish(message);
           }}
-          onShouldStartLoadWithRequest={(req) => isAllowedWidgetUrl(req.url, pending.config)}
+          onShouldStartLoadWithRequest={(req) => {
+            // `site_redirect_url` atteinte : la passerelle est revenue sans résultat du widget (issue inconnue).
+            // On ne charge pas la page : tentative conservée, retour à l'appelant qui affiche la vérification.
+            if (isWidgetRedirect(req.url, pending.config.redirectUrl)) {
+              finish({ kind: 'dismissed', reason: 'gateway_returned' });
+              return false;
+            }
+            return isAllowedWidgetUrl(req.url); // https + about:blank ; http / schémas inconnus bloqués
+          }}
         />
       ) : (
         <View className="flex-1 items-center justify-center px-6">

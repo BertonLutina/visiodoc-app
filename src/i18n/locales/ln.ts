@@ -557,4 +557,9 @@ export const ln: Record<string, string> = {
   "Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.": "Kofuta mbongo ezali kotalama, kofuta lisusu te. Meka lisusu na mwa miniti moke.",
   "Payer quand même": "Futa nde",
   "Paiement effectué, ne repaie pas. Nous vérifions ta transaction.": "Kofuta mbongo esalemi, kofuta lisusu te. Tozali kotala transaction na yo.",
+  "Tu as été débité ?": "Bakata mbongo na yo?",
+  "Tu as quitté le paiement avant la fin. Nous ne savons pas si le paiement a abouti.": "Obimi na kofuta liboso ya nsuka. Toyebi te soki kofuta esalemi.",
+  "Oui": "Iyo",
+  "Non": "Te",
+  "Ton paiement a été reçu mais ta consultation n'est pas encore confirmée. Ne paie pas une seconde fois : contacte le support si cela dure.": "Kofuta mbongo na yo ezwami kasi consultation na yo endimisami naino te. Kofuta mbala ya mibale te: benga support soki ezali kokoba.",
 };

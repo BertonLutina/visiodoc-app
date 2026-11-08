@@ -49,8 +49,30 @@ export async function getPendingAttempt(consultationId: string): Promise<Pending
   return (await readStore())[consultationId] ?? null;
 }
 
+/** Au-delà de 24 h une tentative n'a plus de sens (le serveur a depuis longtemps libéré / rattrapé le paiement). */
+export const PENDING_ATTEMPT_MAX_AGE_MS = 24 * 3600_000;
+
+/** Liste les tentatives ; celles de plus de 24 h sont PURGÉES du stockage. */
 export async function listPendingAttempts(): Promise<PendingPaymentAttempt[]> {
-  return Object.values(await readStore());
+  const store = await readStore();
+  const now = Date.now();
+  const fresh: Store = {};
+  for (const [id, attempt] of Object.entries(store)) {
+    if (typeof attempt?.at === 'number' && now - attempt.at <= PENDING_ATTEMPT_MAX_AGE_MS) fresh[id] = attempt;
+  }
+  if (Object.keys(fresh).length !== Object.keys(store).length) {
+    try {
+      await writeStore(fresh);
+    } catch {
+      /* purge réessayée au prochain listing */
+    }
+  }
+  return Object.values(fresh);
+}
+
+/** Déconnexion : plus aucune tentative mémorisée (elles appartiennent au compte qui se déconnecte). */
+export async function clearAllPendingAttempts(): Promise<void> {
+  await AsyncStorage.removeItem(PENDING_PAYMENT_KEY);
 }
 
 export async function clearPendingAttempt(consultationId: string): Promise<void> {
