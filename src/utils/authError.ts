@@ -9,11 +9,33 @@ export function isProviderPending(e: any): boolean {
   return e?.message === PROVIDER_NOT_VALIDATED;
 }
 
+/**
+ * Refus HTTP 422 `weak_password` pour cause de mot de passe compromis (HIBP) : le texte du guide,
+ * sinon `null`. Corps GoTrue : `{ error_code: 'weak_password', reasons: ['pwned'] }` ; quand seul
+ * le message est disponible (Edge Function, FunctionsHttpError), on cherche `weak_password` / `pwned`.
+ */
+export function pwnedPasswordMessage(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const e = error as Record<string, unknown>;
+  const reasons = Array.isArray(e.reasons) ? e.reasons.map(String) : null;
+  const text = [e.message, e.msg, e.error, e.error_code, e.code, ...(reasons ?? [])]
+    .filter((v): v is string => typeof v === 'string')
+    .join(' ')
+    .toLowerCase();
+  // Corps structuré : weak_password pour une autre raison (longueur…) n'est pas un mot de passe fuité.
+  if (reasons && reasons.length > 0 && !reasons.includes('pwned')) return null;
+  const pwned =
+    text.includes('weak_password') || text.includes('pwned') || text.includes('known to be weak and easy to guess');
+  return pwned ? translate('Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.') : null;
+}
+
 /** Traduit une erreur Supabase Auth/Postgres en message lisible (FR). */
 export function authErrorMessage(e: any): string {
   const msg = (e?.message ?? '').toString();
   const lower = msg.toLowerCase();
   if (msg === PROVIDER_NOT_VALIDATED) return translate(PROVIDER_PENDING_MESSAGE);
+  const pwned = pwnedPasswordMessage(e);
+  if (pwned) return pwned;
   if (lower.includes('invalid login credentials')) return translate('Email ou mot de passe incorrect.');
   if (
     lower.includes('already registered') ||
@@ -22,7 +44,7 @@ export function authErrorMessage(e: any): string {
   )
     return translate('Un compte existe déjà avec cet email.');
   if (lower.includes('password should be at least'))
-    return translate('Le mot de passe doit contenir au moins 6 caractères.');
+    return translate('Le mot de passe doit comporter au moins 10 caractères et inclure au moins une lettre et un chiffre.');
   if (lower.includes('invalid email') || lower.includes('unable to validate email'))
     return translate('Adresse email invalide.');
   if (lower.includes('email not confirmed'))

@@ -9,6 +9,8 @@ import { CountryPicker } from '@/components/CountryPicker';
 import { SPECIALIZATIONS } from '@/config/specializations';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
+import { PasswordField } from '@/components/PasswordField';
+import { passwordIssue } from '@/services/passwordPolicy';
 import { authErrorMessage } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
@@ -109,7 +111,7 @@ export default function RegisterProvider() {
               value={form.licenseNumber}
               onChangeText={set('licenseNumber')}
             />
-            <Field label={t('Mot de passe')} placeholder="••••••••" secureTextEntry value={form.password} onChangeText={set('password')} />
+            <PasswordField label={t('Mot de passe')} value={form.password} onChangeText={set('password')} />
 
             {errorMsg ? (
               <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
@@ -117,7 +119,14 @@ export default function RegisterProvider() {
               </View>
             ) : null}
 
-            <Button label={t('Créer mon compte')} variant="accent" loading={loading} onPress={onSubmit} className="mt-2" />
+            <Button
+              label={t('Créer mon compte')}
+              variant="accent"
+              loading={loading}
+              disabled={passwordIssue(form.password) !== null}
+              onPress={onSubmit}
+              className="mt-2"
+            />
             <Text className="text-center font-sans text-xs text-muted mt-3">
               {t("⏳ Validation par l'administrateur requise")}
             </Text>

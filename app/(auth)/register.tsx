@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { CountryPicker } from '@/components/CountryPicker';
 import { getAfricanCountry } from '@/config/africanCountries';
+import { PasswordField } from '@/components/PasswordField';
+import { passwordIssue } from '@/services/passwordPolicy';
 import { authErrorMessage } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
@@ -68,13 +70,7 @@ export default function RegisterPatient() {
           value={form.phone}
           onChangeText={set('phone')}
         />
-        <Field
-          label={t('Mot de passe')}
-          placeholder="••••••••"
-          secureTextEntry
-          value={form.password}
-          onChangeText={set('password')}
-        />
+        <PasswordField label={t('Mot de passe')} value={form.password} onChangeText={set('password')} />
         <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
 
         {errorMsg ? (
@@ -83,7 +79,13 @@ export default function RegisterPatient() {
           </View>
         ) : null}
 
-        <Button label={t('Créer mon compte')} loading={loading} onPress={onSubmit} className="mt-2" />
+        <Button
+          label={t('Créer mon compte')}
+          loading={loading}
+          disabled={passwordIssue(form.password) !== null}
+          onPress={onSubmit}
+          className="mt-2"
+        />
 
         <View className="flex-row justify-center mt-5">
           <Text className="font-sans text-muted">{t('Déjà inscrit ?')} </Text>
