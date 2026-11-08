@@ -32,6 +32,17 @@ export async function getApprovedSpecializations(): Promise<string[]> {
   return mergeCatalog(SPECIALIZATIONS, data.map((r: any) => r.label as string));
 }
 
+/**
+ * Spécialités officielles avec leur `id` (UUID `service_types`) — utile pour `serviceTypeId` à
+ * l'inscription. Liste vide si la table est illisible ou en mode mock (jamais d'id inventé).
+ */
+export async function getServiceTypeCatalog(): Promise<{ id: string; label: string }[]> {
+  if (useMock()) return [];
+  const { data, error } = await supabase!.from(TABLE).select('id, label').eq('is_active', true);
+  if (error || !data) return [];
+  return data.map((r: any) => ({ id: String(r.id), label: String(r.label) }));
+}
+
 export function mergeCatalog(base: string[], extra: string[]): string[] {
   const seen = new Map<string, string>();
   for (const l of [...base, ...extra]) if (!seen.has(specKey(l))) seen.set(specKey(l), l);

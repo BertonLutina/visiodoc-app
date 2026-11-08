@@ -10,6 +10,8 @@ import { SPECIALIZATIONS } from '@/config/specializations';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
 import { PasswordField } from '@/components/PasswordField';
+import { GenderField } from '@/components/GenderField';
+import type { Gender } from '@/services/registration';
 import { passwordIssue } from '@/services/passwordPolicy';
 import { authErrorMessage } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,8 +27,10 @@ export default function RegisterProvider() {
     phone: '',
     specialization: 'Médecine générale',
     licenseNumber: '',
+    city: '',
     password: '',
   });
+  const [gender, setGender] = useState<Gender | null>(null); // aucun choix par défaut
   const [countryCode, setCountryCode] = useState('CD'); // RD Congo par défaut
   const [done, setDone] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -35,6 +39,7 @@ export default function RegisterProvider() {
 
   const onSubmit = async () => {
     setErrorMsg(null);
+    if (!gender) return;
     try {
       await registerProvider({
         firstName: form.firstName,
@@ -42,8 +47,10 @@ export default function RegisterProvider() {
         email: form.email,
         phone: form.phone,
         password: form.password,
+        gender,
         specialization: form.specialization,
         licenseNumber: form.licenseNumber,
+        city: form.city,
         countryCode,
       });
       setDone(true);
@@ -82,6 +89,7 @@ export default function RegisterProvider() {
           <>
             <Field label={t('Prénom')} placeholder="Amara" value={form.firstName} onChangeText={set('firstName')} />
             <Field label={t('Nom')} placeholder="Diallo" value={form.lastName} onChangeText={set('lastName')} />
+            <GenderField value={gender} onChange={setGender} />
             <Field
               label={t('Email professionnel')}
               placeholder="a.diallo@clinic.sn"
@@ -98,6 +106,7 @@ export default function RegisterProvider() {
               onChangeText={set('phone')}
             />
             <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
+            <Field label={t('Ville')} placeholder="Kinshasa" value={form.city} onChangeText={set('city')} />
             <Autocomplete
               label={t('Spécialisation')}
               value={form.specialization}
@@ -123,7 +132,7 @@ export default function RegisterProvider() {
               label={t('Créer mon compte')}
               variant="accent"
               loading={loading}
-              disabled={passwordIssue(form.password) !== null}
+              disabled={passwordIssue(form.password) !== null || !gender || !form.city.trim()}
               onPress={onSubmit}
               className="mt-2"
             />

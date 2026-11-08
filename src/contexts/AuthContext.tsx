@@ -3,7 +3,9 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import type { User, UserRole } from '@/types';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
-import { PROVIDER_NOT_VALIDATED } from '@/utils/authError';
+import { PROVIDER_NOT_VALIDATED, edgeFunctionError } from '@/utils/authError';
+import { buildRegisterPrestaBody, resolveSpecialty, type Gender } from '@/services/registration';
+import { getServiceTypeCatalog } from '@/services/specializationCatalog';
 import { COUNTRIES } from '@/config/countries';
 import { currentPatient } from '@/data/mock';
 import { currentProvider } from '@/data/mockProvider';
@@ -33,6 +35,8 @@ interface RegisterPatientInput {
   email: string;
   phone?: string;
   password: string;
+  /** `users.gender` : uniquement 'male' ou 'female'. */
+  gender: Gender;
   /** Code ISO du pays choisi, ex: 'CD' */
   countryCode?: string;
 }
@@ -43,8 +47,12 @@ interface RegisterProviderInput {
   email: string;
   phone?: string;
   password: string;
+  /** `users.gender` : uniquement 'male' ou 'female'. */
+  gender: Gender;
+  /** Libellé de la spécialité choisie (résolu en serviceTypeId, sinon proposé). */
   specialization: string;
   licenseNumber: string;
+  city: string;
   /** Code ISO du pays, ex: 'CD' */
   countryCode?: string;
 }
@@ -442,6 +450,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           first_name: input.firstName,
           last_name: input.lastName,
           phone: input.phone || null,
+          gender: input.gender,
           role: 'patient',
           country_id: countryIdForCode(input.countryCode),
           public_id: `VD-${authUser.id.slice(0, 8).toUpperCase()}`,
@@ -475,30 +484,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (supabaseConfigured && supabase) {
         // Edge Function register-presta → crée le compte prestataire.
         // Champs obligatoires côté fonction : phone + countryId (UUID du pays).
-        const { data, error } = await supabase.functions.invoke('register-presta', {
-          body: {
-            email: input.email.trim().toLowerCase(),
-            password: input.password,
-            firstName: input.firstName,
-            lastName: input.lastName,
-            phone: input.phone,
-            specialization: input.specialization,
-            licenseNumber: input.licenseNumber,
-            countryId: countryIdForCode(input.countryCode),
-          },
+        // `buildRegisterPrestaBody` lève avant tout appel réseau si le genre n'est pas male/female.
+        const { serviceTypeId, proposedSpecialtyLabel } = resolveSpecialty(
+          input.specialization,
+          await getServiceTypeCatalog(),
+        );
+        const body = buildRegisterPrestaBody({
+          email: input.email,
+          password: input.password,
+          firstName: input.firstName,
+          lastName: input.lastName,
+          gender: input.gender,
+          phone: input.phone,
+          serviceTypeId,
+          proposedSpecialtyLabel,
+          countryId: countryIdForCode(input.countryCode),
+          city: input.city,
+          licenseNumber: input.licenseNumber,
         });
+        const { data, error } = await supabase.functions.invoke('register-presta', { body });
         if (error) {
-          // FunctionsHttpError : le vrai message métier est dans la réponse (error.context)
-          let msg = '';
+          // FunctionsHttpError : le vrai message métier est dans la réponse (error.context).
+          // On conserve `error_code` / `reasons` (ex. 422 weak_password + pwned) sur l'erreur levée.
+          let resBody: any = null;
           try {
-            const body = await (error as any).context?.json?.();
-            msg = body?.error ?? '';
+            resBody = await (error as any).context?.json?.();
           } catch {
             /* ignore */
           }
-          throw new Error(msg || error.message);
+          throw edgeFunctionError(resBody, error.message);
         }
-        if (data?.error) throw new Error(data.error);
+        if (data?.error) throw edgeFunctionError(data);
         // Pas de connexion auto : le compte doit d'abord être validé par l'admin.
       } else {
         await new Promise((r) => setTimeout(r, 400));

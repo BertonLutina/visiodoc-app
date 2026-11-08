@@ -6,6 +6,8 @@ import { Button, Field, ScreenTitle } from '@/components/ui';
 import { CountryPicker } from '@/components/CountryPicker';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { PasswordField } from '@/components/PasswordField';
+import { GenderField } from '@/components/GenderField';
+import type { Gender } from '@/services/registration';
 import { passwordIssue } from '@/services/passwordPolicy';
 import { authErrorMessage } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,6 +23,7 @@ export default function RegisterPatient() {
     phone: '',
     password: '',
   });
+  const [gender, setGender] = useState<Gender | null>(null); // aucun choix par défaut
   const [countryCode, setCountryCode] = useState('CD'); // RD Congo par défaut
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const country = getAfricanCountry(countryCode);
@@ -29,6 +32,7 @@ export default function RegisterPatient() {
 
   const onSubmit = async () => {
     setErrorMsg(null);
+    if (!gender) return;
     try {
       await registerPatient({
         firstName: form.firstName,
@@ -36,6 +40,7 @@ export default function RegisterPatient() {
         email: form.email,
         phone: form.phone,
         password: form.password,
+        gender,
         countryCode,
       });
       router.replace('/(patient)');
@@ -70,6 +75,7 @@ export default function RegisterPatient() {
           value={form.phone}
           onChangeText={set('phone')}
         />
+        <GenderField value={gender} onChange={setGender} />
         <PasswordField label={t('Mot de passe')} value={form.password} onChangeText={set('password')} />
         <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
 
@@ -82,7 +88,7 @@ export default function RegisterPatient() {
         <Button
           label={t('Créer mon compte')}
           loading={loading}
-          disabled={passwordIssue(form.password) !== null}
+          disabled={passwordIssue(form.password) !== null || !gender}
           onPress={onSubmit}
           className="mt-2"
         />
