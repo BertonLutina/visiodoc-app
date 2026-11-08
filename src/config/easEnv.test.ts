@@ -34,6 +34,13 @@ describe('eas.json : séparation UAT / Production', () => {
     expect(Object.keys(eas.build).sort()).toEqual(['development', 'preview', 'production']);
   });
 
+  it.each(['development', 'preview', 'production'])(
+    '%s : env contient exactement APP_ENV et SUPABASE_URL (aucune autre clé, donc aucun secret glissé)',
+    (profile) => {
+      expect(Object.keys(env(profile)).sort()).toEqual(['EXPO_PUBLIC_APP_ENV', 'EXPO_PUBLIC_SUPABASE_URL']);
+    },
+  );
+
   it('development : APP_ENV development et URL UAT, jamais Production', () => {
     expect(env('development').EXPO_PUBLIC_APP_ENV).toBe('development');
     expect(env('development').EXPO_PUBLIC_SUPABASE_URL).toBe(UAT_URL);

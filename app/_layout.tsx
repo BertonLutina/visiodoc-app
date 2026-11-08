@@ -1,6 +1,6 @@
 import '../global.css';
 import React, { useEffect } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationBar } from 'expo-navigation-bar';
@@ -24,6 +24,7 @@ import { LanguageProvider } from '@/i18n';
 import { BiometricLock } from '@/components/BiometricLock';
 import { useBiometricOffer } from '@/hooks/useBiometricOffer';
 import { colors } from '@/theme/colors';
+import { supabaseConfigurationProblem } from '@/lib/supabase';
 
 /** Contenu de l'app, sous AuthProvider : écran de verrou tant que la biométrie n'est pas validée. */
 function AppShell() {
@@ -82,6 +83,17 @@ export default function RootLayout() {
 
   if (!fontsLoaded) {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  }
+
+  // Build uat / production mal configuré : écran bloquant plutôt qu'un repli silencieux sur les données mock.
+  if (supabaseConfigurationProblem) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: 'center', padding: 24 }}>
+        <Text accessibilityRole="alert" style={{ fontSize: 16, textAlign: 'center', color: '#B00020' }}>
+          {supabaseConfigurationProblem}
+        </Text>
+      </View>
+    );
   }
 
   return (

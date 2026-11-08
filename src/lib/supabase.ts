@@ -1,9 +1,24 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
+import { appEnv } from '@/config/appEnv';
+import { configurationProblem } from '@/config/configurationProblem';
 import { secureSessionStorage } from './secureSessionStorage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+/**
+ * Build `uat` / `production` sans URL ou sans clé : `null` en développement local (`__DEV__`, Jest),
+ * où les données mock restent permises. Affiché en écran bloquant par `app/_layout.tsx`.
+ */
+export const supabaseConfigurationProblem: string | null =
+  typeof __DEV__ !== 'undefined' && __DEV__
+    ? null
+    : configurationProblem({ url: supabaseUrl, anonKey: supabaseAnonKey, appEnv: appEnv() });
+
+if (supabaseConfigurationProblem && !process.env.JEST_WORKER_ID) {
+  console.error(supabaseConfigurationProblem);
+}
 
 // En Phase 1 (frontend seul) le client peut être absent : les écrans utilisent
 // les données mock. Le lien réel sera activé en Phase 2.

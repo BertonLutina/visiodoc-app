@@ -40,6 +40,8 @@ dans EAS (`eas env:create` ou le tableau de bord, **une valeur par environnement
 - Paiement (widget Interswitch, voir `src/services/paymentWidget.ts`) : `EXPO_PUBLIC_ISW_MODE` (`TEST` ou `LIVE`), `EXPO_PUBLIC_ISW_MERCHANT_CODE`, `EXPO_PUBLIC_ISW_PAY_ITEM_ID`. Optionnelles : `EXPO_PUBLIC_ISW_SCRIPT_URL`, `EXPO_PUBLIC_ISW_REDIRECT_URL`. Valeurs à obtenir du backend ; sans elles le widget n'est pas configuré.
 - `EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT` : `true` uniquement en `development` pour simuler localement le paiement prestataire ; ignorée dans les autres environnements.
 
+Avant `eas build -p production`, vérifier que l'environnement EAS `production` contient bien `EXPO_PUBLIC_SUPABASE_ANON_KEY` : un build `uat` ou `production` sans URL ou sans clé affiche un écran « Configuration manquante » au lieu de retomber sur les données mock (seul `development` garde ce repli).
+
 `EXPO_PUBLIC_APP_ENV` vient de `eas.json` ; une valeur absente ou inconnue vaut `production`
 (`src/config/appEnv.ts`). L'application n'a pas de sélecteur d'environnement : un build est lié à un seul projet.
 
