@@ -24,9 +24,28 @@ const useMock = () => !supabaseConfigured || !supabase;
 const initials = (a?: string, b?: string) =>
   `${(a ?? '').charAt(0)}${(b ?? '').charAt(0)}`.toUpperCase();
 
-// La colonne `specialization` peut être un tableau (text[]) ou une chaîne côté DB.
-const specLabel = (s: any): string =>
-  Array.isArray(s) ? s.filter(Boolean).join(' · ') : (s ?? '');
+const LABEL_LOCALES = ['fr', 'en'] as const;
+
+/**
+ * Une spécialité peut arriver sous plusieurs formes : chaîne, tableau (text[]), ou jsonb indexé par
+ * langue (`specialties.labels` = { fr: '…', en: '…' }, ce que renvoie `public_provider_listing`).
+ * Toujours rendre une chaîne : un objet passé à <Text> fait planter React.
+ */
+const specLabel = (s: unknown): string => {
+  if (typeof s === 'string') return s;
+  if (Array.isArray(s)) return s.map(specLabel).filter(Boolean).join(' · ');
+  if (s && typeof s === 'object') {
+    const labels = s as Record<string, unknown>;
+    for (const locale of LABEL_LOCALES) {
+      const value = labels[locale];
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+    for (const value of Object.values(labels)) {
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+  }
+  return '';
+};
 
 /* ---------- Médecins ----------
  * Catalogue public : la vue `public_provider_listing` est l'unique point d'entrée (jamais la table

@@ -707,6 +707,23 @@ describe('public doctor catalog (public_provider_listing)', () => {
     expect(doctors[1].avatarUrl).toBeUndefined();
   });
 
+  // `specialties.labels` est un jsonb indexé par langue ({ fr: '…' }), jamais un tableau de chaînes.
+  it.each([
+    [{ fr: 'Médecine générale' }, 'Médecine générale'],
+    [{ en: 'General medicine', fr: 'Médecine générale' }, 'Médecine générale'],
+    [{ en: 'General medicine' }, 'General medicine'],
+    [{ fr: '', en: 'Pediatrics' }, 'Pediatrics'],
+    [[{ fr: 'Pédiatrie' }, { fr: 'Nutrition' }], 'Pédiatrie · Nutrition'],
+    [{}, 'Médecin'],
+    [{ fr: 42 }, 'Médecin'],
+  ])('renders a locale-keyed specialty label %j as a plain string', async (labels, expected) => {
+    sessionOrder.mockResolvedValue({ data: [{ ...rows[0], specialty_labels: labels }], error: null });
+    const { getDoctors } = require('./patientApi');
+    const [doctor] = await getDoctors({ signedIn: true });
+    expect(typeof doctor.specialty).toBe('string');
+    expect(doctor.specialty).toBe(expected);
+  });
+
   it('propagates a catalog error', async () => {
     publicOrder.mockResolvedValue({ data: null, error: new Error('boom') });
     const { getDoctors } = require('./patientApi');
