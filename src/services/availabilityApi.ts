@@ -1,4 +1,4 @@
-import { supabase, supabasePublic, supabaseConfigured } from '@/lib/supabase';
+import { supabase, supabaseConfigured } from '@/lib/supabase';
 import {
   DEFAULT_SETTINGS,
   computeDayStatus,
@@ -14,7 +14,13 @@ import {
 } from './availabilityEngine';
 
 const useMock = () => !supabaseConfigured || !supabase;
-const readClient = () => supabasePublic ?? supabase;
+
+/**
+ * Qui lit les disponibilités : `signedIn` (même convention que patientApi). Sans session, aucune
+ * lecture n'est faite : le backend n'expose plus `doctor_availability` ni `doctor_busy_slots` à
+ * l'anonyme. Toutes les lectures passent par le client de SESSION, jamais `supabasePublic`.
+ */
+export type AvailabilityOptions = { signedIn?: boolean };
 
 function monthBounds(year: number, month: number): { first: Date; last: Date } {
   return { first: new Date(year, month - 1, 1), last: new Date(year, month, 0) };
@@ -43,7 +49,7 @@ function mapWeeklyRow(r: any, withWindow: boolean): WeeklyRule {
 }
 
 async function fetchWeeklyRules(providerId: string): Promise<WeeklyRule[]> {
-  const client = readClient();
+  const client = supabase;
   if (!client) return [];
   const query = (columns: string) =>
     client
@@ -69,7 +75,7 @@ async function fetchWeeklyRules(providerId: string): Promise<WeeklyRule[]> {
 }
 
 async function fetchOverrides(providerId: string, from: Date, to: Date): Promise<OverrideRule[]> {
-  const client = readClient();
+  const client = supabase;
   if (!client) return [];
   const { data, error } = await client
     .from('doctor_availability')
@@ -124,20 +130,41 @@ export async function saveSchedulingSettings(
   if (error) throw error;
 }
 
-async function fetchBookedRanges(providerId: string, from: Date, to: Date): Promise<BookedRange[]> {
-  const client = readClient();
-  if (!client) return [];
-  const { data, error } = await client
-    .from('consultation_busy_times')
-    .select('scheduled_at, duration')
-    .eq('doctor_id', providerId)
-    .gte('scheduled_at', from.toISOString())
-    .lt('scheduled_at', to.toISOString());
-  if (error) throw error;
-  return (data ?? []).map((r: any) => {
-    const start = new Date(r.scheduled_at);
-    return { start, end: new Date(start.getTime() + (r.duration ?? 30) * 60000) };
-  });
+/** La RPC refuse `p_to - p_from > 62 jours` (SQLSTATE 22023) : 62 jours exactement passent. */
+const MAX_BUSY_WINDOW_MS = 62 * 24 * 60 * 60 * 1000;
+
+/**
+ * Créneaux occupés d'un médecin sur [from, to) via la RPC `doctor_busy_slots` (session obligatoire).
+ * Les plages > 62 jours sont découpées en fenêtres contiguës de 62 jours max (sans trou ni chevauchement).
+ * Sans session : aucun appel, liste vide. 42501 (non connecté) = « aucun créneau » ; toute autre
+ * erreur est propagée (comme avant avec la vue).
+ */
+export async function fetchBookedRanges(
+  providerId: string,
+  from: Date,
+  to: Date,
+  options: AvailabilityOptions = {},
+): Promise<BookedRange[]> {
+  if (!options.signedIn || useMock()) return [];
+  const end = to.getTime();
+  const ranges: BookedRange[] = [];
+  for (let start = from.getTime(); start < end; start += MAX_BUSY_WINDOW_MS) {
+    const windowEnd = Math.min(start + MAX_BUSY_WINDOW_MS, end);
+    const { data, error } = await supabase!.rpc('doctor_busy_slots', {
+      p_doctor_id: providerId,
+      p_from: new Date(start).toISOString(),
+      p_to: new Date(windowEnd).toISOString(),
+    });
+    if (error) {
+      if (error.code === '42501') return [];
+      throw error;
+    }
+    for (const r of (data ?? []) as { scheduled_at: string; duration: number | null }[]) {
+      const slotStart = new Date(r.scheduled_at);
+      ranges.push({ start: slotStart, end: new Date(slotStart.getTime() + (r.duration ?? 30) * 60000) });
+    }
+  }
+  return ranges;
 }
 
 /**
@@ -168,7 +195,9 @@ export async function getMonthAvailability(
   providerId: string,
   year: number,
   month: number,
+  options: AvailabilityOptions = {},
 ): Promise<Record<string, DayStatus>> {
+  if (!options.signedIn) return {}; // visiteur : ni créneaux ni requête
   const { first, last } = monthBounds(year, month);
   const rangeEnd = new Date(last);
   rangeEnd.setDate(rangeEnd.getDate() + 1);
@@ -177,13 +206,18 @@ export async function getMonthAvailability(
     fetchWeeklyRules(providerId),
     fetchOverrides(providerId, first, last),
     getSchedulingSettings(providerId),
-    fetchBookedRanges(providerId, first, rangeEnd),
+    fetchBookedRanges(providerId, first, rangeEnd, options),
   ]);
 
   return buildMonthAvailability(year, month, weeklyRules, overrides, settings, bookedRanges, new Date());
 }
 
-export async function getDaySlots(providerId: string, date: Date): Promise<Slot[]> {
+export async function getDaySlots(
+  providerId: string,
+  date: Date,
+  options: AvailabilityOptions = {},
+): Promise<Slot[]> {
+  if (!options.signedIn) return []; // visiteur : ni créneaux ni requête
   const dayStart = new Date(date);
   dayStart.setHours(0, 0, 0, 0);
   const dayEnd = new Date(dayStart);
@@ -193,7 +227,7 @@ export async function getDaySlots(providerId: string, date: Date): Promise<Slot[
     fetchWeeklyRules(providerId),
     fetchOverrides(providerId, dayStart, dayStart),
     getSchedulingSettings(providerId),
-    fetchBookedRanges(providerId, dayStart, dayEnd),
+    fetchBookedRanges(providerId, dayStart, dayEnd, options),
   ]);
 
   const ranges = effectiveRangesForDate(dayStart, weeklyRules, overrides);

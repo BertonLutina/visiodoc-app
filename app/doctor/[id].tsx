@@ -62,8 +62,8 @@ export default function DoctorProfile() {
     error: monthError,
     reload: reloadMonth,
   } = useAsync(
-    () => (doctor && !hideCommercial ? getMonthAvailability(doctor.id, year, month) : Promise.resolve({})),
-    [doctor?.id, hideCommercial, year, month],
+    () => (doctor && !hideCommercial ? getMonthAvailability(doctor.id, year, month, { signedIn }) : Promise.resolve({})),
+    [doctor?.id, hideCommercial, signedIn, year, month],
   );
 
   const {
@@ -74,9 +74,9 @@ export default function DoctorProfile() {
   } = useAsync(
     () =>
       doctor && !hideCommercial && selectedDate
-        ? getDaySlots(doctor.id, new Date(selectedDate + 'T00:00:00'))
+        ? getDaySlots(doctor.id, new Date(selectedDate + 'T00:00:00'), { signedIn })
         : Promise.resolve([]),
-    [doctor?.id, hideCommercial, selectedDate],
+    [doctor?.id, hideCommercial, signedIn, selectedDate],
   );
 
   const maxDate = new Date(today);
