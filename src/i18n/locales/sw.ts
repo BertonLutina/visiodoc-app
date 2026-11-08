@@ -552,6 +552,8 @@ export const sw: Record<string, string> = {
   "Cette opération de paiement n'est pas autorisée depuis l'application. Réessaie depuis tes rendez-vous.": "Operesheni hii ya malipo hairuhusiwi kutoka kwenye programu. Jaribu tena kupitia miadi yako.",
   "Cette consultation ne peut plus être payée. Vérifie tes rendez-vous.": "Mashauriano haya hayawezi kulipwa tena. Angalia miadi yako.",
   "Cette référence de paiement a déjà été utilisée. Réessaie le paiement.": "Rejeleo hili la malipo limeshatumika. Jaribu tena kulipa.",
+  "Quantité de recharge invalide (5, 10, 20, 50 ou 100).": "Kiasi cha kuongeza si sahihi (5, 10, 20, 50 au 100).",
+  "Type de paiement inconnu.": "Aina ya malipo haijulikani.",
   "Ton paiement a bien été effectué, mais sa confirmation n'est pas encore arrivée. Ne paie pas une seconde fois : vérifie tes rendez-vous dans quelques instants.": "Malipo yako yamefanyika, lakini uthibitisho bado haujafika. Usilipe mara ya pili: angalia miadi yako baada ya muda mfupi.",
   "Le paiement n'est pas disponible pour le moment. Ta consultation reste en attente de paiement.": "Malipo hayapatikani kwa sasa. Mashauriano yako yanabaki yakisubiri malipo.",
   "Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.": "Malipo yanakaguliwa, usilipe tena. Jaribu tena baada ya dakika chache.",

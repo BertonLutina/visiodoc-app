@@ -552,6 +552,8 @@ export const ln: Record<string, string> = {
   "Cette opération de paiement n'est pas autorisée depuis l'application. Réessaie depuis tes rendez-vous.": "Misala oyo ya kofuta mbongo epesami ndingisa te na application. Meka lisusu na rendez-vous na yo.",
   "Cette consultation ne peut plus être payée. Vérifie tes rendez-vous.": "Consultation oyo ekoki lisusu kofutama te. Tala rendez-vous na yo.",
   "Cette référence de paiement a déjà été utilisée. Réessaie le paiement.": "Référence oyo ya kofuta esili esalelami. Meka kofuta lisusu.",
+  "Quantité de recharge invalide (5, 10, 20, 50 ou 100).": "Motango ya kotyela mbongo ezali malamu te (5, 10, 20, 50 to 100).",
+  "Type de paiement inconnu.": "Lolenge ya kofuta eyebani te.",
   "Ton paiement a bien été effectué, mais sa confirmation n'est pas encore arrivée. Ne paie pas une seconde fois : vérifie tes rendez-vous dans quelques instants.": "Kofuta mbongo na yo esalemi, kasi bondimisi eyei naino te. Kofuta mbala ya mibale te: tala rendez-vous na yo na mwa ngonga moke.",
   "Le paiement n'est pas disponible pour le moment. Ta consultation reste en attente de paiement.": "Kofuta mbongo ezali te sikoyo. Consultation na yo etikali kozela kofuta.",
   "Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.": "Kofuta mbongo ezali kotalama, kofuta lisusu te. Meka lisusu na mwa miniti moke.",

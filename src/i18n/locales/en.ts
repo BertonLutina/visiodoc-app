@@ -552,6 +552,8 @@ export const en: Record<string, string> = {
   "Cette opération de paiement n'est pas autorisée depuis l'application. Réessaie depuis tes rendez-vous.": "This payment operation is not allowed from the app. Try again from your appointments.",
   "Cette consultation ne peut plus être payée. Vérifie tes rendez-vous.": "This consultation can no longer be paid. Check your appointments.",
   "Cette référence de paiement a déjà été utilisée. Réessaie le paiement.": "This payment reference has already been used. Try the payment again.",
+  "Quantité de recharge invalide (5, 10, 20, 50 ou 100).": "Invalid top-up quantity (5, 10, 20, 50 or 100).",
+  "Type de paiement inconnu.": "Unknown payment type.",
   "Ton paiement a bien été effectué, mais sa confirmation n'est pas encore arrivée. Ne paie pas une seconde fois : vérifie tes rendez-vous dans quelques instants.": "Your payment went through, but its confirmation has not arrived yet. Do not pay a second time: check your appointments in a few moments.",
   "Le paiement n'est pas disponible pour le moment. Ta consultation reste en attente de paiement.": "Payment is not available right now. Your consultation remains awaiting payment.",
   "Paiement en cours de vérification, ne repaie pas. Réessaie dans quelques minutes.": "Payment being verified, do not pay again. Try again in a few minutes.",

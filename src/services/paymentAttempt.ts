@@ -16,7 +16,7 @@ import type { PendingPaymentAttempt } from './pendingPaymentAttempt';
  * Le client n'écrit JAMAIS payment_status / payment_amount / currency / payment_reference /
  * fee_percent_at_booking, ni `status = 'scheduled'` : seule `confirm-consultation-payment` (service_role)
  * le fait. `supabase.functions.invoke` envoie `Authorization: Bearer <session>` + `apikey`.
- * Ce module reste volontairement modulaire : les paiements prestataire (abonnement / avoir) viennent s'y ajouter.
+ * Les paiements prestataire (abonnement / avoir) sont plus bas (`registerProviderPaymentAttempt`).
  * ---------------------------------------------------------------------------------------------- */
 
 /**
@@ -124,59 +124,144 @@ async function refreshSessionOnce(): Promise<boolean> {
 }
 
 /**
- * `POST /functions/v1/register-payment-attempt` `{ consultationId, txnRef, useWallet }`.
- * - 200 `{ success: true }` → ok.
+ * Appel commun d'un `register-*-payment-attempt` (consultation ou prestataire), même politique :
+ * - 200 `{ success: true }` (ou 200 `{ alreadyPaid: true }`) → renvoie le corps.
  * - `NOT_PAYABLE` / `TXN_ALREADY_USED` (corps 200 `success:false` ou HTTP 409) → `PaymentNotPayableError`.
- * - Erreur réseau, 429, 5xx (dont 503) → ne bloque PAS le paiement (le rattrapage serveur sera simplement absent).
+ * - Erreur réseau, 429, 5xx (dont 503) → ne bloque PAS le paiement : renvoie `null` (rattrapage serveur absent).
  * - 401 (jeton expiré) → rafraîchit la session UNE fois et rejoue UNE fois ; refresh en échec = session
  *   expirée (signalée via `reportSessionExpiry`), on bloque.
  * - 400 / 403 / 404 → `PaymentRegistrationError` : on BLOQUE.
  *
  * Écart volontaire avec le guide (qui ne cite que NOT_PAYABLE / TXN_ALREADY_USED comme bloquants) : un
- * enregistrement définitivement refusé est condamné, `confirm-consultation-payment` échouerait de la même
- * façon APRÈS que le patient a payé. Mieux vaut ne pas ouvrir le widget que débiter un patient sans pouvoir
- * confirmer.
+ * enregistrement définitivement refusé est condamné, la confirmation échouerait de la même façon APRÈS que
+ * l'utilisateur a payé. Mieux vaut ne pas ouvrir le widget que débiter sans pouvoir confirmer.
  */
-export async function registerConsultationPayment(
-  consultationId: string,
-  txnRef: string,
-  useWallet = false,
-): Promise<void> {
+async function registerAttempt(functionName: string, body: Record<string, unknown>): Promise<any | null> {
   const call = async (): Promise<InvokeResult | null> => {
     try {
-      return await supabase!.functions.invoke('register-payment-attempt', {
-        body: { consultationId, txnRef, useWallet },
-      });
+      return await supabase!.functions.invoke(functionName, { body });
     } catch {
       return null; // hors ligne : le paiement continue
     }
   };
 
   let result = await call();
-  if (!result) return;
+  if (!result) return null;
   let refreshed = false;
   for (;;) {
     const { data, error } = result;
     if (error) {
-      const { status, body } = await readHttpError(error);
-      if (isNotPayableCode(body?.code)) throw new PaymentNotPayableError(body.code);
+      const { status, body: errBody } = await readHttpError(error);
+      if (isNotPayableCode(errBody?.code)) throw new PaymentNotPayableError(errBody.code);
       if (status === 401) {
-        if (refreshed) throw new PaymentRegistrationError(401, edgeFunctionError(body, error?.message).message);
+        if (refreshed) throw new PaymentRegistrationError(401, edgeFunctionError(errBody, error?.message).message);
         refreshed = true;
         if (!(await refreshSessionOnce())) throw sessionExpiredError();
         const retry = await call();
-        if (!retry) return;
+        if (!retry) return null;
         result = retry;
         continue;
       }
-      if (status === undefined || status === 429 || status >= 500) return;
-      throw new PaymentRegistrationError(status, edgeFunctionError(body, error?.message).message);
+      if (status === undefined || status === 429 || status >= 500) return null;
+      throw new PaymentRegistrationError(status, edgeFunctionError(errBody, error?.message).message);
     }
     if (data?.success === false) {
       if (isNotPayableCode(data.code)) throw new PaymentNotPayableError(data.code);
       throw new PaymentRegistrationError(undefined, edgeFunctionError(data).message);
     }
-    return;
+    return data ?? {};
+  }
+}
+
+/** `POST /functions/v1/register-payment-attempt` `{ consultationId, txnRef, useWallet }` (voir `registerAttempt`). */
+export async function registerConsultationPayment(
+  consultationId: string,
+  txnRef: string,
+  useWallet = false,
+): Promise<void> {
+  await registerAttempt('register-payment-attempt', { consultationId, txnRef, useWallet });
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Paiements PRESTATAIRE (guide MOB-0712-1) : abonnement et recharge d'avoir.
+ * Ordre imposé pour un futur écran : `generateTxnRef()` → `registerProviderPaymentAttempt` (ou
+ * `registerProviderPaymentWithRetry`) → widget avec cette `txnRef` → au succès `confirm-subscription-payment`
+ * ou `confirm-wallet-recharge` avec la MÊME `txnRef`. Le client n'envoie JAMAIS de montant (calculé par le
+ * serveur) et n'écrit JAMAIS dans `provider_subscriptions` / `call_transactions` (verrous `enforce`, 42501).
+ * ---------------------------------------------------------------------------------------------- */
+
+export const WALLET_RECHARGE_QUANTITIES = [5, 10, 20, 50, 100] as const;
+export type WalletRechargeQuantity = (typeof WALLET_RECHARGE_QUANTITIES)[number];
+
+export type ProviderPaymentAttemptBody =
+  | { kind: 'subscription'; subscriptionId: string; txnRef: string }
+  | { kind: 'wallet_recharge'; quantity: WalletRechargeQuantity; currency: string; txnRef: string };
+
+/** Corps sans `txnRef` : `registerProviderPaymentWithRetry` génère (et au besoin régénère) la référence. */
+export type ProviderPaymentRequest =
+  | { kind: 'subscription'; subscriptionId: string }
+  | { kind: 'wallet_recharge'; quantity: WalletRechargeQuantity; currency: string };
+
+/**
+ * - `registered` : le serveur a enregistré la référence (200 `success`).
+ * - `already_paid` : 200 `alreadyPaid` — l'appelant NE DOIT PAS ouvrir le widget, il relit l'abonnement.
+ * - `not_registered` : réseau / 429 / 503 / 5xx — le paiement peut continuer, sans rattrapage serveur.
+ * - `simulated` : simulation locale (développement uniquement) — rien n'a été appelé.
+ */
+export type ProviderPaymentRegistration = {
+  status: 'registered' | 'already_paid' | 'not_registered' | 'simulated';
+};
+
+/** Simulation locale : JAMAIS en build de production (`EXPO_PUBLIC_APP_ENV` doit valoir `development`). */
+const isProviderPaymentSimulated = (): boolean =>
+  process.env.EXPO_PUBLIC_APP_ENV === 'development' && process.env.EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT === 'true';
+
+/**
+ * `POST /functions/v1/register-provider-payment-attempt`. Le corps envoyé est reconstruit champ par champ :
+ * aucun `amount` (ni autre champ parasite) ne part, même si l'appelant en passe un via un cast.
+ * Politique d'erreurs : voir `registerAttempt`. `TXN_ALREADY_USED` est levé tel quel (une régénération de
+ * `txnRef` est faite par `registerProviderPaymentWithRetry`). `403` = recharge par un non-prestataire,
+ * `404` = abonnement d'un autre, `400` = requête invalide : tous bloquent.
+ */
+export async function registerProviderPaymentAttempt(
+  body: ProviderPaymentAttemptBody,
+): Promise<ProviderPaymentRegistration> {
+  let wire: Record<string, unknown>;
+  if (body.kind === 'subscription') {
+    wire = { kind: 'subscription', subscriptionId: body.subscriptionId, txnRef: body.txnRef };
+  } else if (body.kind === 'wallet_recharge') {
+    if (!(WALLET_RECHARGE_QUANTITIES as readonly unknown[]).includes(body.quantity)) {
+      throw new PaymentRegistrationError(
+        undefined,
+        translate('Quantité de recharge invalide (5, 10, 20, 50 ou 100).'),
+      );
+    }
+    wire = { kind: 'wallet_recharge', quantity: body.quantity, currency: body.currency, txnRef: body.txnRef };
+  } else {
+    throw new PaymentRegistrationError(undefined, translate('Type de paiement inconnu.'));
+  }
+  if (isProviderPaymentSimulated()) return { status: 'simulated' };
+
+  const data = await registerAttempt('register-provider-payment-attempt', wire);
+  if (data === null) return { status: 'not_registered' };
+  if (data.alreadyPaid === true) return { status: 'already_paid' };
+  return { status: 'registered' };
+}
+
+/**
+ * Génère une `txnRef`, l'enregistre ; sur `409 TXN_ALREADY_USED` génère UNE nouvelle `txnRef` et réessaie
+ * UNE fois (un second `TXN_ALREADY_USED` est levé). Renvoie la `txnRef` à donner au widget ET à la confirmation.
+ */
+export async function registerProviderPaymentWithRetry(
+  request: ProviderPaymentRequest,
+): Promise<ProviderPaymentRegistration & { txnRef: string }> {
+  let txnRef = generateTxnRef();
+  try {
+    return { ...(await registerProviderPaymentAttempt({ ...request, txnRef })), txnRef };
+  } catch (e) {
+    if (!(e instanceof PaymentNotPayableError && e.code === 'TXN_ALREADY_USED')) throw e;
+    txnRef = generateTxnRef();
+    return { ...(await registerProviderPaymentAttempt({ ...request, txnRef })), txnRef };
   }
 }
 

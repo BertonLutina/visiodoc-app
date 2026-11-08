@@ -11,6 +11,8 @@ import {
   reconcilePendingPayments,
   resolveDismissedAttempt,
   registerConsultationPayment,
+  registerProviderPaymentAttempt,
+  registerProviderPaymentWithRetry,
 } from './paymentAttempt';
 import {
   clearPendingAttempt,
@@ -927,5 +929,233 @@ describe('storage resilience', () => {
     await saveAttempt({ consultationId: 'fresh', txnRef: 'T-fresh' });
     expect((await listAttempts()).map((a) => a.consultationId)).toEqual(['fresh']);
     expect(await getAttempt('old')).toBeNull(); // really removed from storage, not just filtered
+  });
+});
+
+describe('registerProviderPaymentAttempt (MOB-0712-1)', () => {
+  const SUB_ID = '7a1d2c3e-0000-4000-8000-0000000000a1';
+  const SUBSCRIPTION = { kind: 'subscription' as const, subscriptionId: SUB_ID, txnRef: TXN };
+  const RECHARGE = { kind: 'wallet_recharge' as const, quantity: 10 as const, currency: 'USD', txnRef: TXN };
+
+  it('posts exactly { kind, subscriptionId, txnRef } and NO amount for a subscription', async () => {
+    await expect(registerProviderPaymentAttempt(SUBSCRIPTION)).resolves.toEqual({ status: 'registered' });
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke).toHaveBeenCalledWith('register-provider-payment-attempt', {
+      body: { kind: 'subscription', subscriptionId: SUB_ID, txnRef: TXN },
+    });
+    expect(Object.keys(mockInvoke.mock.calls[0][1].body)).toEqual(['kind', 'subscriptionId', 'txnRef']);
+    expect(mockInvoke.mock.calls[0][1].body).not.toHaveProperty('amount');
+  });
+
+  it('posts exactly { kind, quantity, currency, txnRef } and NO amount for a wallet recharge', async () => {
+    await expect(registerProviderPaymentAttempt(RECHARGE)).resolves.toEqual({ status: 'registered' });
+    expect(mockInvoke).toHaveBeenCalledWith('register-provider-payment-attempt', {
+      body: { kind: 'wallet_recharge', quantity: 10, currency: 'USD', txnRef: TXN },
+    });
+    expect(Object.keys(mockInvoke.mock.calls[0][1].body)).toEqual(['kind', 'quantity', 'currency', 'txnRef']);
+    expect(mockInvoke.mock.calls[0][1].body).not.toHaveProperty('amount');
+  });
+
+  it('never leaks an amount (or any stray field) even if a caller smuggles one in', async () => {
+    await registerProviderPaymentAttempt({ ...RECHARGE, amount: 1 } as any);
+    await registerProviderPaymentAttempt({ ...SUBSCRIPTION, amount: 1, price: 2 } as any);
+    expect(mockInvoke.mock.calls[0][1].body).toEqual({ kind: 'wallet_recharge', quantity: 10, currency: 'USD', txnRef: TXN });
+    expect(mockInvoke.mock.calls[1][1].body).toEqual({ kind: 'subscription', subscriptionId: SUB_ID, txnRef: TXN });
+  });
+
+  it.each([5, 10, 20, 50, 100] as const)('accepts quantity %s', async (quantity) => {
+    await expect(registerProviderPaymentAttempt({ ...RECHARGE, quantity })).resolves.toEqual({ status: 'registered' });
+  });
+
+  it.each([0, 1, 7, 15, 101, -5, 10.5, NaN, '10', null, undefined])(
+    'rejects wallet quantity %p before any call',
+    async (quantity) => {
+      await expect(registerProviderPaymentAttempt({ ...RECHARGE, quantity: quantity as any })).rejects.toBeInstanceOf(
+        PaymentRegistrationError,
+      );
+      expect(mockInvoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects an unknown kind before any call', async () => {
+    await expect(registerProviderPaymentAttempt({ kind: 'consultation', txnRef: TXN } as any)).rejects.toBeInstanceOf(
+      PaymentRegistrationError,
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('200 { alreadyPaid: true } is a distinct result (no widget needed), not an error', async () => {
+    mockInvoke.mockResolvedValue({ data: { alreadyPaid: true }, error: null });
+    await expect(registerProviderPaymentAttempt(SUBSCRIPTION)).resolves.toEqual({ status: 'already_paid' });
+  });
+
+  it('a network error does not reject: payment may continue (not_registered)', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: networkError });
+    await expect(registerProviderPaymentAttempt(SUBSCRIPTION)).resolves.toEqual({ status: 'not_registered' });
+    mockInvoke.mockRejectedValue(new TypeError('Network request failed'));
+    await expect(registerProviderPaymentAttempt(RECHARGE)).resolves.toEqual({ status: 'not_registered' });
+  });
+
+  it.each([429, 503, 500])('HTTP %s does not reject: payment may continue (not_registered)', async (status) => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(status, { error: 'busy' }) });
+    await expect(registerProviderPaymentAttempt(SUBSCRIPTION)).resolves.toEqual({ status: 'not_registered' });
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('HTTP 404 NOT_FOUND (subscription of another) rejects with a typed error and stops', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(404, { code: 'NOT_FOUND', error: 'Abonnement introuvable' }) });
+    const err = await registerProviderPaymentAttempt(SUBSCRIPTION).catch((e) => e);
+    expect(err).toBeInstanceOf(PaymentRegistrationError);
+    expect(err.status).toBe(404);
+    expect(err.message).toBe('Abonnement introuvable');
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('HTTP 409 NOT_PAYABLE rejects with PaymentNotPayableError', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(409, { success: false, code: 'NOT_PAYABLE' }) });
+    const err = await registerProviderPaymentAttempt(SUBSCRIPTION).catch((e) => e);
+    expect(err).toBeInstanceOf(PaymentNotPayableError);
+    expect(err.code).toBe('NOT_PAYABLE');
+  });
+
+  it.each([
+    [400, 'INVALID_REQUEST'],
+    [403, 'FORBIDDEN'],
+  ])('HTTP %s %s blocks (PaymentRegistrationError)', async (status, code) => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(status, { code, error: 'refus' }) });
+    const err = await registerProviderPaymentAttempt(RECHARGE).catch((e) => e);
+    expect(err).toBeInstanceOf(PaymentRegistrationError);
+    expect(err.status).toBe(status);
+    expect(mockRefresh).not.toHaveBeenCalled();
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  describe('401', () => {
+    it('refreshes the session once then retries once with the same body', async () => {
+      mockInvoke
+        .mockResolvedValueOnce({ data: null, error: httpError(401, { error: 'JWT expired' }) })
+        .mockResolvedValueOnce({ data: { success: true }, error: null });
+      await expect(registerProviderPaymentAttempt(SUBSCRIPTION)).resolves.toEqual({ status: 'registered' });
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
+      expect(mockInvoke).toHaveBeenCalledTimes(2);
+      expect(mockInvoke.mock.calls[1]).toEqual(mockInvoke.mock.calls[0]);
+    });
+
+    it('a second 401 blocks (no third call, no second refresh)', async () => {
+      mockInvoke.mockResolvedValue({ data: null, error: httpError(401, { error: 'Unauthorized' }) });
+      const err = await registerProviderPaymentAttempt(SUBSCRIPTION).catch((e) => e);
+      expect(err).toBeInstanceOf(PaymentRegistrationError);
+      expect(err.status).toBe(401);
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
+      expect(mockInvoke).toHaveBeenCalledTimes(2);
+    });
+
+    it('a failed refresh is a session expiry and blocks without retry', async () => {
+      mockInvoke.mockResolvedValue({ data: null, error: httpError(401, {}) });
+      mockRefresh.mockResolvedValue({ data: { session: null }, error: { code: 'refresh_token_not_found', message: 'x' } });
+      const err = await registerProviderPaymentAttempt(SUBSCRIPTION).catch((e) => e);
+      expect(err).toBeInstanceOf(PaymentRegistrationError);
+      expect(err.message).toBe('Ta session a expiré, reconnecte-toi.');
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('local development simulation', () => {
+    const KEYS = ['EXPO_PUBLIC_APP_ENV', 'EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT'] as const;
+    const saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
+    afterEach(() => {
+      // Même objet `process.env` (jamais remplacé) : on restaure clé par clé.
+      for (const k of KEYS) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    });
+
+    it('APP_ENV development + flag "true": register is NOT called and the result is "simulated"', async () => {
+      process.env.EXPO_PUBLIC_APP_ENV = 'development';
+      process.env.EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT = 'true';
+      await expect(registerProviderPaymentAttempt(SUBSCRIPTION)).resolves.toEqual({ status: 'simulated' });
+      await expect(registerProviderPaymentAttempt(RECHARGE)).resolves.toEqual({ status: 'simulated' });
+      expect(mockInvoke).not.toHaveBeenCalled();
+    });
+
+    it.each(['production', 'uat', 'staging', undefined])(
+      'APP_ENV %p + flag "true": register IS called (never active outside development)',
+      async (appEnv) => {
+        if (appEnv === undefined) delete process.env.EXPO_PUBLIC_APP_ENV;
+        else process.env.EXPO_PUBLIC_APP_ENV = appEnv;
+        process.env.EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT = 'true';
+        await expect(registerProviderPaymentAttempt(SUBSCRIPTION)).resolves.toEqual({ status: 'registered' });
+        expect(mockInvoke).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it.each(['false', '1', '', undefined])('APP_ENV development + flag %p: register IS called', async (flag) => {
+      process.env.EXPO_PUBLIC_APP_ENV = 'development';
+      if (flag === undefined) delete process.env.EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT;
+      else process.env.EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT = flag;
+      await expect(registerProviderPaymentAttempt(SUBSCRIPTION)).resolves.toEqual({ status: 'registered' });
+      expect(mockInvoke).toHaveBeenCalledTimes(1);
+    });
+
+    it('invalid input is still rejected under simulation', async () => {
+      process.env.EXPO_PUBLIC_APP_ENV = 'development';
+      process.env.EXPO_PUBLIC_SIMULATE_PROVIDER_PAYMENT = 'true';
+      await expect(registerProviderPaymentAttempt({ ...RECHARGE, quantity: 7 as any })).rejects.toBeInstanceOf(
+        PaymentRegistrationError,
+      );
+    });
+  });
+});
+
+describe('registerProviderPaymentWithRetry', () => {
+  const SUB_REQUEST = { kind: 'subscription' as const, subscriptionId: 'sub-1' };
+  const bodies = () => mockInvoke.mock.calls.map((c) => c[1].body);
+
+  it('generates a txnRef, registers it and returns it for the widget and the confirmation', async () => {
+    const result = await registerProviderPaymentWithRetry(SUB_REQUEST);
+    expect(result.status).toBe('registered');
+    expect(result.txnRef).toMatch(/^VDC-\d{13}-[A-Z0-9]{7}$/);
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(bodies()[0]).toEqual({ kind: 'subscription', subscriptionId: 'sub-1', txnRef: result.txnRef });
+  });
+
+  it('409 TXN_ALREADY_USED → exactly one retry with a NEW txnRef, returns the new one', async () => {
+    mockInvoke
+      .mockResolvedValueOnce({ data: null, error: httpError(409, { success: false, code: 'TXN_ALREADY_USED' }) })
+      .mockResolvedValueOnce({ data: { success: true }, error: null });
+    const result = await registerProviderPaymentWithRetry({ kind: 'wallet_recharge', quantity: 20, currency: 'CDF' });
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+    const [first, second] = bodies();
+    expect(first.txnRef).not.toBe(second.txnRef);
+    expect(second).toEqual({ kind: 'wallet_recharge', quantity: 20, currency: 'CDF', txnRef: second.txnRef });
+    expect(result).toEqual({ status: 'registered', txnRef: second.txnRef });
+  });
+
+  it('a second TXN_ALREADY_USED rejects (no third call)', async () => {
+    // Une `Response` ne se lit qu'une fois : un corps neuf à chaque appel.
+    mockInvoke.mockImplementation(async () => ({
+      data: null,
+      error: httpError(409, { success: false, code: 'TXN_ALREADY_USED' }),
+    }));
+    const err = await registerProviderPaymentWithRetry(SUB_REQUEST).catch((e) => e);
+    expect(err).toBeInstanceOf(PaymentNotPayableError);
+    expect(err.code).toBe('TXN_ALREADY_USED');
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('NOT_PAYABLE is never retried', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(409, { success: false, code: 'NOT_PAYABLE' }) });
+    const err = await registerProviderPaymentWithRetry(SUB_REQUEST).catch((e) => e);
+    expect(err).toBeInstanceOf(PaymentNotPayableError);
+    expect(err.code).toBe('NOT_PAYABLE');
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+  });
+
+  it('alreadyPaid is surfaced with the txnRef; non-blocking failures do not reject', async () => {
+    mockInvoke.mockResolvedValueOnce({ data: { alreadyPaid: true }, error: null });
+    await expect(registerProviderPaymentWithRetry(SUB_REQUEST)).resolves.toMatchObject({ status: 'already_paid' });
+    mockInvoke.mockResolvedValueOnce({ data: null, error: httpError(503, {}) });
+    await expect(registerProviderPaymentWithRetry(SUB_REQUEST)).resolves.toMatchObject({ status: 'not_registered' });
   });
 });
