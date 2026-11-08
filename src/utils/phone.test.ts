@@ -36,3 +36,32 @@ describe('toE164 (local or international input -> +<dial><national>)', () => {
     expect(toE164('abc', '+243')).toBeUndefined();
   });
 });
+
+describe('toE164 literal cases (final review)', () => {
+  it.each([
+    ['+243 899 999 999', '+243899999999'],
+    ['+243-899-999-999', '+243899999999'],
+    ['0899999999', '+243899999999'],
+    ['899999999', '+243899999999'],
+    ['00243899999999', '+243899999999'],
+    ['243899999999', '+243899999999'],
+    ['243 899 999 999', '+243899999999'],
+  ])('%s -> %s (never a doubled country code)', (input, expected) => {
+    expect(toE164(input, '+243')).toBe(expected);
+  });
+
+  it('treats digits already starting with the Niger code (8-digit numbers) as international', () => {
+    expect(toE164('22790123456', '+227')).toBe('+22790123456');
+  });
+
+  it('still prefixes a local number that merely starts with the dial digits but is too short', () => {
+    expect(toE164('243123456', '+243')).toBe('+243243123456');
+  });
+
+  it("returns undefined (invalid marker) for zeros only, not '+'", () => {
+    expect(toE164('000', '+243')).toBeUndefined();
+    expect(toE164('00', '+243')).toBeUndefined();
+    expect(toE164('0', '+243')).toBeUndefined();
+  });
+});
+
