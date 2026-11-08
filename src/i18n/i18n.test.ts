@@ -9,7 +9,12 @@ import {
   setCurrentLangCode,
   translate,
 } from './core';
-import { PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
+import {
+  PROVIDER_INCOMPLETE_MESSAGE,
+  PROVIDER_PENDING_MESSAGE,
+  PROVIDER_REJECTED_MESSAGE,
+  PROVIDER_SUSPENDED_MESSAGE,
+} from '@/utils/authError';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const fs = require('fs');
@@ -44,7 +49,7 @@ function usedKeys(): string[] {
 
 // Textes passés à t() via une variable (constantes, tableaux de libellés).
 const DYNAMIC_KEYS = [
-  PROVIDER_PENDING_MESSAGE,
+  PROVIDER_PENDING_MESSAGE, PROVIDER_REJECTED_MESSAGE, PROVIDER_INCOMPLETE_MESSAGE, PROVIDER_SUSPENDED_MESSAGE,
   'Hebdomadaire', 'Dates spécifiques', 'Réglages',
   'Connexion classique', 'Lien magique par email', 'Sans mot de passe', 'Numéro de téléphone',
   'Code de vérification par SMS', 'Email et mot de passe',

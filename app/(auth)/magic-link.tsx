@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, MailCheck } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
-import { authErrorMessage, isProviderPending, PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
+import { authErrorMessage, providerRefusal, providerRefusalMessage } from '@/utils/authError';
+import { providerHomeHref } from '@/services/accessPolicy';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -27,7 +28,8 @@ export default function MagicLinkLogin() {
   const emailValid = email.includes('@') && email.includes('.');
 
   const handleError = (e: any) => {
-    if (isProviderPending(e)) Alert.alert(t('Compte en attente de validation'), t(PROVIDER_PENDING_MESSAGE));
+    const refusal = providerRefusal(e);
+    if (refusal) Alert.alert(t('Connexion impossible'), providerRefusalMessage(refusal));
     else setErrorMsg(authErrorMessage(e));
   };
 
@@ -48,7 +50,7 @@ export default function MagicLinkLogin() {
     setErrorMsg(null);
     try {
       const u = await verifyEmailOtp(email, code);
-      router.replace(u?.role === 'provider' ? '/(provider)' : '/(patient)');
+      router.replace(u ? providerHomeHref(u) : '/(patient)');
     } catch (e: any) {
       handleError(e);
     }

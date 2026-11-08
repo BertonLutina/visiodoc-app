@@ -8,7 +8,8 @@ import { CountryPicker } from '@/components/CountryPicker';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
 import { toE164 } from '@/utils/phone';
-import { authErrorMessage, isProviderPending, PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
+import { authErrorMessage, providerRefusal, providerRefusalMessage } from '@/utils/authError';
+import { providerHomeHref } from '@/services/accessPolicy';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -33,7 +34,8 @@ export default function PhoneLogin() {
   const phoneValid = local.replace(/\D/g, '').length >= 8;
 
   const handleError = (e: any) => {
-    if (isProviderPending(e)) Alert.alert(t('Compte en attente de validation'), t(PROVIDER_PENDING_MESSAGE));
+    const refusal = providerRefusal(e);
+    if (refusal) Alert.alert(t('Connexion impossible'), providerRefusalMessage(refusal));
     else setErrorMsg(authErrorMessage(e));
   };
 
@@ -54,7 +56,7 @@ export default function PhoneLogin() {
     setErrorMsg(null);
     try {
       const u = await verifyPhoneOtp(fullPhone, code);
-      router.replace(u?.role === 'provider' ? '/(provider)' : '/(patient)');
+      router.replace(u ? providerHomeHref(u) : '/(patient)');
     } catch (e: any) {
       handleError(e);
     }

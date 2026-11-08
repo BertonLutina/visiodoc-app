@@ -1,12 +1,43 @@
 import { translate } from '@/i18n/core';
 
-/** Code d'erreur : compte médecin pas encore validé par l'admin. */
-export const PROVIDER_NOT_VALIDATED = 'PROVIDER_NOT_VALIDATED';
-export const PROVIDER_PENDING_MESSAGE =
-  "Votre inscription n'a pas encore été validée par l'administrateur. Vous recevrez une notification dès l'activation de votre compte.";
+/** Refus de connexion d'un prestataire dont la garde (`providerGate`) ne donne pas d'accès. */
+export type ProviderRefusal = 'pending' | 'rejected' | 'incomplete' | 'suspended';
 
-export function isProviderPending(e: any): boolean {
-  return e?.message === PROVIDER_NOT_VALIDATED;
+const PROVIDER_REFUSAL_CODES: Record<ProviderRefusal, string> = {
+  pending: 'PROVIDER_PENDING',
+  rejected: 'PROVIDER_REJECTED',
+  incomplete: 'PROVIDER_INCOMPLETE',
+  suspended: 'PROVIDER_SUSPENDED',
+};
+
+/** Un message par statut, toujours passés par `translate`. */
+export const PROVIDER_PENDING_MESSAGE = 'Ton compte est en attente de validation par notre équipe.';
+export const PROVIDER_REJECTED_MESSAGE = 'Ton profil a été refusé. Contacte le support pour en savoir plus.';
+export const PROVIDER_INCOMPLETE_MESSAGE = 'Ton profil est incomplet. Finalise ton dossier pour continuer.';
+export const PROVIDER_SUSPENDED_MESSAGE = 'Ton compte est suspendu. Contacte le support.';
+
+const PROVIDER_REFUSAL_MESSAGES: Record<ProviderRefusal, string> = {
+  pending: PROVIDER_PENDING_MESSAGE,
+  rejected: PROVIDER_REJECTED_MESSAGE,
+  incomplete: PROVIDER_INCOMPLETE_MESSAGE,
+  suspended: PROVIDER_SUSPENDED_MESSAGE,
+};
+
+export function providerRefusalError(reason: ProviderRefusal): Error {
+  return new Error(PROVIDER_REFUSAL_CODES[reason]);
+}
+
+/** Motif du refus si l'erreur en est un, sinon `null`. */
+export function providerRefusal(e: any): ProviderRefusal | null {
+  const message = e?.message;
+  const found = (Object.keys(PROVIDER_REFUSAL_CODES) as ProviderRefusal[]).find(
+    (reason) => PROVIDER_REFUSAL_CODES[reason] === message,
+  );
+  return found ?? null;
+}
+
+export function providerRefusalMessage(reason: ProviderRefusal): string {
+  return translate(PROVIDER_REFUSAL_MESSAGES[reason]);
 }
 
 /** Code d'erreur : rôle (admin, validateur…) non autorisé sur l'application mobile. */
@@ -81,7 +112,8 @@ export function authErrorMessage(e: any): string {
   const msg = (e?.message ?? '').toString();
   const lower = msg.toLowerCase();
   if (msg === ROLE_NOT_ALLOWED) return roleNotAllowedMessage();
-  if (msg === PROVIDER_NOT_VALIDATED) return translate(PROVIDER_PENDING_MESSAGE);
+  const refusal = providerRefusal(e);
+  if (refusal) return providerRefusalMessage(refusal);
   const pwned = pwnedPasswordMessage(e);
   if (pwned) return pwned;
   if (lower.includes('invalid login credentials')) return translate('Email ou mot de passe incorrect.');

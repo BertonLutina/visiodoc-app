@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
-import { authErrorMessage, isEmailNotConfirmed, isProviderPending, PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
+import { authErrorMessage, isEmailNotConfirmed, providerRefusal, providerRefusalMessage } from '@/utils/authError';
+import { providerHomeHref } from '@/services/accessPolicy';
 import { ResendConfirmation } from '@/components/ResendConfirmation';
 import { useAuth, type OAuthProvider } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
@@ -54,16 +55,19 @@ export default function PasswordLogin() {
     if (isEmailNotConfirmed(e)) {
       setUnconfirmedEmail(email.trim());
       setErrorMsg(authErrorMessage(e));
-    } else if (isProviderPending(e)) Alert.alert(t('Compte en attente de validation'), t(PROVIDER_PENDING_MESSAGE));
-    else setErrorMsg(authErrorMessage(e));
+    } else {
+      const refusal = providerRefusal(e);
+      if (refusal) Alert.alert(t('Connexion impossible'), providerRefusalMessage(refusal));
+      else setErrorMsg(authErrorMessage(e));
+    }
   };
 
   const onSubmit = async () => {
     setErrorMsg(null);
     setUnconfirmedEmail(null);
     try {
-      await loginPatient(email, password);
-      router.replace('/(patient)');
+      const u = await loginPatient(email, password);
+      router.replace(providerHomeHref(u));
     } catch (e: any) {
       handleError(e);
     }
@@ -75,7 +79,7 @@ export default function PasswordLogin() {
     setBusy(true);
     try {
       const u = await signInWithProvider(provider);
-      if (u) router.replace(u.role === 'provider' ? '/(provider)' : '/(patient)');
+      if (u) router.replace(providerHomeHref(u));
     } catch (e: any) {
       handleError(e);
     } finally {

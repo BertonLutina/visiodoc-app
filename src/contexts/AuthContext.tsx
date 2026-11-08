@@ -4,8 +4,14 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import type { User } from '@/types';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
-import { PROVIDER_NOT_VALIDATED, edgeFunctionError, roleNotAllowedError, roleNotAllowedMessage } from '@/utils/authError';
-import { mobileRole, type MobileRole } from '@/services/accessPolicy';
+import {
+  edgeFunctionError,
+  providerRefusalError,
+  providerRefusalMessage,
+  roleNotAllowedError,
+  roleNotAllowedMessage,
+} from '@/utils/authError';
+import { mobileRole, providerRefusalReason, type MobileRole } from '@/services/accessPolicy';
 import {
   buildRegisterPrestaBody,
   registerPatientAccount,
@@ -70,8 +76,9 @@ interface AuthContextType {
   loading: boolean;
   /** Vrai pendant la restauration de session au démarrage. */
   initializing: boolean;
-  loginPatient: (email: string, password: string) => Promise<void>;
-  loginProvider: (email: string, password: string) => Promise<void>;
+  /** Renvoie l'utilisateur connecté (pour router selon `providerHomeHref`). */
+  loginPatient: (email: string, password: string) => Promise<User>;
+  loginProvider: (email: string, password: string) => Promise<User>;
   /** Connexion sans mot de passe — envoie un lien/code par email. */
   sendEmailOtp: (email: string) => Promise<void>;
   /** Vérifie le code ; renvoie l'utilisateur connecté (pour router selon le rôle). */
@@ -119,6 +126,9 @@ const providerMockUser: User = {
   role: 'provider',
   phone: currentProvider.phone,
   countryCode: 'CD',
+  // Mode mock : un prestataire entièrement validé (même vocabulaire que `users.doctor_status`).
+  isActive: true,
+  doctorStatus: 'VALIDE_ABO_ACTIF',
 };
 
 function mapUserRow(row: any, role: MobileRole): User {
@@ -136,26 +146,6 @@ function mapUserRow(row: any, role: MobileRole): User {
     isActive: typeof row.is_active === 'boolean' ? row.is_active : undefined,
     doctorStatus: row.doctor_status ?? undefined,
   };
-}
-
-// Statuts médecin qui bloquent la connexion (pas encore validé par l'admin).
-const PENDING_DOCTOR_STATUSES = [
-  'PENDING_VALIDATION',
-  'PENDING',
-  'EN_ATTENTE',
-  'EN_ATTENTE_VALIDATION',
-  'REJECTED',
-  'REFUSE',
-  'SUSPENDED',
-  'SUSPENDU',
-];
-
-/** Un médecin est autorisé si son compte est actif et son statut n'est pas en attente/refusé. */
-export function isProviderValidated(u: Pick<User, 'isActive' | 'doctorStatus'>): boolean {
-  if (u.isActive === false) return false;
-  const s = (u.doctorStatus ?? '').toUpperCase();
-  if (s && PENDING_DOCTOR_STATUSES.includes(s)) return false;
-  return true;
 }
 
 /**
@@ -241,10 +231,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then(async ({ data }) => {
         if (active && data.session?.user) {
           const result = await loadProfile(data.session.user.id);
+          const refusal = result.status === 'ok' ? providerRefusalReason(result.user) : null;
           if (active && result.status === 'forbidden') {
             // Un compte admin connecté ailleurs n'est jamais restauré : session fermée, alerte unique.
             dropForbiddenSession();
             Alert.alert(roleNotAllowedMessage());
+          } else if (active && refusal) {
+            // Prestataire en attente, rejeté, incomplet ou suspendu : jamais restauré. Session
+            // fermée, alerte unique (même schéma que le rôle refusé), pas de boucle au redémarrage.
+            dropForbiddenSession();
+            Alert.alert(translate('Connexion impossible'), providerRefusalMessage(refusal));
           } else if (active && result.status === 'ok') {
             const profile = result.user;
             if (await biometrics.shouldLockAtLaunch(profile.id)) {
@@ -281,7 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logAuthEvent('auth:login', { id: profile.id, role: profile.role, countryId: countryIdForCode(profile.countryCode) }, method);
   };
 
-  const signIn = async (email: string, password: string, mockUser: User) => {
+  const signIn = async (email: string, password: string, mockUser: User): Promise<User> => {
     setLoading(true);
     try {
       if (supabaseConfigured && supabase) {
@@ -306,10 +302,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const profile = result.user;
         await guardProvider(profile);
         signedIn(profile, 'password');
-      } else {
-        await new Promise((r) => setTimeout(r, 400));
-        signedIn(mockUser, 'password');
+        return profile;
       }
+      await new Promise((r) => setTimeout(r, 400));
+      signedIn(mockUser, 'password');
+      return mockUser;
     } finally {
       setLoading(false);
     }
@@ -318,15 +315,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginPatient = (email: string, password: string) => signIn(email, password, currentPatient);
   const loginProvider = (email: string, password: string) => signIn(email, password, providerMockUser);
 
-  // Bloque la connexion d'un médecin pas encore validé par l'admin (ferme la session).
+  // Garde prestataire (`providerGate`) : `full` et `subscribe` restent connectés (le second est
+  // routé vers l'abonnement) ; en attente, rejeté, incomplet ou suspendu → session fermée + refus
+  // précis (message distinct par statut sur l'écran de connexion).
   const guardProvider = async (profile: User) => {
-    if (profile.role === 'provider' && !isProviderValidated(profile)) {
+    const refusal = providerRefusalReason(profile);
+    if (refusal) {
       try {
         await supabase?.auth.signOut({ scope: 'local' });
       } catch {
         /* ignore */
       }
-      throw new Error(PROVIDER_NOT_VALIDATED);
+      throw providerRefusalError(refusal);
     }
   };
 
@@ -583,7 +583,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       dropForbiddenSession();
       throw roleNotAllowedError();
     }
-    // Un médecin dont le compte n'est plus validé est déconnecté (lève PROVIDER_NOT_VALIDATED).
+    // Un médecin dont le statut ne permet plus l'accès est déconnecté (lève un refus par statut).
     await guardProvider(profile);
     setUser(profile);
     logAuthEvent(

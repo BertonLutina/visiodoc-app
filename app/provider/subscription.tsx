@@ -9,11 +9,20 @@ import { activeCountry } from '@/config/countries';
 import { appLocale } from '@/i18n';
 import { subscriptionPlans } from '@/data/mockProvider';
 import { useT } from '@/i18n';
+import { useAuth } from '@/contexts/AuthContext';
+import { providerHomeHref } from '@/services/accessPolicy';
 
 const cur = activeCountry.currency.symbol;
 
 export default function Subscription() {
   const t = useT();
+  const { user, logout } = useAuth();
+  // Prestataire sans accès complet : cet écran est son point d'arrivée, il doit pouvoir en sortir.
+  const restricted = !!user && providerHomeHref(user) === '/provider/subscription';
+  const onLogout = async () => {
+    await logout();
+    router.replace('/(auth)/login-provider');
+  };
   const [selected, setSelected] = useState(subscriptionPlans[0].id);
 
   return (
@@ -66,6 +75,11 @@ export default function Subscription() {
         })}
 
         <Button label={t("S'abonner maintenant")} variant="accent" onPress={() => router.back()} className="mt-2" />
+        {restricted ? (
+          <Pressable onPress={onLogout} className="py-4 items-center mt-2">
+            <Text className="font-sans-bold text-muted">{t('Se déconnecter')}</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

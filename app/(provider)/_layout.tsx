@@ -1,11 +1,13 @@
 import React from 'react';
 import { Platform } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { Home, Users, CalendarClock, FolderHeart, User } from 'lucide-react-native';
 import { GlassTabBar } from '@/components/GlassTabBar';
 import { colors } from '@/theme/colors';
 import { useT } from '@/i18n';
+import { useAuth } from '@/contexts/AuthContext';
+import { providerGate } from '@/services/accessPolicy';
 
 /**
  * Espace médecin (accent orange).
@@ -13,6 +15,12 @@ import { useT } from '@/i18n';
  */
 export default function ProviderTabsLayout() {
   const t = useT();
+  const { user } = useAuth();
+  // Garde : sans accès complet (`VALIDE_ABO_ACTIF`), ni onglets ni agenda, y compris par lien direct.
+  // Le prestataire reste connecté et arrive sur l'abonnement (d'où il peut se déconnecter).
+  if (user?.role === 'provider' && providerGate(user.doctorStatus, user.isActive) !== 'full') {
+    return <Redirect href="/provider/subscription" />;
+  }
   if (Platform.OS === 'ios') {
     return (
       <NativeTabs tintColor={colors.accent}>

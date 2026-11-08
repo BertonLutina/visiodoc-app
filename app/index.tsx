@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getDoctors } from '@/services/patientApi';
 import { useT } from '@/i18n';
+import { providerHomeHref } from '@/services/accessPolicy';
 
 const services = [
   { icon: Stethoscope, title: 'Consulter', subtitle: 'Médecins dispo.', tint: 'bg-sage' },
@@ -42,7 +43,7 @@ export default function PublicHome() {
 
   // Déjà connecté (session restaurée) → direct vers l'espace, sans re-login.
   if (user) {
-    return <Redirect href={user.role === 'provider' ? '/(provider)' : '/(patient)'} />;
+    return <Redirect href={providerHomeHref(user)} />;
   }
 
   return (
