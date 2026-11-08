@@ -16,10 +16,13 @@ import {
   buildRegisterPrestaBody,
   registerPatientAccount,
   resolveSpecialty,
+  needsLoginCredentials,
+  setLoginCredentials,
+  LoginCredentialsError,
   type Gender,
 } from '@/services/registration';
 import { getServiceTypeCatalog } from '@/services/specializationCatalog';
-import { isSessionExpiry, onSessionExpired } from '@/services/sessionExpiry';
+import { isSessionExpiry, onSessionExpired, reportSessionExpiry } from '@/services/sessionExpiry';
 import { createSessionExpiryTracker } from '@/services/sessionExpiryTracker';
 import { COUNTRIES } from '@/config/countries';
 import { currentPatient } from '@/data/mock';
@@ -72,6 +75,12 @@ interface RegisterProviderInput {
   countryCode?: string;
 }
 
+/** Résultat de la validation du code téléphone : `needsLoginCredentials` = e-mail + mot de passe à définir avant d'entrer. */
+export interface PhoneOtpResult {
+  user: User | null;
+  needsLoginCredentials: boolean;
+}
+
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
@@ -87,7 +96,15 @@ interface AuthContextType {
   verifyEmailOtp: (email: string, token: string) => Promise<User | null>;
   /** Connexion par téléphone — envoie un code par SMS. */
   sendPhoneOtp: (phone: string) => Promise<void>;
-  verifyPhoneOtp: (phone: string, token: string) => Promise<User | null>;
+  /**
+   * Valide le code. Un compte téléphone sans e-mail n'est PAS ouvert : `needsLoginCredentials` vaut
+   * vrai et l'écran doit appeler `saveLoginCredentials` (étape obligatoire) ou `cancelLoginCredentials`.
+   */
+  verifyPhoneOtp: (phone: string, token: string) => Promise<PhoneOtpResult>;
+  /** `set-login-credentials` après l'OTP, puis ouverture de la session (gardes de rôle et de statut incluses). */
+  saveLoginCredentials: (email: string, newPassword: string, confirmPassword: string) => Promise<User>;
+  /** Abandon de l'étape e-mail + mot de passe : la session créée par l'OTP est fermée. */
+  cancelLoginCredentials: () => void;
   /** Connexion sociale (Google, Microsoft/Outlook…). Renvoie l'utilisateur connecté. */
   signInWithProvider: (provider: OAuthProvider) => Promise<User | null>;
   /** Envoie un email de réinitialisation de mot de passe. */
@@ -274,6 +291,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (active && isSessionExpiry(error)) {
           // Jeton de rafraîchissement refusé au démarrage : jamais de restauration, message unique.
           handleSessionExpired();
+        } else if (active && data.session?.user && needsLoginCredentials(data.session.user)) {
+          // Compte téléphone resté sans e-mail ni mot de passe (étape obligatoire interrompue) :
+          // jamais restauré, il repasse par le code puis par l'étape e-mail + mot de passe.
+          dropForbiddenSession();
         } else if (active && data.session?.user) {
           const result = await loadProfile(data.session.user.id);
           const refusal = result.status === 'ok' ? providerRefusalReason(result.user) : null;
@@ -397,7 +418,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     phone: u?.phone ?? undefined,
   });
 
-  const finishOtp = async (authUser: any, fallbackEmail?: string, method?: AuthEventMethod): Promise<User> => {
+  // Profil du compte qui vient de s'authentifier par code, après les gardes de rôle et de statut.
+  const resolveOtpProfile = async (authUser: any, fallbackEmail?: string): Promise<User> => {
     const result = authUser?.id ? await loadProfile(authUser.id) : ({ status: 'missing' } as ProfileResult);
     if (result.status === 'forbidden') {
       dropForbiddenSession();
@@ -412,6 +434,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // mobile a déjà été refusée ci-dessus.
     const profile = result.status === 'ok' ? result.user : minimalUser(authUser, fallbackEmail);
     await guardProvider(profile);
+    return profile;
+  };
+
+  const finishOtp = async (authUser: any, fallbackEmail?: string, method?: AuthEventMethod): Promise<User> => {
+    const profile = await resolveOtpProfile(authUser, fallbackEmail);
     signedIn(profile, method);
     return profile;
   };
@@ -460,13 +487,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
-  const verifyPhoneOtp = async (phone: string, token: string): Promise<User | null> => {
+  // Vrai entre la validation du code et l'enregistrement de l'e-mail + mot de passe (aucun mot de passe ici).
+  const awaitingCredentialsRef = useRef(false);
+
+  const verifyPhoneOtp = async (phone: string, token: string): Promise<PhoneOtpResult> => {
     setLoading(true);
     try {
       if (!supabaseConfigured || !supabase) {
         const u = { ...currentPatient, phone };
         signedIn(u, 'phone_otp');
-        return u;
+        return { user: u, needsLoginCredentials: false };
       }
       const { data, error } = await supabase.auth.verifyOtp({
         phone,
@@ -474,10 +504,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         type: 'sms',
       });
       if (error) throw error;
-      return await finishOtp(data.user, undefined, 'phone_otp');
+      if (needsLoginCredentials(data.user)) {
+        // Rôle et statut vérifiés d'abord (refus = session fermée), mais l'app ne s'ouvre pas encore :
+        // l'étape e-mail + mot de passe est obligatoire pour un compte créé par téléphone.
+        const profile = await resolveOtpProfile(data.user);
+        awaitingCredentialsRef.current = true;
+        return { user: profile, needsLoginCredentials: true };
+      }
+      return { user: await finishOtp(data.user, undefined, 'phone_otp'), needsLoginCredentials: false };
     } finally {
       setLoading(false);
     }
+  };
+
+  const saveLoginCredentials = async (email: string, newPassword: string, confirmPassword: string): Promise<User> => {
+    if (!supabaseConfigured || !supabase || !awaitingCredentialsRef.current) {
+      throw new Error(translate('Une erreur est survenue. Réessaie.'));
+    }
+    setLoading(true);
+    try {
+      try {
+        await setLoginCredentials(email, newPassword, confirmPassword);
+      } catch (e) {
+        if (e instanceof LoginCredentialsError && e.kind === 'session_expired') {
+          // Session de l'OTP expirée : voie Task 6 (purge + message unique), l'étape est abandonnée.
+          awaitingCredentialsRef.current = false;
+          reportSessionExpiry(e);
+        }
+        throw e;
+      }
+      awaitingCredentialsRef.current = false;
+      // Rafraîchit la session : le jeton et l'utilisateur portent maintenant l'e-mail (connexion par e-mail possible).
+      let authUser: any = null;
+      try {
+        const { data } = await supabase.auth.refreshSession();
+        authUser = data.user ?? data.session?.user ?? null;
+      } catch {
+        /* le compte est à jour côté serveur : on retombe sur la session en cours */
+      }
+      if (!authUser) authUser = (await supabase.auth.getSession()).data.session?.user ?? null;
+      return await finishOtp(authUser, email.trim().toLowerCase(), 'phone_otp');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelLoginCredentials = () => {
+    if (!awaitingCredentialsRef.current) return;
+    awaitingCredentialsRef.current = false;
+    localSignOut().catch(() => {
+      /* ignore : aucun état utilisateur n'a été posé */
+    });
   };
 
   /* ---------- Connexion sociale (OAuth) ---------- */
@@ -705,6 +782,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyEmailOtp,
       sendPhoneOtp,
       verifyPhoneOtp,
+      saveLoginCredentials,
+      cancelLoginCredentials,
       signInWithProvider,
       sendPasswordReset,
       registerPatient,

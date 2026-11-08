@@ -4,7 +4,8 @@ import { getAfricanCountry } from '@/config/africanCountries';
 import { toE164 } from '@/utils/phone';
 import { supabase } from '@/lib/supabase';
 import { specKey } from '@/services/specializationCatalog';
-import { edgeFunctionError, pwnedPasswordMessage, authErrorMessage } from '@/utils/authError';
+import { edgeFunctionError, pwnedPasswordMessage, authErrorMessage, readHttpError } from '@/utils/authError';
+import { passwordIssue, passwordIssueMessage } from '@/services/passwordPolicy';
 
 /** `users.gender` : uniquement `male` ou `female` (guide). `other` est interdit. */
 export type Gender = 'male' | 'female';
@@ -256,4 +257,125 @@ export async function resendEmailConfirmation(email: string, language?: string):
   };
   const { error } = await supabase.functions.invoke('resend-email-confirmation', { body });
   if (error) throw await toRegisterError(error);
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Étape 8 du guide : un compte créé par téléphone (OTP WhatsApp) reçoit obligatoirement un e-mail et
+ * un mot de passe via l'Edge Function `set-login-credentials`.
+ * ---------------------------------------------------------------------------------------------- */
+
+/**
+ * Vrai si le compte authentifié est un compte « téléphone » auquel il manque encore l'e-mail
+ * (donc le mot de passe) : numéro présent, adresse `auth.users.email` vide.
+ *
+ * Règle retenue : c'est la seule donnée fiable connue juste après `verifyOtp`. GoTrue crée un compte
+ * téléphone avec `email` vide ; `set-login-credentials` renseigne ensuite cette adresse. Un
+ * utilisateur de retour qui a déjà un e-mail n'est donc jamais ramené à l'étape, et un compte e-mail
+ * ou OAuth (sans téléphone) n'est jamais concerné.
+ */
+export function needsLoginCredentials(
+  authUser: { id?: string; phone?: string | null; email?: string | null } | null | undefined,
+): boolean {
+  if (!authUser) return false;
+  const hasPhone = typeof authUser.phone === 'string' && authUser.phone.trim() !== '';
+  const hasEmail = typeof authUser.email === 'string' && authUser.email.trim() !== '';
+  return hasPhone && !hasEmail;
+}
+
+export type LoginCredentialsErrorKind =
+  | 'invalid_email'
+  | 'weak_password'
+  | 'password_mismatch'
+  | 'validation'
+  | 'conflict'
+  | 'rate_limited'
+  | 'session_expired'
+  | 'unknown';
+
+/** Erreur de `setLoginCredentials` : contrôle client (avant tout appel) ou réponse HTTP de la fonction. */
+export class LoginCredentialsError extends Error {
+  kind: LoginCredentialsErrorKind;
+  error_code?: string;
+  reasons?: string[];
+
+  constructor(
+    kind: LoginCredentialsErrorKind,
+    message: string,
+    extra?: { error_code?: string; reasons?: string[] },
+  ) {
+    super(message);
+    this.name = 'LoginCredentialsError';
+    this.kind = kind;
+    if (extra?.error_code) this.error_code = extra.error_code;
+    if (extra?.reasons) this.reasons = extra.reasons;
+  }
+}
+
+const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const credentialsKindForStatus = (status: number | undefined): LoginCredentialsErrorKind => {
+  if (status === 401) return 'session_expired';
+  if (status === 400 || status === 422) return 'validation';
+  if (status === 409) return 'conflict';
+  if (status === 429) return 'rate_limited';
+  return 'unknown';
+};
+
+/** Message affiché pour une erreur de `setLoginCredentials` (français, via `translate`). */
+export function loginCredentialsErrorMessage(error: any): string {
+  if (error instanceof LoginCredentialsError) {
+    if (error.kind === 'session_expired') return translate('Ta session a expiré, reconnecte-toi.');
+    if (error.kind === 'conflict') return translate('Un compte existe déjà avec cet email.');
+    if (error.kind === 'rate_limited') return translate('Trop de tentatives. Réessaie dans quelques minutes.');
+    return pwnedPasswordMessage(error) ?? error.message;
+  }
+  return authErrorMessage(error);
+}
+
+/**
+ * `POST /functions/v1/set-login-credentials` avec la session de l'utilisateur (l'en-tête
+ * `Authorization: Bearer` est ajouté par supabase-js). Corps exact du guide :
+ * `{ email, newPassword, confirmPassword }` (pas `password`).
+ *
+ * Contrôles AVANT tout appel réseau : format de l'e-mail, politique de mot de passe commune
+ * (10–72, lettre + chiffre) puis égalité de la confirmation. Le mot de passe n'est ni journalisé ni
+ * conservé.
+ */
+export async function setLoginCredentials(
+  email: string,
+  newPassword: string,
+  confirmPassword: string,
+): Promise<{ success: true; message: string }> {
+  const cleanEmail = email.trim().toLowerCase();
+  if (!EMAIL_FORMAT.test(cleanEmail)) {
+    throw new LoginCredentialsError('invalid_email', translate('Adresse email invalide.'));
+  }
+  const issue = passwordIssue(newPassword);
+  if (issue) {
+    throw new LoginCredentialsError('weak_password', passwordIssueMessage(issue));
+  }
+  if (newPassword !== confirmPassword) {
+    throw new LoginCredentialsError('password_mismatch', translate('Les mots de passe ne correspondent pas.'));
+  }
+  if (!supabase) throw new Error(translate('Backend non configuré.'));
+
+  const { data, error } = await supabase.functions.invoke('set-login-credentials', {
+    body: { email: cleanEmail, newPassword, confirmPassword },
+  });
+  if (error) {
+    const { status, body } = await readHttpError(error);
+    const kind = credentialsKindForStatus(status);
+    // `edgeFunctionError` conserve `error_code` / `reasons` (422 weak_password + pwned).
+    const base = edgeFunctionError(body);
+    throw new LoginCredentialsError(kind, base.message, {
+      // 401 : toujours traité comme session expirée (voie Task 6, `isSessionExpiry`).
+      error_code: kind === 'session_expired' ? 'session_expired' : base.error_code,
+      reasons: base.reasons,
+    });
+  }
+  if (data?.error || data?.success !== true) {
+    const base = edgeFunctionError(data);
+    throw new LoginCredentialsError('unknown', base.message, { error_code: base.error_code, reasons: base.reasons });
+  }
+  return { success: true, message: typeof data.message === 'string' ? data.message : '' };
 }

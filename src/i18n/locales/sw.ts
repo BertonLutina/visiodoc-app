@@ -578,4 +578,13 @@ export const sw: Record<string, string> = {
   "Ouvrir les réglages": "Fungua mipangilio",
   "Quitter": "Toka",
   "La visioconférence a été interrompue. Réessaie.": "Simu ya video imekatizwa. Jaribu tena.",
+  "Votre code de confirmation vous a été envoyé par WhatsApp": "Msimbo wako wa uthibitisho umetumwa kwako kupitia WhatsApp",
+  "Code de confirmation": "Msimbo wa uthibitisho",
+  "Vos identifiants de connexion": "Taarifa zako za kuingia",
+  "Ajoutez un e-mail et un mot de passe pour pouvoir aussi vous connecter par e-mail.": "Ongeza barua pepe na nenosiri ili uweze pia kuingia kwa barua pepe.",
+  "Confirmer le mot de passe": "Thibitisha nenosiri",
+  "Enregistrer et continuer": "Hifadhi na uendelee",
+  "Recevoir le code ({seconds} s)": "Pokea msimbo ({seconds} s)",
+  "Renvoyer le code ({seconds} s)": "Tuma msimbo tena ({seconds} s)",
+  "Les mots de passe ne correspondent pas.": "Manenosiri hayalingani.",
 };

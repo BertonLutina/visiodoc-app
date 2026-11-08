@@ -578,4 +578,13 @@ export const en: Record<string, string> = {
   "Ouvrir les réglages": "Open settings",
   "Quitter": "Leave",
   "La visioconférence a été interrompue. Réessaie.": "The video call was interrupted. Try again.",
+  "Votre code de confirmation vous a été envoyé par WhatsApp": "Your confirmation code has been sent to you by WhatsApp",
+  "Code de confirmation": "Confirmation code",
+  "Vos identifiants de connexion": "Your sign-in details",
+  "Ajoutez un e-mail et un mot de passe pour pouvoir aussi vous connecter par e-mail.": "Add an email and a password so you can also sign in by email.",
+  "Confirmer le mot de passe": "Confirm password",
+  "Enregistrer et continuer": "Save and continue",
+  "Recevoir le code ({seconds} s)": "Receive the code ({seconds} s)",
+  "Renvoyer le code ({seconds} s)": "Resend the code ({seconds} s)",
+  "Les mots de passe ne correspondent pas.": "The passwords do not match.",
 };

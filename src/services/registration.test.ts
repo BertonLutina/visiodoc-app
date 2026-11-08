@@ -8,8 +8,14 @@ import {
   resendCooldownRemaining,
   registerPatientErrorMessage,
   RegisterPatientError,
+  RESEND_COOLDOWN_SECONDS,
+  setLoginCredentials,
+  LoginCredentialsError,
+  loginCredentialsErrorMessage,
+  needsLoginCredentials,
 } from './registration';
 import { authErrorMessage, edgeFunctionError, isEmailNotConfirmed } from '@/utils/authError';
+import { isSessionExpiry } from '@/services/sessionExpiry';
 import { setCurrentLangCode } from '@/i18n/core';
 
 // Seule frontière simulée : `@/lib/supabase` (Edge Functions + garde-fous auth / users).
@@ -436,6 +442,10 @@ describe('resendEmailConfirmation', () => {
 });
 
 describe('resendCooldownRemaining (60 s between two resends)', () => {
+  it('uses the 60 seconds of the guide (étape 8.3)', () => {
+    expect(RESEND_COOLDOWN_SECONDS).toBe(60);
+  });
+
   it('is 0 when nothing was sent yet', () => {
     expect(resendCooldownRemaining(null, 5000)).toBe(0);
   });
@@ -481,5 +491,204 @@ describe('isEmailNotConfirmed (GoTrue email_not_confirmed)', () => {
     expect(authErrorMessage(new Error('Email not confirmed'))).toBe(
       "Ton adresse e-mail n'est pas encore confirmée. Clique sur le lien reçu par e-mail.",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Étape 8 : `set-login-credentials` après l'OTP WhatsApp (e-mail + mot de passe obligatoires)
+// ---------------------------------------------------------------------------------------------
+
+const CREDENTIALS_OK = { success: true, message: 'Identifiants mis à jour avec succès' };
+const GUIDE_EMAIL = 'patient.recup@exemple.com';
+const GUIDE_PASSWORD = 'NouveauMotDePasse123!';
+
+describe('setLoginCredentials', () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockSignUp.mockReset();
+    mockSignIn.mockReset();
+    mockFrom.mockReset();
+    mockInvoke.mockResolvedValue({ data: CREDENTIALS_OK, error: null });
+    setCurrentLangCode('fr');
+  });
+
+  afterEach(() => setCurrentLangCode('fr'));
+
+  it('invokes set-login-credentials with exactly { email, newPassword, confirmPassword } (no `password`)', async () => {
+    await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD);
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke).toHaveBeenCalledWith('set-login-credentials', {
+      body: { email: GUIDE_EMAIL, newPassword: GUIDE_PASSWORD, confirmPassword: GUIDE_PASSWORD },
+    });
+    const body = mockInvoke.mock.calls[0][1].body;
+    expect(Object.keys(body).sort()).toEqual(['confirmPassword', 'email', 'newPassword']);
+    expect(Object.keys(body)).not.toContain('password');
+  });
+
+  it('trims and lowercases the e-mail but never touches the password', async () => {
+    await setLoginCredentials('  Patient.Recup@Exemple.com ', ' Abcdefghij12 ', ' Abcdefghij12 ');
+    expect(mockInvoke.mock.calls[0][1].body).toEqual({
+      email: GUIDE_EMAIL,
+      newPassword: ' Abcdefghij12 ',
+      confirmPassword: ' Abcdefghij12 ',
+    });
+  });
+
+  it('resolves the success shape of the guide on a 200', async () => {
+    await expect(setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD)).resolves.toEqual({
+      success: true,
+      message: 'Identifiants mis à jour avec succès',
+    });
+  });
+
+  it('newPassword !== confirmPassword → typed error, function NOT called', async () => {
+    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, 'AutreMotDePasse456').catch(
+      (e) => e,
+    );
+    expect(err).toBeInstanceOf(LoginCredentialsError);
+    expect(err.kind).toBe('password_mismatch');
+    expect(err.message).toBe('Les mots de passe ne correspondent pas.');
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['short', 'Abc12345', 'too_short', 'Le mot de passe doit contenir au moins 10 caractères.'],
+    ['no digit', 'AbcdefghijKL', 'needs_letter_and_digit', 'Le mot de passe doit contenir au moins une lettre et un chiffre.'],
+    ['no letter', '1234567890123', 'needs_letter_and_digit', 'Le mot de passe doit contenir au moins une lettre et un chiffre.'],
+    ['73 chars', `a1${'b'.repeat(71)}`, 'too_long', 'Le mot de passe ne doit pas dépasser 72 caractères.'],
+  ])('weak password (%s) → typed error, function NOT called', async (_name, password, _issue, message) => {
+    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, password, password).catch((e) => e);
+    expect(err).toBeInstanceOf(LoginCredentialsError);
+    expect(err.kind).toBe('weak_password');
+    expect(err.message).toBe(message);
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it.each(['', '   ', 'pas-un-email', 'a@b', 'a b@c.cd', '@exemple.com'])(
+    'invalid e-mail %p → typed error, function NOT called',
+    async (email) => {
+      const err: LoginCredentialsError = await setLoginCredentials(email, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+      expect(err).toBeInstanceOf(LoginCredentialsError);
+      expect(err.kind).toBe('invalid_email');
+      expect(err.message).toBe('Adresse email invalide.');
+      expect(mockInvoke).not.toHaveBeenCalled();
+    },
+  );
+
+  it('accepts the 10-character and 72-character limits', async () => {
+    await setLoginCredentials(GUIDE_EMAIL, 'abcdefghi1', 'abcdefghi1');
+    const long = `a1${'b'.repeat(70)}`;
+    expect(long).toHaveLength(72);
+    await setLoginCredentials(GUIDE_EMAIL, long, long);
+    expect(mockInvoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('422 weak_password + pwned → the pwned message', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(422, { error: 'Password is known to be weak', error_code: 'weak_password', reasons: ['pwned'] }),
+    });
+    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+    expect(err).toBeInstanceOf(LoginCredentialsError);
+    expect(err.kind).toBe('validation');
+    expect(loginCredentialsErrorMessage(err)).toBe('Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.');
+  });
+
+  it('422 weak_password for another reason is not shown as pwned', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(422, { error: 'Mot de passe trop courant.', error_code: 'weak_password', reasons: ['common'] }),
+    });
+    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+    expect(loginCredentialsErrorMessage(err)).toBe('Mot de passe trop courant.');
+  });
+
+  it('400 → validation error with the server message', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(400, { error: 'Les mots de passe ne correspondent pas.' }),
+    });
+    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+    expect(err.kind).toBe('validation');
+    expect(loginCredentialsErrorMessage(err)).toBe('Les mots de passe ne correspondent pas.');
+  });
+
+  it('409 → conflict error: e-mail already used (existing French message)', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(409, { error: 'Email already registered' }) });
+    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+    expect(err.kind).toBe('conflict');
+    expect(loginCredentialsErrorMessage(err)).toBe('Un compte existe déjà avec cet email.');
+  });
+
+  it('429 → rate_limited error with a generic French message', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(429, { error: 'Too many requests' }) });
+    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+    expect(err.kind).toBe('rate_limited');
+    expect(loginCredentialsErrorMessage(err)).toBe('Trop de tentatives. Réessaie dans quelques minutes.');
+  });
+
+  it('401 (expired session) → session_expired error recognised by the Task 6 expiry path', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(401, { code: 401, message: 'Invalid JWT' }) });
+    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+    expect(err.kind).toBe('session_expired');
+    expect(isSessionExpiry(err)).toBe(true);
+    expect(loginCredentialsErrorMessage(err)).toBe('Ta session a expiré, reconnecte-toi.');
+  });
+
+  it('500 → unknown error with a generic French message (never the raw SDK text)', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(500, {}) });
+    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+    expect(err.kind).toBe('unknown');
+    expect(loginCredentialsErrorMessage(err)).toBe('Une erreur est survenue. Réessaie.');
+  });
+
+  it('network failure → the usual connection message', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: { name: 'FunctionsFetchError', message: 'Failed to send a request to the Edge Function' },
+    });
+    const err: LoginCredentialsError = await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD).catch((e) => e);
+    expect(err.kind).toBe('unknown');
+    expect(loginCredentialsErrorMessage(err)).toBe('Une erreur est survenue. Réessaie.');
+  });
+
+  it('a 200 without success:true is an error', async () => {
+    mockInvoke.mockResolvedValue({ data: { error: 'Echec' }, error: null });
+    await expect(setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD)).rejects.toBeInstanceOf(
+      LoginCredentialsError,
+    );
+  });
+
+  it('never calls signUp / signInWithPassword / the users table', async () => {
+    await setLoginCredentials(GUIDE_EMAIL, GUIDE_PASSWORD, GUIDE_PASSWORD);
+    expect(mockSignUp).not.toHaveBeenCalled();
+    expect(mockSignIn).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
+
+describe('needsLoginCredentials (phone account without e-mail yet)', () => {
+  it('is true for a phone account whose auth e-mail is empty', () => {
+    expect(needsLoginCredentials({ id: 'u1', phone: '243899999999', email: '' })).toBe(true);
+  });
+
+  it('is true when the e-mail is null, missing or blank', () => {
+    expect(needsLoginCredentials({ id: 'u1', phone: '243899999999', email: null })).toBe(true);
+    expect(needsLoginCredentials({ id: 'u1', phone: '243899999999' })).toBe(true);
+    expect(needsLoginCredentials({ id: 'u1', phone: '+243899999999', email: '   ' })).toBe(true);
+  });
+
+  it('is false for a phone account that already has an e-mail (returning user)', () => {
+    expect(needsLoginCredentials({ id: 'u1', phone: '243899999999', email: 'patient.recup@exemple.com' })).toBe(false);
+  });
+
+  it('is false for an e-mail account without phone (e-mail OTP, OAuth)', () => {
+    expect(needsLoginCredentials({ id: 'u1', email: 'a@b.cd' })).toBe(false);
+    expect(needsLoginCredentials({ id: 'u1', email: '', phone: '' })).toBe(false);
+  });
+
+  it('is false for no user at all', () => {
+    expect(needsLoginCredentials(null)).toBe(false);
+    expect(needsLoginCredentials(undefined)).toBe(false);
   });
 });

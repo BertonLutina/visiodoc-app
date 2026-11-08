@@ -578,4 +578,13 @@ export const ln: Record<string, string> = {
   "Ouvrir les réglages": "Fungola ba réglages",
   "Quitter": "Bima",
   "La visioconférence a été interrompue. Réessaie.": "Appel ya video etelemisami. Meka lisusu.",
+  "Votre code de confirmation vous a été envoyé par WhatsApp": "Code ya bondimi na yo etindami na yo na WhatsApp",
+  "Code de confirmation": "Code ya bondimi",
+  "Vos identifiants de connexion": "Makambo ma yo ya kokota",
+  "Ajoutez un e-mail et un mot de passe pour pouvoir aussi vous connecter par e-mail.": "Bakisa email mpe mot de passe po okoka mpe kokota na email.",
+  "Confirmer le mot de passe": "Pesa likanisi ya mot de passe",
+  "Enregistrer et continuer": "Kobomba mpe kokoba",
+  "Recevoir le code ({seconds} s)": "Zwa code ({seconds} s)",
+  "Renvoyer le code ({seconds} s)": "Tinda code lisusu ({seconds} s)",
+  "Les mots de passe ne correspondent pas.": "Mots de passe ekokani te.",
 };

@@ -1,33 +1,61 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Smartphone } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { CountryPicker } from '@/components/CountryPicker';
+import { PasswordField } from '@/components/PasswordField';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
 import { toE164 } from '@/utils/phone';
 import { authErrorMessage, providerRefusal, providerRefusalMessage } from '@/utils/authError';
 import { providerHomeHref } from '@/services/accessPolicy';
+import { LoginCredentialsError, loginCredentialsErrorMessage, resendCooldownRemaining } from '@/services/registration';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
 export default function PhoneLogin() {
   const t = useT();
-  const { sendPhoneOtp, verifyPhoneOtp, loading } = useAuth();
+  const { sendPhoneOtp, verifyPhoneOtp, saveLoginCredentials, cancelLoginCredentials, loading } = useAuth();
   const { role } = useLocalSearchParams<{ role?: string }>();
   const isProvider = role === 'provider';
   const tint = isProvider ? colors.accent : colors.primary;
   const tileBg = isProvider ? 'bg-accent-50' : 'bg-primary-50';
   const variant = isProvider ? 'accent' : 'primary';
 
-  const [step, setStep] = useState<'phone' | 'code'>('phone');
+  const [step, setStep] = useState<'phone' | 'code' | 'credentials'>('phone');
   const [countryCode, setCountryCode] = useState('CD');
   const [local, setLocal] = useState('');
   const [code, setCode] = useState('');
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Étape e-mail + mot de passe (obligatoire après le code pour un compte créé par téléphone).
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  // Temporisation de 60 s entre deux envois du code (guide, étape 8.3).
+  const [lastSentAt, setLastSentAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const remaining = resendCooldownRemaining(lastSentAt, now);
+
+  useEffect(() => {
+    if (remaining <= 0) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [remaining > 0]);
+
+  // Quitter l'écran en cours d'étape (retour matériel, geste) abandonne la session créée par le code.
+  const cancelRef = useRef(cancelLoginCredentials);
+  cancelRef.current = cancelLoginCredentials;
+  useEffect(() => () => cancelRef.current(), []);
+
+  const clearCredentials = () => {
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
+  };
 
   const country = getAfricanCountry(countryCode);
   const fullPhone = toE164(local, country?.dialCode) ?? '';
@@ -44,6 +72,9 @@ export default function PhoneLogin() {
     setSending(true);
     try {
       await sendPhoneOtp(fullPhone);
+      const sentAt = Date.now();
+      setNow(sentAt);
+      setLastSentAt(sentAt);
       setStep('code');
     } catch (e: any) {
       handleError(e);
@@ -55,10 +86,45 @@ export default function PhoneLogin() {
   const onVerify = async () => {
     setErrorMsg(null);
     try {
-      const u = await verifyPhoneOtp(fullPhone, code);
-      router.replace(u ? providerHomeHref(u) : '/(patient)');
+      const result = await verifyPhoneOtp(fullPhone, code);
+      if (result.needsLoginCredentials) {
+        setCode('');
+        setStep('credentials');
+        return;
+      }
+      router.replace(result.user ? providerHomeHref(result.user) : '/(patient)');
     } catch (e: any) {
       handleError(e);
+    }
+  };
+
+  const goBackToPhone = () => {
+    cancelLoginCredentials();
+    clearCredentials();
+    setCode('');
+    setErrorMsg(null);
+    setStep('phone');
+  };
+
+  const onSaveCredentials = async () => {
+    setErrorMsg(null);
+    setSaving(true);
+    try {
+      const u = await saveLoginCredentials(email, password, confirmPassword);
+      clearCredentials();
+      router.replace(providerHomeHref(u));
+    } catch (e: any) {
+      if (e instanceof LoginCredentialsError && e.kind !== 'session_expired') {
+        setErrorMsg(loginCredentialsErrorMessage(e));
+      } else {
+        // Session expirée, rôle ou statut refusé : la session est fermée, on repart du numéro.
+        clearCredentials();
+        setCode('');
+        setStep('phone');
+        handleError(e);
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -66,7 +132,7 @@ export default function PhoneLogin() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <View className="flex-row items-center px-5 pt-2 pb-2">
         <Pressable
-          onPress={() => (step === 'code' ? setStep('phone') : router.back())}
+          onPress={() => (step === 'credentials' ? goBackToPhone() : step === 'code' ? setStep('phone') : router.back())}
           className="p-1 mr-2"
         >
           <ChevronLeft color={colors.ink} size={26} />
@@ -79,12 +145,21 @@ export default function PhoneLogin() {
           <View className={`w-14 h-14 rounded-3xl items-center justify-center mb-4 ${tileBg}`}>
             <Smartphone color={tint} size={28} />
           </View>
-          <ScreenTitle center>{step === 'phone' ? t('Votre numéro') : t('Entrez le code')}</ScreenTitle>
+          <ScreenTitle center>
+            {step === 'phone' ? t('Votre numéro') : step === 'code' ? t('Entrez le code') : t('Vos identifiants de connexion')}
+          </ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
             {step === 'phone'
               ? t('On vous envoie un code de vérification par SMS.')
-              : t('Code envoyé au {phone}.', { phone: fullPhone })}
+              : step === 'code'
+                ? t('Votre code de confirmation vous a été envoyé par WhatsApp')
+                : t("Ajoutez un e-mail et un mot de passe pour pouvoir aussi vous connecter par e-mail.")}
           </Text>
+          {step === 'code' ? (
+            <Text className="font-sans text-sm text-muted mt-1 text-center">
+              {t('Code envoyé au {phone}.', { phone: fullPhone })}
+            </Text>
+          ) : null}
         </View>
 
         {step === 'phone' ? (
@@ -103,12 +178,18 @@ export default function PhoneLogin() {
                 <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
               </View>
             ) : null}
-            <Button label={t('Recevoir le code')} variant={variant} loading={sending} disabled={!phoneValid} onPress={onSend} />
+            <Button
+              label={remaining > 0 ? t('Recevoir le code ({seconds} s)', { seconds: remaining }) : t('Recevoir le code')}
+              variant={variant}
+              loading={sending}
+              disabled={!phoneValid || remaining > 0}
+              onPress={onSend}
+            />
           </>
-        ) : (
+        ) : step === 'code' ? (
           <>
             <Field
-              label={t('Code SMS')}
+              label={t('Code de confirmation')}
               placeholder="123456"
               keyboardType="number-pad"
               maxLength={6}
@@ -121,11 +202,45 @@ export default function PhoneLogin() {
               </View>
             ) : null}
             <Button label={t('Se connecter')} variant={variant} loading={loading} disabled={code.length < 6} onPress={onVerify} />
-            <Pressable onPress={onSend} disabled={sending} className="mt-4 items-center">
-              <Text className="font-sans-semibold text-sm" style={{ color: tint }}>
-                {sending ? t('Envoi…') : t('Renvoyer le code')}
+            <Pressable onPress={onSend} disabled={sending || remaining > 0} className="mt-4 items-center">
+              <Text
+                className="font-sans-semibold text-sm"
+                style={{ color: tint, opacity: sending || remaining > 0 ? 0.5 : 1 }}
+              >
+                {sending
+                  ? t('Envoi…')
+                  : remaining > 0
+                    ? t('Renvoyer le code ({seconds} s)', { seconds: remaining })
+                    : t('Renvoyer le code')}
               </Text>
             </Pressable>
+          </>
+        ) : (
+          <>
+            <Field
+              label={t('Adresse email')}
+              placeholder="nom@exemple.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              value={email}
+              onChangeText={setEmail}
+            />
+            <PasswordField label={t('Mot de passe')} value={password} onChangeText={setPassword} />
+            <PasswordField label={t('Confirmer le mot de passe')} value={confirmPassword} onChangeText={setConfirmPassword} />
+            {errorMsg ? (
+              <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
+                <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
+              </View>
+            ) : null}
+            <Button
+              label={t('Enregistrer et continuer')}
+              variant={variant}
+              loading={saving}
+              disabled={!email.trim() || !password || !confirmPassword}
+              onPress={onSaveCredentials}
+            />
           </>
         )}
       </ScrollView>
