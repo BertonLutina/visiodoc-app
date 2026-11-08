@@ -4,17 +4,20 @@
  */
 
 /** Codes d'erreur GoTrue (snake_case, comparés tels quels). */
-const EXPIRY_CODES = ['session_expired', 'refresh_token_not_found'];
+const EXPIRY_CODES = ['session_expired', 'refresh_token_not_found', 'refresh_token_already_used'];
 
 /**
  * Phrases de message (texte libre : comparaison insensible à la casse).
- * `refresh token not found` : formulation GoTrue de `refresh_token_not_found` quand le code manque.
+ * Formulations GoTrue (`Refresh Token Not Found`, `Already Used`) quand le code manque.
  */
 const EXPIRY_PHRASES = [
   'session_expired',
   'refresh_token_not_found',
   'invalid refresh token: session expired',
   'invalid refresh token: refresh token not found',
+  // Rotation des jetons : un jeton déjà utilisé invalide la session.
+  'refresh_token_already_used',
+  'invalid refresh token: already used',
   'jwt expired',
 ];
 

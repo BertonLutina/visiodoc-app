@@ -20,6 +20,7 @@ import {
 } from '@/services/registration';
 import { getServiceTypeCatalog } from '@/services/specializationCatalog';
 import { isSessionExpiry, onSessionExpired } from '@/services/sessionExpiry';
+import { createSessionExpiryTracker } from '@/services/sessionExpiryTracker';
 import { COUNTRIES } from '@/config/countries';
 import { currentPatient } from '@/data/mock';
 import { currentProvider } from '@/data/mockProvider';
@@ -176,21 +177,14 @@ async function loadProfile(userId: string): Promise<ProfileResult> {
   return { status: 'ok', user: mapUserRow(data, role) };
 }
 
-/**
- * Nombre de `signOut` lancés PAR L'APPLICATION et pas encore terminés. Le SDK émet `SIGNED_OUT` aussi bien
- * pour une déconnexion volontaire que pour un rafraîchissement de jeton définitivement refusé (expiration) :
- * l'événement ne porte pas la cause. Tant que ce compteur est > 0, un `SIGNED_OUT` est le nôtre (le SDK
- * l'émet avant que la promesse de `signOut` ne se résolve) ; sinon c'est le SDK qui a purgé la session.
- */
-let appInitiatedSignOuts = 0;
+/** Distingue `SIGNED_OUT` volontaire / expiration et dédoublonne le message (cf. sessionExpiryTracker). */
+const expiryTracker = createSessionExpiryTracker();
 
 /** Ferme la session locale (`scope: 'local'`, sans dépendre du serveur) en marquant la déconnexion comme volontaire. */
 function localSignOut(): Promise<unknown> {
   if (!supabase) return Promise.resolve();
-  appInitiatedSignOuts += 1;
-  return supabase.auth.signOut({ scope: 'local' }).finally(() => {
-    appInitiatedSignOuts -= 1;
-  });
+  const end = expiryTracker.beginAppSignOut();
+  return supabase.auth.signOut({ scope: 'local' }).finally(end);
 }
 
 /**
@@ -224,8 +218,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   pendingUserRef.current = pendingUser;
   // Vrai pendant la restauration de session au démarrage (session persistée en cours de rafraîchissement).
   const restoringRef = useRef(!!supabase);
-  // Le message d'expiration ne s'affiche qu'une fois par expiration (rétabli à la prochaine connexion).
-  const expiryShownRef = useRef(false);
 
   useEffect(() => {
     if (!supabaseConfigured) return;
@@ -269,8 +261,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           /* ignore : l'état local est déjà nettoyé */
         });
       }, 0);
-      if (!expiryShownRef.current) {
-        expiryShownRef.current = true;
+      if (expiryTracker.claimExpiryNotice()) {
         Alert.alert(translate('Ta session a expiré, reconnecte-toi.'));
       }
     };
@@ -316,9 +307,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (active && event === 'SIGNED_OUT') {
         // Déconnexion lancée par l'app (logout, refus de rôle ou de statut…) : pas de message.
-        const voluntary = appInitiatedSignOuts > 0;
         const hadSession = restoringRef.current || !!userRef.current || !!pendingUserRef.current;
-        if (!voluntary && hadSession) {
+        if (expiryTracker.onSignedOut(hadSession).kind === 'expired') {
           // Le SDK a purgé la session après un rafraîchissement refusé : on explique pourquoi.
           handleSessionExpired();
           return;
@@ -338,7 +328,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Connexion active (mot de passe, OTP, OAuth, inscription) → jamais verrouillée,
   // et déclenche la proposition d'activer la biométrie.
   const signedIn = (profile: User, method?: AuthEventMethod) => {
-    expiryShownRef.current = false;
+    expiryTracker.resetNotice();
     setUser(profile);
     setJustSignedIn(true);
     logAuthEvent('auth:login', { id: profile.id, role: profile.role, countryId: countryIdForCode(profile.countryCode) }, method);

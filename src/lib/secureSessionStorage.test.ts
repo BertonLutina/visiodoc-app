@@ -6,31 +6,39 @@ import { secureSessionStorage } from './secureSessionStorage';
 // Frontière externe : le trousseau. Le mock reproduit la contrainte de la plateforme
 // (clés limitées à [A-Za-z0-9._-], valeurs ≤ 2048 octets) pour que le test échoue si l'adaptateur la viole.
 jest.mock('expo-secure-store', () => {
-  const bytes = (v: string) => unescape(encodeURIComponent(v)).length; // octets UTF-8
   const store = new Map<string, string>();
+  const bytes = (v: string) => unescape(encodeURIComponent(v)).length; // octets UTF-8
   const check = (key: string) => {
     if (!/^[A-Za-z0-9._-]+$/.test(key)) throw new Error(`Invalid SecureStore key: ${key}`);
   };
-  return {
-    __store: store,
-    getItemAsync: jest.fn(async (key: string) => {
+  const impl = {
+    get: async (key: string) => {
       check(key);
       return store.has(key) ? (store.get(key) as string) : null;
-    }),
-    setItemAsync: jest.fn(async (key: string, value: string) => {
+    },
+    set: async (key: string, value: string) => {
       check(key);
       if (bytes(value) > 2048) throw new Error(`Value too large (${bytes(value)} bytes)`);
       store.set(key, value);
-    }),
-    deleteItemAsync: jest.fn(async (key: string) => {
+    },
+    del: async (key: string) => {
       check(key);
       store.delete(key);
-    }),
+    },
+  };
+  return {
+    __store: store,
+    __impl: impl,
+    AFTER_FIRST_UNLOCK: 'AFTER_FIRST_UNLOCK_CONSTANT',
+    getItemAsync: jest.fn(impl.get),
+    setItemAsync: jest.fn(impl.set),
+    deleteItemAsync: jest.fn(impl.del),
   };
 });
 
 const utf8Bytes = (v: string) => unescape(encodeURIComponent(v)).length;
 const secureMap: Map<string, string> = (SecureStore as any).__store;
+const impl = (SecureStore as any).__impl;
 const KEY = 'sb-pslypdfjmjetjhtpzwip-auth-token';
 
 const bigSession = () =>
@@ -44,6 +52,10 @@ beforeEach(async () => {
   secureMap.clear();
   await AsyncStorage.clear();
   jest.clearAllMocks();
+  // clearAllMocks ne retire pas les implémentations d'échec posées par un test précédent.
+  (SecureStore.getItemAsync as jest.Mock).mockImplementation(impl.get);
+  (SecureStore.setItemAsync as jest.Mock).mockImplementation(impl.set);
+  (SecureStore.deleteItemAsync as jest.Mock).mockImplementation(impl.del);
   (Platform as any).OS = 'ios';
 });
 
@@ -96,12 +108,14 @@ describe('secureSessionStorage', () => {
     await secureSessionStorage.setItem(KEY, bigSession());
     await secureSessionStorage.setItem(KEY, 'short');
     expect(await secureSessionStorage.getItem(KEY)).toBe('short');
-    expect(secureMap.size).toBe(2); // métadonnée + un seul fragment
+    // Une seule génération reste : journal + métadonnée + un fragment.
+    expect(secureMap.size).toBe(3);
+    expect([...secureMap.keys()].filter((k) => /\.__\d+$/.test(k))).toHaveLength(1);
   });
 
   it('returns null when a chunk is missing', async () => {
     await secureSessionStorage.setItem(KEY, bigSession());
-    const chunkKey = [...secureMap.keys()].find((k) => k.endsWith('.__1')) as string;
+    const chunkKey = [...secureMap.keys()].find((k) => /\.__1$/.test(k)) as string;
     secureMap.delete(chunkKey);
 
     expect(await secureSessionStorage.getItem(KEY)).toBeNull();
@@ -109,7 +123,7 @@ describe('secureSessionStorage', () => {
 
   it('returns null when a chunk is corrupt', async () => {
     await secureSessionStorage.setItem(KEY, bigSession());
-    const chunkKey = [...secureMap.keys()].find((k) => k.endsWith('.__0')) as string;
+    const chunkKey = [...secureMap.keys()].find((k) => /\.__0$/.test(k)) as string;
     secureMap.set(chunkKey, (secureMap.get(chunkKey) as string).slice(10));
 
     expect(await secureSessionStorage.getItem(KEY)).toBeNull();
@@ -121,6 +135,259 @@ describe('secureSessionStorage', () => {
     secureMap.set(metaKey, 'not-a-number');
 
     expect(await secureSessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  describe('atomic writes', () => {
+    const OLD = 'old-' + 'o'.repeat(4000);
+    const NEW = 'new-' + 'n'.repeat(5000);
+
+    // Combien d'appels setItemAsync une réécriture fait-elle ? (mesuré, pas supposé)
+    async function countWriteCalls(): Promise<number> {
+      secureMap.clear();
+      await secureSessionStorage.setItem(KEY, OLD);
+      (SecureStore.setItemAsync as jest.Mock).mockClear();
+      await secureSessionStorage.setItem(KEY, NEW);
+      return (SecureStore.setItemAsync as jest.Mock).mock.calls.length;
+    }
+
+    it.each([['first', 1], ['second', 2]])('keeps the old value when the %s write fails', async (_label, n) => {
+      await secureSessionStorage.setItem(KEY, OLD);
+      let calls = 0;
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(async (k: string, v: string) => {
+        calls += 1;
+        if (calls === n) throw new Error('write failed');
+        return impl.set(k, v);
+      });
+
+      await expect(secureSessionStorage.setItem(KEY, NEW)).rejects.toThrow('write failed');
+
+      expect(await secureSessionStorage.getItem(KEY)).toBe(OLD);
+    });
+
+    it('keeps the old value when the LAST chunk write fails', async () => {
+      const total = await countWriteCalls();
+      await secureSessionStorage.removeItem(KEY);
+      await secureSessionStorage.setItem(KEY, OLD);
+      let calls = 0;
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(async (k: string, v: string) => {
+        calls += 1;
+        if (calls === total - 2) throw new Error('write failed'); // dernier fragment (avant la métadonnée et le journal de nettoyage)
+        return impl.set(k, v);
+      });
+
+      await expect(secureSessionStorage.setItem(KEY, NEW)).rejects.toThrow('write failed');
+
+      expect(await secureSessionStorage.getItem(KEY)).toBe(OLD);
+    });
+
+    it('keeps the old value when the meta write fails', async () => {
+      const total = await countWriteCalls();
+      await secureSessionStorage.removeItem(KEY);
+      await secureSessionStorage.setItem(KEY, OLD);
+      let calls = 0;
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(async (k: string, v: string) => {
+        calls += 1;
+        if (calls === total - 1) throw new Error('meta write failed'); // la métadonnée précède l'écriture finale du journal de nettoyage
+        return impl.set(k, v);
+      });
+
+      await expect(secureSessionStorage.setItem(KEY, NEW)).rejects.toThrow('meta write failed');
+
+      expect(await secureSessionStorage.getItem(KEY)).toBe(OLD);
+    });
+
+    it('never reads back a mix of old and new chunks, whichever write call fails', async () => {
+      const total = await countWriteCalls();
+      for (let failAt = 1; failAt <= total - 1; failAt += 1) { // total = dernière écriture = journal de nettoyage, après l'interrupteur
+        secureMap.clear();
+        await secureSessionStorage.setItem(KEY, OLD);
+        let calls = 0;
+        (SecureStore.setItemAsync as jest.Mock).mockImplementation(async (k: string, v: string) => {
+          calls += 1;
+          if (calls === failAt) throw new Error('write failed');
+          return impl.set(k, v);
+        });
+        await secureSessionStorage.setItem(KEY, NEW).catch(() => {});
+        (SecureStore.setItemAsync as jest.Mock).mockImplementation(impl.set);
+
+        expect([OLD, null]).toContain(await secureSessionStorage.getItem(KEY));
+        expect(await secureSessionStorage.getItem(KEY)).toBe(OLD);
+      }
+    });
+
+    it('keeps the NEW value when only the final journal cleanup write fails', async () => {
+      const total = await countWriteCalls();
+      secureMap.clear();
+      await secureSessionStorage.setItem(KEY, OLD);
+      let calls = 0;
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(async (k: string, v: string) => {
+        calls += 1;
+        if (calls === total) throw new Error('journal rewrite failed');
+        return impl.set(k, v);
+      });
+
+      await expect(secureSessionStorage.setItem(KEY, NEW)).resolves.toBeUndefined();
+
+      expect(await secureSessionStorage.getItem(KEY)).toBe(NEW);
+    });
+
+    it('returns null (never a partial value) when the very first write fails midway', async () => {
+      let calls = 0;
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(async (k: string, v: string) => {
+        calls += 1;
+        if (calls === 3) throw new Error('write failed');
+        return impl.set(k, v);
+      });
+
+      await expect(secureSessionStorage.setItem(KEY, NEW)).rejects.toThrow('write failed');
+
+      expect(await secureSessionStorage.getItem(KEY)).toBeNull();
+    });
+
+    it('does not fail the write when cleaning up the previous generation fails', async () => {
+      await secureSessionStorage.setItem(KEY, OLD);
+      (SecureStore.deleteItemAsync as jest.Mock).mockRejectedValue(new Error('delete failed'));
+
+      await expect(secureSessionStorage.setItem(KEY, NEW)).resolves.toBeUndefined();
+
+      expect(await secureSessionStorage.getItem(KEY)).toBe(NEW);
+    });
+
+    it('sweeps a failed generation on the next successful write', async () => {
+      await secureSessionStorage.setItem(KEY, OLD);
+      let calls = 0;
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(async (k: string, v: string) => {
+        calls += 1;
+        if (calls === 4) throw new Error('write failed');
+        return impl.set(k, v);
+      });
+      await secureSessionStorage.setItem(KEY, NEW).catch(() => {});
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(impl.set);
+
+      await secureSessionStorage.setItem(KEY, 'final');
+
+      expect(await secureSessionStorage.getItem(KEY)).toBe('final');
+      expect(secureMap.size).toBe(3); // journal + métadonnée + un fragment : rien d'orphelin
+    });
+
+    it('writes with AFTER_FIRST_UNLOCK so a locked device does not log the user out', async () => {
+      await secureSessionStorage.setItem(KEY, bigSession());
+
+      const calls = (SecureStore.setItemAsync as jest.Mock).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      for (const call of calls) expect(call[2]).toEqual({ keychainAccessible: 'AFTER_FIRST_UNLOCK_CONSTANT' });
+    });
+  });
+
+  describe('chunk boundaries', () => {
+    const CHUNK = 1800;
+    const utf8 = (v: string) => unescape(encodeURIComponent(v)).length;
+
+    it('stores a value of exactly the chunk size in one chunk', async () => {
+      const value = 'x'.repeat(CHUNK);
+      await secureSessionStorage.setItem(KEY, value);
+      expect([...secureMap.keys()].filter((k) => /\.__\d+$/.test(k))).toHaveLength(1);
+      expect(await secureSessionStorage.getItem(KEY)).toBe(value);
+    });
+
+    it('splits a value one byte over the chunk size in two chunks', async () => {
+      const value = 'x'.repeat(CHUNK + 1);
+      await secureSessionStorage.setItem(KEY, value);
+      expect([...secureMap.keys()].filter((k) => /\.__\d+$/.test(k))).toHaveLength(2);
+      expect(await secureSessionStorage.getItem(KEY)).toBe(value);
+    });
+
+    it.each([
+      ['2-byte', 'é'],
+      ['3-byte', '€'],
+      ['4-byte (surrogate pair)', '😀'],
+    ])('keeps a %s character that straddles a chunk boundary intact', async (_label, ch) => {
+      for (const pad of [CHUNK - 1, CHUNK - 2, CHUNK - 3]) {
+        const value = 'a'.repeat(pad) + ch + 'tail' + ch.repeat(10);
+        await secureSessionStorage.setItem(KEY, value);
+        for (const v of secureMap.values()) expect(utf8(v)).toBeLessThanOrEqual(2048);
+        expect(await secureSessionStorage.getItem(KEY)).toBe(value);
+      }
+    });
+  });
+
+  describe('key escaping', () => {
+    it('maps keys that differ only by a forbidden character to different storage keys', async () => {
+      await secureSessionStorage.setItem('a:b', 'colon');
+      await secureSessionStorage.setItem('a_b', 'underscore');
+      await secureSessionStorage.setItem('a/b', 'slash');
+
+      expect(await secureSessionStorage.getItem('a:b')).toBe('colon');
+      expect(await secureSessionStorage.getItem('a_b')).toBe('underscore');
+      expect(await secureSessionStorage.getItem('a/b')).toBe('slash');
+      for (const k of secureMap.keys()) expect(k).toMatch(/^[A-Za-z0-9._-]+$/);
+    });
+
+    it('removing one key leaves the key that used to collide with it untouched', async () => {
+      await secureSessionStorage.setItem('a:b', 'colon');
+      await secureSessionStorage.setItem('a_b', 'underscore');
+      await secureSessionStorage.removeItem('a:b');
+      expect(await secureSessionStorage.getItem('a_b')).toBe('underscore');
+      expect(await secureSessionStorage.getItem('a:b')).toBeNull();
+    });
+  });
+
+  describe('removeItem robustness', () => {
+    it('still deletes the AsyncStorage legacy copy when the keychain delete throws', async () => {
+      await secureSessionStorage.setItem(KEY, bigSession());
+      await AsyncStorage.setItem(KEY, 'legacy');
+      (SecureStore.deleteItemAsync as jest.Mock).mockRejectedValue(new Error('keychain locked'));
+
+      await expect(secureSessionStorage.removeItem(KEY)).rejects.toThrow('keychain locked');
+
+      expect(await AsyncStorage.getItem(KEY)).toBeNull();
+    });
+
+    it('sweeps chunks even when the meta record is gone', async () => {
+      await secureSessionStorage.setItem(KEY, bigSession());
+      const metaKey = [...secureMap.keys()].find((k) => k.endsWith('.__n')) as string;
+      secureMap.delete(metaKey);
+      expect(secureMap.size).toBeGreaterThan(0);
+
+      await secureSessionStorage.removeItem(KEY);
+
+      expect(secureMap.size).toBe(0);
+    });
+
+    it('lets a retry finish the job after a delete failed midway, leaving no token fragment', async () => {
+      await secureSessionStorage.setItem(KEY, bigSession());
+      let calls = 0;
+      (SecureStore.deleteItemAsync as jest.Mock).mockImplementation(async (k: string) => {
+        calls += 1;
+        if (calls === 2) throw new Error('delete failed');
+        return impl.del(k);
+      });
+
+      await expect(secureSessionStorage.removeItem(KEY)).rejects.toThrow('delete failed');
+      // Déjà illisible : la session n'est plus restaurable même si un fragment reste.
+      expect(await secureSessionStorage.getItem(KEY)).toBeNull();
+
+      (SecureStore.deleteItemAsync as jest.Mock).mockImplementation(impl.del);
+      await secureSessionStorage.removeItem(KEY);
+
+      expect(secureMap.size).toBe(0);
+    });
+
+    it('sweeps the generation left behind by a failed write', async () => {
+      await secureSessionStorage.setItem(KEY, 'old-' + 'o'.repeat(4000));
+      let calls = 0;
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(async (k: string, v: string) => {
+        calls += 1;
+        if (calls === 4) throw new Error('write failed');
+        return impl.set(k, v);
+      });
+      await secureSessionStorage.setItem(KEY, 'new-' + 'n'.repeat(5000)).catch(() => {});
+      (SecureStore.setItemAsync as jest.Mock).mockImplementation(impl.set);
+
+      await secureSessionStorage.removeItem(KEY);
+
+      expect(secureMap.size).toBe(0);
+    });
   });
 
   describe('migration from AsyncStorage', () => {

@@ -24,6 +24,20 @@ describe('isSessionExpiry', () => {
     expect(isSessionExpiry('JWT expired')).toBe(true);
   });
 
+  it('is true for a reused (rotated) refresh token', () => {
+    expect(isSessionExpiry({ code: 'refresh_token_already_used' })).toBe(true);
+    expect(isSessionExpiry(new Error('Invalid Refresh Token: Already Used'))).toBe(true);
+    expect(isSessionExpiry('refresh_token_already_used')).toBe(true);
+    expect(
+      isSessionExpiry({
+        name: 'AuthApiError',
+        code: 'refresh_token_already_used',
+        message: 'Invalid Refresh Token: Already Used',
+        status: 400,
+      }),
+    ).toBe(true);
+  });
+
   it('recognises the GoTrue wording of a missing refresh token', () => {
     expect(isSessionExpiry(new Error('Invalid Refresh Token: Refresh Token Not Found'))).toBe(true);
   });
