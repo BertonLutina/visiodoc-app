@@ -1,5 +1,6 @@
 // Types côté médecin (provider) — alignés sur le backend Supabase de l'app web.
 import type { ConsultationStatus, ConsultationType } from '@/types';
+import type { Gender } from '@/services/registration';
 
 export interface ProviderProfile {
   id: string;
@@ -34,8 +35,8 @@ export interface ProviderPatient {
   lastName: string;
   /** `null` quand `users.date_of_birth` est absente — jamais un 0 trompeur. */
   age: number | null;
-  /** `null` quand `users.gender` est absent ou hors de l'énumération attendue. */
-  gender: 'M' | 'F' | null;
+  /** `null` quand `users.gender` est absent ou différent de `male` / `female` (ex. ancien `other`). */
+  gender: Gender | null;
   mainCondition: string;
   initials: string;
 }
@@ -46,7 +47,7 @@ export interface PatientDetail {
   lastName: string;
   initials: string;
   age: number | null;
-  gender: 'M' | 'F' | null;
+  gender: Gender | null;
   bloodType: string | null;
   allergiesSummary: string | null;
   address: string | null;

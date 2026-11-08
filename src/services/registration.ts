@@ -74,3 +74,16 @@ export function resolveSpecialty(
   if (match) return { serviceTypeId: match.id, proposedSpecialtyLabel: null };
   return { serviceTypeId: null, proposedSpecialtyLabel: label.trim() || null };
 }
+
+/** Valeur DB `users.gender` → `'male' | 'female' | null` (tout autre contenu, dont l'ancien `other`, devient `null`). */
+export function normalizeGender(value: unknown): Gender | null {
+  return isGender(value) ? value : null;
+}
+
+/** Libellé d'affichage : Masculin / Féminin, sinon « Non renseigné » (jamais de texte brut de la base). */
+export function genderLabel(value: unknown): string {
+  const gender = normalizeGender(value);
+  if (gender === 'male') return translate('Masculin');
+  if (gender === 'female') return translate('Féminin');
+  return translate('Non renseigné');
+}

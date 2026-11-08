@@ -38,7 +38,11 @@ export function edgeFunctionError(
   body: { error?: unknown; error_code?: unknown; reasons?: unknown } | null | undefined,
   fallbackMessage = '',
 ): Error & { error_code?: string; reasons?: string[] } {
-  const message = typeof body?.error === 'string' && body.error ? body.error : fallbackMessage;
+  // Jamais de message vide : corps sans `error` texte → message de repli, sinon message générique.
+  const message =
+    (typeof body?.error === 'string' && body.error) ||
+    fallbackMessage ||
+    translate('Une erreur est survenue. Réessaie.');
   const err: Error & { error_code?: string; reasons?: string[] } = new Error(message);
   if (typeof body?.error_code === 'string') err.error_code = body.error_code;
   if (Array.isArray(body?.reasons)) err.reasons = body.reasons.map(String);

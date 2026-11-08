@@ -8,6 +8,7 @@ import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getPatients } from '@/services/providerApi';
+import { genderLabel } from '@/services/registration';
 import { currentProvider } from '@/data/mockProvider';
 import { useT } from '@/i18n';
 
@@ -55,7 +56,7 @@ export default function ProviderPatients() {
               </Text>
               <Text className="font-sans text-xs text-muted mt-0.5">
                 {p.age !== null ? `${p.age} ${t('ans')}` : t('Âge inconnu')}
-                {p.gender ? ` · ${p.gender}` : ''}
+                {` · ${genderLabel(p.gender)}`}
               </Text>
               <Text className="font-sans text-xs text-clay mt-0.5">{p.mainCondition}</Text>
             </View>

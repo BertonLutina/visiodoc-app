@@ -233,6 +233,7 @@ export const ln: Record<string, string> = {
   "La date de fin ne peut pas précéder la date de début.": "Mokolo ya suka ekoki kozala liboso ya mokolo ya kobanda te.",
   "La spécialisation « en attente » reste visible sur votre profil mais ne rejoint la liste officielle qu'après validation par l'administrateur.": "Mayele “ezali kozela” ekomonana na profil na yo kasi ekokota na liste ya officiel kaka sima ya bondimi ya administrateur.",
   "Langue": "Lokota",
+  "Non renseigné": "Emonisami te",
   "Genre": "Bosolo",
   "Masculin": "Mobali",
   "Féminin": "Mwasi",

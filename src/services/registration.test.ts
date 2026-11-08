@@ -1,4 +1,4 @@
-import { buildRegisterPrestaBody, resolveSpecialty } from './registration';
+import { buildRegisterPrestaBody, resolveSpecialty, genderLabel, normalizeGender } from './registration';
 import { authErrorMessage, edgeFunctionError } from '@/utils/authError';
 
 // Valeurs du guide « Inscription Prestataire » (POST /functions/v1/register-presta).
@@ -112,5 +112,43 @@ describe('edgeFunctionError (register-presta 422 weak_password)', () => {
     expect(edgeFunctionError(null, 'Edge Function returned a non-2xx status code').message).toBe(
       'Edge Function returned a non-2xx status code',
     );
+  });
+});
+
+describe('normalizeGender (users.gender → male | female | null)', () => {
+  it('passes male and female through', () => {
+    expect(normalizeGender('male')).toBe('male');
+    expect(normalizeGender('female')).toBe('female');
+  });
+
+  it('maps legacy / unexpected values and absence to null', () => {
+    expect(normalizeGender('other')).toBeNull();
+    expect(normalizeGender('M')).toBeNull();
+    expect(normalizeGender('F')).toBeNull();
+    expect(normalizeGender('')).toBeNull();
+    expect(normalizeGender(null)).toBeNull();
+    expect(normalizeGender(undefined)).toBeNull();
+  });
+});
+
+describe('genderLabel', () => {
+  it('shows the French labels of the guide', () => {
+    expect(genderLabel('male')).toBe('Masculin');
+    expect(genderLabel('female')).toBe('Féminin');
+  });
+
+  it("shows 'Non renseigné' for null, never raw English text for a legacy value", () => {
+    expect(genderLabel(null)).toBe('Non renseigné');
+    expect(genderLabel(undefined)).toBe('Non renseigné');
+    expect(genderLabel('other')).toBe('Non renseigné');
+  });
+});
+
+describe('edgeFunctionError with a non-string error', () => {
+  it('never produces an empty message', () => {
+    expect(edgeFunctionError({ error: { code: 1 } }, 'Edge Function returned a non-2xx status code').message).toBe(
+      'Edge Function returned a non-2xx status code',
+    );
+    expect(edgeFunctionError({ error: true }).message).not.toBe('');
   });
 });

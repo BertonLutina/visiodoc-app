@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import type { Gender } from '@/services/registration';
+import { genderLabel, type Gender } from '@/services/registration';
 import { useT } from '@/i18n';
 
 type Props = {
@@ -12,8 +12,8 @@ type Props = {
 export function GenderField({ value, onChange }: Props) {
   const t = useT();
   const options: { value: Gender; label: string }[] = [
-    { value: 'male', label: t('Masculin') },
-    { value: 'female', label: t('Féminin') },
+    { value: 'male', label: genderLabel('male') },
+    { value: 'female', label: genderLabel('female') },
   ];
   return (
     <View className="mb-4">

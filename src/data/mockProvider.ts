@@ -74,10 +74,10 @@ export const providerUpcomingConsultations: ProviderConsultation[] = [
 ];
 
 export const providerPatients: ProviderPatient[] = [
-  { id: 'pat-1', firstName: 'Marie', lastName: 'Konaté', age: 38, gender: 'F', mainCondition: 'Rhinopharyngite', initials: 'MK' },
-  { id: 'pat-2', firstName: 'Bamba', lastName: 'Sow', age: 45, gender: 'M', mainCondition: 'Hypertension artérielle', initials: 'BS' },
-  { id: 'pat-3', firstName: 'Aïcha', lastName: 'Ndiaye', age: 29, gender: 'F', mainCondition: 'Suivi prénatal', initials: 'AN' },
-  { id: 'pat-4', firstName: 'Oumar', lastName: 'Camara', age: 52, gender: 'M', mainCondition: 'Diabète type 2', initials: 'OC' },
+  { id: 'pat-1', firstName: 'Marie', lastName: 'Konaté', age: 38, gender: 'female', mainCondition: 'Rhinopharyngite', initials: 'MK' },
+  { id: 'pat-2', firstName: 'Bamba', lastName: 'Sow', age: 45, gender: 'male', mainCondition: 'Hypertension artérielle', initials: 'BS' },
+  { id: 'pat-3', firstName: 'Aïcha', lastName: 'Ndiaye', age: 29, gender: 'female', mainCondition: 'Suivi prénatal', initials: 'AN' },
+  { id: 'pat-4', firstName: 'Oumar', lastName: 'Camara', age: 52, gender: 'male', mainCondition: 'Diabète type 2', initials: 'OC' },
 ];
 
 export const providerAvailability: AvailabilitySlot[] = [

@@ -233,6 +233,7 @@ export const sw: Record<string, string> = {
   "La date de fin ne peut pas précéder la date de début.": "Tarehe ya kumaliza haiwezi kuwa kabla ya tarehe ya kuanza.",
   "La spécialisation « en attente » reste visible sur votre profil mais ne rejoint la liste officielle qu'après validation par l'administrateur.": "Utaalamu “unaosubiri” unabaki kuonekana kwenye wasifu wako lakini unaingia kwenye orodha rasmi baada ya msimamizi kuuthibitisha.",
   "Langue": "Lugha",
+  "Non renseigné": "Haijaainishwa",
   "Genre": "Jinsia",
   "Masculin": "Mwanaume",
   "Féminin": "Mwanamke",

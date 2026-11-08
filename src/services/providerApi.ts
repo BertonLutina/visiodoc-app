@@ -2,6 +2,7 @@ import { supabase, supabaseConfigured } from '@/lib/supabase';
 import * as mock from '@/data/mockProvider';
 import * as patientMock from '@/data/mock';
 import { logMedicalRecordEvent } from './auditLog';
+import { normalizeGender } from './registration';
 import { mapMedicalRecordRow } from './patientApi';
 import { normalizeConsultationStatus } from '@/utils/format';
 import { parseSpecializations, dedupeSpecializations, joinSpecializations } from './specializations';
@@ -259,7 +260,7 @@ export async function getPatients(doctorId: string): Promise<ProviderPatient[]> 
         firstName: p.first_name ?? '',
         lastName: p.last_name ?? '',
         age: calculateAge(p.date_of_birth),
-        gender: p.gender === 'M' || p.gender === 'F' ? p.gender : null,
+        gender: normalizeGender(p.gender),
         mainCondition: (row as any).reason ?? '',
         initials: initials(p.first_name, p.last_name),
       });
@@ -323,7 +324,7 @@ export async function getPatient(patientId: string): Promise<PatientDetail> {
       lastName: p?.lastName ?? '',
       initials: p?.initials ?? '?',
       age: p?.age ?? null,
-      gender: (p?.gender as 'M' | 'F' | undefined) ?? null,
+      gender: normalizeGender(p?.gender),
       bloodType: null,
       allergiesSummary: null,
       address: null,
@@ -345,7 +346,7 @@ export async function getPatient(patientId: string): Promise<PatientDetail> {
     lastName: data.last_name ?? '',
     initials: initials(data.first_name, data.last_name),
     age: calculateAge(data.date_of_birth),
-    gender: data.gender ?? null,
+    gender: normalizeGender(data.gender),
     bloodType: data.blood_type ?? null,
     allergiesSummary: data.allergies ?? null,
     address: data.address ?? null,

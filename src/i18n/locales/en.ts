@@ -233,6 +233,7 @@ export const en: Record<string, string> = {
   "La date de fin ne peut pas précéder la date de début.": "The end date cannot be before the start date.",
   "La spécialisation « en attente » reste visible sur votre profil mais ne rejoint la liste officielle qu'après validation par l'administrateur.": "A specialty marked “pending” stays visible on your profile but only joins the official list once approved by the administrator.",
   "Langue": "Language",
+  "Non renseigné": "Not specified",
   "Genre": "Gender",
   "Masculin": "Male",
   "Féminin": "Female",

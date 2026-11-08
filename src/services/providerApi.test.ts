@@ -141,7 +141,7 @@ describe('getPatient', () => {
         first_name: 'Marie',
         last_name: 'Konaté',
         date_of_birth: '1990-01-01T00:00:00.000Z',
-        gender: 'F',
+        gender: 'female',
         blood_type: 'O+',
         allergies: 'Pénicilline',
         address: 'Kinshasa',
@@ -160,6 +160,7 @@ describe('getPatient', () => {
 
     expect(fromMock).toHaveBeenCalledWith('users');
     expect(eqMock).toHaveBeenCalledWith('id', 'pat-1');
+    expect(result.gender).toBe('female');
     expect(result.bloodType).toBe('O+');
     expect(result.allergiesSummary).toBe('Pénicilline');
     expect(result.age).toBeGreaterThan(30);
@@ -338,5 +339,69 @@ describe('appendMedicalRecordAttachment', () => {
     await appendFresh('rec-1', existing, newOne);
 
     expect(updateMock).toHaveBeenCalledWith({ attachments: [...existing, newOne] });
+  });
+});
+
+describe('provider-side patient gender (male | female | null)', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.dontMock('@/lib/supabase');
+  });
+
+  const patientRow = (id: string, gender: unknown) => ({
+    patient: { id, first_name: 'A', last_name: 'B', date_of_birth: null, gender },
+    reason: 'x',
+  });
+
+  it('getPatients keeps male/female and maps other, legacy M/F, null and undefined to null', async () => {
+    const notMock = jest.fn().mockResolvedValue({
+      data: [
+        patientRow('p-male', 'male'),
+        patientRow('p-female', 'female'),
+        patientRow('p-other', 'other'),
+        patientRow('p-m', 'M'),
+        patientRow('p-null', null),
+        patientRow('p-undef', undefined),
+      ],
+      error: null,
+    });
+    const eqMock = jest.fn(() => ({ not: notMock }));
+    const selectMock = jest.fn(() => ({ eq: eqMock }));
+    jest.doMock('@/lib/supabase', () => ({
+      supabase: { from: jest.fn(() => ({ select: selectMock })) },
+      supabasePublic: null,
+      supabaseConfigured: true,
+    }));
+    const { getPatients } = require('./providerApi');
+    const byId = Object.fromEntries((await getPatients('doc-1')).map((p: any) => [p.id, p.gender]));
+    expect(byId).toEqual({
+      'p-male': 'male',
+      'p-female': 'female',
+      'p-other': null,
+      'p-m': null,
+      'p-null': null,
+      'p-undef': null,
+    });
+  });
+
+  it.each([
+    ['male', 'male'],
+    ['female', 'female'],
+    ['other', null],
+    ['F', null],
+    [null, null],
+  ])('getPatient maps DB gender %p to %p', async (db, expected) => {
+    const singleMock = jest.fn().mockResolvedValue({
+      data: { id: 'pat-1', first_name: 'A', last_name: 'B', date_of_birth: null, gender: db },
+      error: null,
+    });
+    const fromMock = jest.fn(() => ({ select: jest.fn(() => ({ eq: jest.fn(() => ({ single: singleMock })) })) }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+    const { getPatient: getPatientFresh } = require('./providerApi');
+    expect((await getPatientFresh('pat-1')).gender).toBe(expected);
   });
 });

@@ -7,6 +7,7 @@ import { Avatar, Badge, Card, SectionTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { useAsync } from '@/hooks/useAsync';
 import { getPatient, getPatientConsultationHistory } from '@/services/providerApi';
+import { genderLabel } from '@/services/registration';
 import { getMedicalRecords } from '@/services/patientApi';
 import { currentProvider } from '@/data/mockProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -94,7 +95,7 @@ export default function PatientProfile() {
           {patient && (
             <Text className="font-sans text-sm text-muted mt-0.5">
               {patient.age !== null ? `${patient.age} ${t('ans')}` : t('Âge inconnu')}
-              {patient.gender ? ` · ${patient.gender}` : ''}
+              {` · ${genderLabel(patient.gender)}`}
               {patient.bloodType ? ` · ${patient.bloodType}` : ''}
             </Text>
           )}
