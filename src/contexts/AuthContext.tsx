@@ -279,6 +279,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // message affiché une seule fois. `signOut` n'est pas awaité (verrou interne du SDK, cf. `logout`).
     const handleSessionExpired = () => {
       if (!active) return;
+      // Plusieurs chargements en échec simultanés signalent la même expiration : un seul nettoie et notifie.
+      if (!expiryTracker.claimCleanup()) return;
       // Message seulement si une session existait (utilisateur, verrou biométrique en attente ou
       // restauration d'une session persistée) : jamais pour un visiteur (ex. lien profond vers /call/x).
       const hadSession = restoringRef.current || !!userRef.current || !!pendingUserRef.current;

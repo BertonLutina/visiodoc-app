@@ -66,6 +66,20 @@ describe('session expiry tracker', () => {
     expect(t.onSignedOut(true).notify).toBe(false);
   });
 
+  it('claimCleanup lets only ONE of several simultaneous expiry reports run the sign-out', () => {
+    const t = createSessionExpiryTracker();
+    expect(t.claimCleanup()).toBe(true);
+    expect(t.claimCleanup()).toBe(false);
+    expect(t.claimCleanup()).toBe(false);
+  });
+
+  it('a new sign-in re-arms the cleanup too', () => {
+    const t = createSessionExpiryTracker();
+    expect(t.claimCleanup()).toBe(true);
+    t.resetNotice();
+    expect(t.claimCleanup()).toBe(true);
+  });
+
   it('a new sign-in re-arms the message', () => {
     const t = createSessionExpiryTracker();
     expect(t.onSignedOut(true).notify).toBe(true);

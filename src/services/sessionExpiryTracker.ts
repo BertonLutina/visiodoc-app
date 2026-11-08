@@ -13,6 +13,7 @@ export type SignedOutKind = 'voluntary' | 'expired' | 'ignored';
 export function createSessionExpiryTracker() {
   let inFlight = 0;
   let noticeShown = false;
+  let cleanupClaimed = false;
 
   return {
     /** À appeler avant un `signOut` de l'app ; renvoie la fonction à appeler (une seule fois effective) à sa fin. */
@@ -53,9 +54,20 @@ export function createSessionExpiryTracker() {
       return true;
     },
 
+    /**
+     * Vrai une seule fois par expiration pour le nettoyage (état local + `signOut` local) : plusieurs
+     * chargements qui échouent ensemble signalent la même expiration, un seul doit agir.
+     */
+    claimCleanup(): boolean {
+      if (cleanupClaimed) return false;
+      cleanupClaimed = true;
+      return true;
+    },
+
     /** Nouvelle connexion : le prochain événement d'expiration affichera de nouveau le message. */
     resetNotice(): void {
       noticeShown = false;
+      cleanupClaimed = false;
     },
   };
 }
