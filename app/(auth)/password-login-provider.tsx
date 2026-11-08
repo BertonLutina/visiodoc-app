@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
-import { authErrorMessage, isProviderPending, PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
+import { authErrorMessage, isEmailNotConfirmed, isProviderPending, PROVIDER_PENDING_MESSAGE } from '@/utils/authError';
+import { ResendConfirmation } from '@/components/ResendConfirmation';
 import { useAuth, type OAuthProvider } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -46,14 +47,20 @@ export default function PasswordLoginProvider() {
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Connexion refusée parce que l'adresse n'est pas encore confirmée : propose le renvoi de l'e-mail.
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
 
   const handleError = (e: any) => {
-    if (isProviderPending(e)) Alert.alert(t('Compte en attente de validation'), t(PROVIDER_PENDING_MESSAGE));
+    if (isEmailNotConfirmed(e)) {
+      setUnconfirmedEmail(email.trim());
+      setErrorMsg(authErrorMessage(e));
+    } else if (isProviderPending(e)) Alert.alert(t('Compte en attente de validation'), t(PROVIDER_PENDING_MESSAGE));
     else setErrorMsg(authErrorMessage(e));
   };
 
   const onSubmit = async () => {
     setErrorMsg(null);
+    setUnconfirmedEmail(null);
     try {
       await loginProvider(email, password);
       router.replace('/(provider)');
@@ -64,6 +71,7 @@ export default function PasswordLoginProvider() {
 
   const onSocial = async (provider: OAuthProvider) => {
     setErrorMsg(null);
+    setUnconfirmedEmail(null);
     setBusy(true);
     try {
       const u = await signInWithProvider(provider);
@@ -122,6 +130,12 @@ export default function PasswordLoginProvider() {
         {errorMsg ? (
           <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
             <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
+          </View>
+        ) : null}
+
+        {unconfirmedEmail ? (
+          <View className="mb-3">
+            <ResendConfirmation email={unconfirmedEmail} variant="accent" />
           </View>
         ) : null}
 

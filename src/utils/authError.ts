@@ -49,6 +49,17 @@ export function edgeFunctionError(
   return err;
 }
 
+/**
+ * Erreur GoTrue `email_not_confirmed` (« Email not confirmed ») : connexion par mot de passe d'un
+ * compte dont l'adresse n'a pas encore été confirmée (confirmation obligatoire, guide MOB-0612-1).
+ */
+export function isEmailNotConfirmed(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as Record<string, unknown>;
+  if (e.code === 'email_not_confirmed' || e.error_code === 'email_not_confirmed') return true;
+  return typeof e.message === 'string' && e.message.toLowerCase().includes('email not confirmed');
+}
+
 /** Traduit une erreur Supabase Auth/Postgres en message lisible (FR). */
 export function authErrorMessage(e: any): string {
   const msg = (e?.message ?? '').toString();
@@ -67,8 +78,8 @@ export function authErrorMessage(e: any): string {
     return translate('Le mot de passe doit comporter au moins 10 caractères et inclure au moins une lettre et un chiffre.');
   if (lower.includes('invalid email') || lower.includes('unable to validate email'))
     return translate('Adresse email invalide.');
-  if (lower.includes('email not confirmed'))
-    return translate('Confirme ton email avant de te connecter.');
+  if (isEmailNotConfirmed(e))
+    return translate("Ton adresse e-mail n'est pas encore confirmée. Clique sur le lien reçu par e-mail.");
   // Codes / SMS sans mot de passe
   if (lower.includes('otp_disabled') || lower.includes('signups not allowed for otp'))
     return translate("Aucun compte n'est associé à cet email. Crée d'abord un compte.");

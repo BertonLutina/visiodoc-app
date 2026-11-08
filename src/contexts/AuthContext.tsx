@@ -4,7 +4,12 @@ import * as Linking from 'expo-linking';
 import type { User, UserRole } from '@/types';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 import { PROVIDER_NOT_VALIDATED, edgeFunctionError } from '@/utils/authError';
-import { buildRegisterPrestaBody, resolveSpecialty, type Gender } from '@/services/registration';
+import {
+  buildRegisterPrestaBody,
+  registerPatientAccount,
+  resolveSpecialty,
+  type Gender,
+} from '@/services/registration';
 import { getServiceTypeCatalog } from '@/services/specializationCatalog';
 import { COUNTRIES } from '@/config/countries';
 import { currentPatient } from '@/data/mock';
@@ -76,7 +81,8 @@ interface AuthContextType {
   signInWithProvider: (provider: OAuthProvider) => Promise<User | null>;
   /** Envoie un email de réinitialisation de mot de passe. */
   sendPasswordReset: (email: string) => Promise<void>;
-  registerPatient: (input: RegisterPatientInput) => Promise<void>;
+  /** Inscription patient : `requiresEmailConfirmation` vrai = e-mail à confirmer, pas de session ouverte. */
+  registerPatient: (input: RegisterPatientInput) => Promise<{ requiresEmailConfirmation: boolean }>;
   registerProvider: (input: RegisterProviderInput) => Promise<void>;
   updateProfile: (
     partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage' | 'avatarUrl'>>,
@@ -427,52 +433,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
-  const registerPatient = async (input: RegisterPatientInput) => {
+  const registerPatient = async (input: RegisterPatientInput): Promise<{ requiresEmailConfirmation: boolean }> => {
     setLoading(true);
     try {
       if (supabaseConfigured && supabase) {
-        const email = input.email.trim().toLowerCase();
-        // 1. Création du compte Auth (la session est ouverte directement)
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password: input.password,
-          options: { data: { first_name: input.firstName, last_name: input.lastName } },
-        });
-        if (error) throw error;
-        const authUser = data.user;
-        if (!authUser) throw new Error(translate('Inscription impossible. Réessaie.'));
-
-        // 2. Création de la ligne profil dans public.users (aucun trigger côté DB).
-        //    `public_id` est obligatoire et sans valeur par défaut → on le génère.
-        const { error: insertError } = await supabase.from('users').insert({
-          id: authUser.id,
-          email,
-          first_name: input.firstName,
-          last_name: input.lastName,
-          phone: input.phone || null,
-          gender: input.gender,
-          role: 'patient',
-          country_id: countryIdForCode(input.countryCode),
-          public_id: `VD-${authUser.id.slice(0, 8).toUpperCase()}`,
-          is_active: true,
-        });
-        // 23505 = ligne déjà existante (ex: trigger qui l'aurait créée) → on ignore
-        if (insertError && insertError.code !== '23505') throw insertError;
-
-        const profile = (await loadProfile(authUser.id)) ?? {
-          id: authUser.id,
-          email,
-          firstName: input.firstName,
-          lastName: input.lastName,
-          role: 'patient' as const,
-          phone: input.phone,
-          countryCode: input.countryCode,
-        };
-        signedIn(profile, 'registration');
-      } else {
-        await new Promise((r) => setTimeout(r, 400));
-        signedIn({ ...currentPatient, firstName: input.firstName, lastName: input.lastName, email: input.email }, 'registration');
+        // Edge Function register-patient : le compte est créé côté serveur et l'e-mail de
+        // confirmation est envoyé. Pas de connexion automatique : l'adresse doit d'abord être confirmée.
+        return await registerPatientAccount(input);
       }
+      // Mode mock (aucun Supabase configuré) : on parcourt l'UI comme avant, patient connecté.
+      await new Promise((r) => setTimeout(r, 400));
+      signedIn({ ...currentPatient, firstName: input.firstName, lastName: input.lastName, email: input.email }, 'registration');
+      return { requiresEmailConfirmation: false };
     } finally {
       setLoading(false);
     }

@@ -7,9 +7,9 @@ import { CountryPicker } from '@/components/CountryPicker';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { PasswordField } from '@/components/PasswordField';
 import { GenderField } from '@/components/GenderField';
-import type { Gender } from '@/services/registration';
+import { ResendConfirmation } from '@/components/ResendConfirmation';
 import { passwordIssue } from '@/services/passwordPolicy';
-import { authErrorMessage } from '@/utils/authError';
+import { registerPatientErrorMessage, type Gender } from '@/services/registration';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -26,6 +26,8 @@ export default function RegisterPatient() {
   const [gender, setGender] = useState<Gender | null>(null); // aucun choix par défaut
   const [countryCode, setCountryCode] = useState('CD'); // RD Congo par défaut
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Renseigné après un 200 `requiresEmailConfirmation` : on affiche « Vérifie ta boîte e-mail ».
+  const [sent, setSent] = useState<{ email: string; at: number } | null>(null);
   const country = getAfricanCountry(countryCode);
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -34,7 +36,7 @@ export default function RegisterPatient() {
     setErrorMsg(null);
     if (!gender) return;
     try {
-      await registerPatient({
+      const result = await registerPatient({
         firstName: form.firstName,
         lastName: form.lastName,
         email: form.email,
@@ -43,11 +45,41 @@ export default function RegisterPatient() {
         gender,
         countryCode,
       });
-      router.replace('/(patient)');
+      // Pas de connexion ni de redirection automatique tant que l'adresse n'est pas confirmée.
+      if (result.requiresEmailConfirmation) setSent({ email: form.email.trim(), at: Date.now() });
+      else router.replace('/(patient)'); // mode mock (sans Supabase) : patient connecté
     } catch (e: any) {
-      setErrorMsg(authErrorMessage(e));
+      setErrorMsg(registerPatientErrorMessage(e));
     }
   };
+
+  if (sent) {
+    return (
+      <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+          <View className="items-center mb-7 mt-2">
+            <Text className="font-serif-bold text-3xl text-primary mb-4">visiodoc</Text>
+            <ScreenTitle center>{t('Vérifie ta boîte e-mail')}</ScreenTitle>
+            <Text className="font-sans text-base text-muted mt-3 text-center">
+              {t('Nous avons envoyé un lien de confirmation à')}
+            </Text>
+            <Text className="font-sans-bold text-base text-ink mt-1 text-center">{sent.email}</Text>
+            <Text className="font-sans text-base text-muted mt-3 text-center">
+              {t("Clique sur le lien reçu par e-mail, puis reviens dans l'application pour te connecter.")}
+            </Text>
+          </View>
+
+          <ResendConfirmation email={sent.email} initialSentAt={sent.at} />
+
+          <Button
+            label={t('Se connecter')}
+            className="mt-3"
+            onPress={() => router.replace('/(auth)/login')}
+          />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
