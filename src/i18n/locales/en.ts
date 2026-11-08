@@ -536,4 +536,5 @@ export const en: Record<string, string> = {
   "Renvoyer l'e-mail": "Resend the email",
   "Renvoyer l'e-mail ({seconds} s)": "Resend the email ({seconds} s)",
   "Si cette adresse est associée à un compte non confirmé, un nouveau lien de confirmation a été envoyé.": "If this address belongs to an unconfirmed account, a new confirmation link has been sent.",
+  "Vous n'êtes pas autorisé ici, utilisez la version web.": "You are not authorised here, please use the web version.",
 };

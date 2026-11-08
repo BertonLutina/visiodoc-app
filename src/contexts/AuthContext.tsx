@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { Alert } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import type { User, UserRole } from '@/types';
+import type { User } from '@/types';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
-import { PROVIDER_NOT_VALIDATED, edgeFunctionError } from '@/utils/authError';
+import { PROVIDER_NOT_VALIDATED, edgeFunctionError, roleNotAllowedError, roleNotAllowedMessage } from '@/utils/authError';
+import { mobileRole, type MobileRole } from '@/services/accessPolicy';
 import {
   buildRegisterPrestaBody,
   registerPatientAccount,
@@ -119,14 +121,13 @@ const providerMockUser: User = {
   countryCode: 'CD',
 };
 
-function mapUserRow(row: any): User {
-  const role = String(row.role || 'patient').toLowerCase() as UserRole;
+function mapUserRow(row: any, role: MobileRole): User {
   return {
     id: row.id,
     email: row.email,
     firstName: row.first_name ?? '',
     lastName: row.last_name ?? '',
-    role: role === 'provider' ? 'provider' : role === 'admin' ? 'admin' : 'patient',
+    role,
     phone: row.phone ?? undefined,
     avatarUrl: row.avatar_url ?? undefined,
     // `users.country_id` est une FK → table `countries` ; le code pays vit dans countries.code
@@ -157,15 +158,41 @@ export function isProviderValidated(u: Pick<User, 'isActive' | 'doctorStatus'>):
   return true;
 }
 
-async function loadProfile(userId: string): Promise<User | null> {
-  if (!supabase) return null;
+/**
+ * Résultat de la lecture de `users` pour un compte authentifié. On distingue « aucune ligne »
+ * (`missing`, p. ex. nouvel utilisateur OTP sans profil → repli `minimalUser`) d'une ligne dont le
+ * rôle n'est pas mobile (`forbidden` : admin, validateur… → refus, jamais converti en patient).
+ * `error` = lecture impossible (réseau, RLS) : on ne sait pas quel est le rôle, donc jamais de repli patient.
+ */
+type ProfileResult =
+  | { status: 'ok'; user: User }
+  | { status: 'missing' }
+  | { status: 'forbidden' }
+  | { status: 'error' };
+
+async function loadProfile(userId: string): Promise<ProfileResult> {
+  if (!supabase) return { status: 'missing' };
   const { data, error } = await supabase
     .from('users')
     .select('*, countries ( code, currency_code, locale )')
     .eq('id', userId)
     .single();
-  if (error || !data) return null;
-  return mapUserRow(data);
+  // PGRST116 : `.single()` n'a trouvé aucune ligne → le compte n'a vraiment pas de profil.
+  if (error && error.code !== 'PGRST116') return { status: 'error' };
+  if (error || !data) return { status: 'missing' };
+  const role = mobileRole(data.role);
+  if (!role) return { status: 'forbidden' };
+  return { status: 'ok', user: mapUserRow(data, role) };
+}
+
+/**
+ * Ferme la session locale d'un compte au rôle non mobile. `signOut` n'est volontairement PAS
+ * awaité (même raison que dans `logout()` : le verrou interne du SDK peut bloquer l'appelant).
+ */
+function dropForbiddenSession() {
+  supabase?.auth.signOut({ scope: 'local' }).catch(() => {
+    /* ignore : aucun état utilisateur n'a été posé */
+  });
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -213,8 +240,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .getSession()
       .then(async ({ data }) => {
         if (active && data.session?.user) {
-          const profile = await loadProfile(data.session.user.id);
-          if (active && profile) {
+          const result = await loadProfile(data.session.user.id);
+          if (active && result.status === 'forbidden') {
+            // Un compte admin connecté ailleurs n'est jamais restauré : session fermée, alerte unique.
+            dropForbiddenSession();
+            Alert.alert(roleNotAllowedMessage());
+          } else if (active && result.status === 'ok') {
+            const profile = result.user;
             if (await biometrics.shouldLockAtLaunch(profile.id)) {
               // Le profil reste en attente : aucun écran ne se charge avant la biométrie.
               setPendingUser(profile);
@@ -255,8 +287,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (supabaseConfigured && supabase) {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        const profile = data.user && (await loadProfile(data.user.id));
-        if (!profile) {
+        const result = data.user ? await loadProfile(data.user.id) : ({ status: 'missing' } as ProfileResult);
+        if (result.status === 'forbidden') {
+          dropForbiddenSession();
+          throw roleNotAllowedError();
+        }
+        if (result.status !== 'ok') {
           // Compte auth valide mais aucune ligne `users` correspondante (RLS, ligne
           // manquante…) : ne JAMAIS retomber sur mockUser ici — ce serait connecter
           // la personne sous une fausse identité qui passe toujours guardProvider.
@@ -267,6 +303,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
           throw new Error(translate('Profil introuvable pour ce compte. Contacte le support.'));
         }
+        const profile = result.user;
         await guardProvider(profile);
         signedIn(profile, 'password');
       } else {
@@ -304,7 +341,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   const finishOtp = async (authUser: any, fallbackEmail?: string, method?: AuthEventMethod): Promise<User> => {
-    const profile = (authUser?.id && (await loadProfile(authUser.id))) || minimalUser(authUser, fallbackEmail);
+    const result = authUser?.id ? await loadProfile(authUser.id) : ({ status: 'missing' } as ProfileResult);
+    if (result.status === 'forbidden') {
+      dropForbiddenSession();
+      throw roleNotAllowedError();
+    }
+    if (result.status === 'error') {
+      // Rôle inconnu (lecture impossible) : jamais de repli patient, on ferme la session.
+      dropForbiddenSession();
+      throw new Error(translate('Profil introuvable pour ce compte. Contacte le support.'));
+    }
+    // Aucune ligne `users` (role absent) : profil minimal patient. Une ligne existante au rôle non
+    // mobile a déjà été refusée ci-dessus.
+    const profile = result.status === 'ok' ? result.user : minimalUser(authUser, fallbackEmail);
     await guardProvider(profile);
     signedIn(profile, method);
     return profile;
@@ -529,6 +578,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const profile = pendingUser;
     setPendingUser(null);
     setLocked(false);
+    // pendingUser vient d'une restauration déjà filtrée ; on re-vérifie le rôle avant d'ouvrir l'espace.
+    if (!mobileRole(profile.role)) {
+      dropForbiddenSession();
+      throw roleNotAllowedError();
+    }
     // Un médecin dont le compte n'est plus validé est déconnecté (lève PROVIDER_NOT_VALIDATED).
     await guardProvider(profile);
     setUser(profile);

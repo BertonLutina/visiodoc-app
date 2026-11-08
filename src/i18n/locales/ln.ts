@@ -536,4 +536,5 @@ export const ln: Record<string, string> = {
   "Renvoyer l'e-mail": "Tinda e-mail lisusu",
   "Renvoyer l'e-mail ({seconds} s)": "Tinda e-mail lisusu (sekonde {seconds})",
   "Si cette adresse est associée à un compte non confirmé, un nouveau lien de confirmation a été envoyé.": "Soki adresi oyo ezali na compte oyo ekondimami naino te, lien ya sika ya bondimisi etindami.",
+  "Vous n'êtes pas autorisé ici, utilisez la version web.": "Ozali na ndingisa awa te, salela version ya web.",
 };

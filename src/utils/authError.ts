@@ -9,6 +9,22 @@ export function isProviderPending(e: any): boolean {
   return e?.message === PROVIDER_NOT_VALIDATED;
 }
 
+/** Code d'erreur : rôle (admin, validateur…) non autorisé sur l'application mobile. */
+export const ROLE_NOT_ALLOWED = 'ROLE_NOT_ALLOWED';
+
+export function roleNotAllowedError(): Error {
+  return new Error(ROLE_NOT_ALLOWED);
+}
+
+export function isRoleNotAllowed(e: any): boolean {
+  return e?.message === ROLE_NOT_ALLOWED;
+}
+
+/** Texte exact du guide (0.3), point final compris. */
+export function roleNotAllowedMessage(): string {
+  return translate("Vous n'êtes pas autorisé ici, utilisez la version web.");
+}
+
 /**
  * Refus HTTP 422 `weak_password` pour cause de mot de passe compromis (HIBP) : le texte du guide,
  * sinon `null`. Corps GoTrue : `{ error_code: 'weak_password', reasons: ['pwned'] }` ; quand seul
@@ -64,6 +80,7 @@ export function isEmailNotConfirmed(error: unknown): boolean {
 export function authErrorMessage(e: any): string {
   const msg = (e?.message ?? '').toString();
   const lower = msg.toLowerCase();
+  if (msg === ROLE_NOT_ALLOWED) return roleNotAllowedMessage();
   if (msg === PROVIDER_NOT_VALIDATED) return translate(PROVIDER_PENDING_MESSAGE);
   const pwned = pwnedPasswordMessage(e);
   if (pwned) return pwned;

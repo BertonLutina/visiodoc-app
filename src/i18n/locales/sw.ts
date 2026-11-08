@@ -536,4 +536,5 @@ export const sw: Record<string, string> = {
   "Renvoyer l'e-mail": "Tuma barua pepe tena",
   "Renvoyer l'e-mail ({seconds} s)": "Tuma barua pepe tena (sekunde {seconds})",
   "Si cette adresse est associée à un compte non confirmé, un nouveau lien de confirmation a été envoyé.": "Ikiwa anwani hii inahusishwa na akaunti isiyothibitishwa, kiungo kipya cha uthibitisho kimetumwa.",
+  "Vous n'êtes pas autorisé ici, utilisez la version web.": "Huruhusiwi hapa, tumia toleo la wavuti.",
 };

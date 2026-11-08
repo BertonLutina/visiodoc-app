@@ -1,6 +1,7 @@
 // Types partagés VisioDoc Mobile — alignés sur le backend Supabase de l'app web.
 
-export type UserRole = 'patient' | 'provider' | 'admin';
+/** Rôles ouverts sur mobile : tout autre rôle `users.role` est refusé (src/services/accessPolicy.ts). */
+export type UserRole = 'patient' | 'provider';
 
 export type ConsultationType = 'video' | 'chat' | 'phone';
 
