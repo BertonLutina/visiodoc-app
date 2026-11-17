@@ -442,6 +442,7 @@ async function readNoshowCredits(patientId: string): Promise<{ ts: number; tx: W
       .from('patient_wallet_transactions')
       .select('id, transaction_type, amount, created_at')
       .eq('patient_id', patientId)
+      .eq('transaction_type', NOSHOW_CREDIT_TYPE)
       .order('created_at', { ascending: false })
       .limit(30);
     if (!res || res.error) return [];
