@@ -133,6 +133,15 @@ describe('videoFailure', () => {
     });
   });
 
+  it('maps 403 provider_start_window_over (médecin absent après 10 min) with a clear message, no technical error', () => {
+    expect(videoFailure(403, { code: 'provider_start_window_over', error: 'x' })).toEqual({
+      kind: 'start_window_over',
+      message:
+        "Le délai de 10 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.",
+      opensAt: null,
+    });
+  });
+
   it('maps any other 403 (no code or unknown code) to denied', () => {
     const denied = { kind: 'denied', message: 'Accès à cette salle refusé', opensAt: null };
     expect(videoFailure(403, { error: 'Accès à cette salle refusé' })).toEqual(denied);

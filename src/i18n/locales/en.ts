@@ -646,4 +646,5 @@ export const en: Record<string, string> = {
   "Continuer": "Continue",
   "Valider": "Confirm",
   "Effacer": "Clear",
+  "Le délai de 10 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.": "The 10-minute window to start the call has passed: the consultation is cancelled (provider absent) and the patient is refunded as wallet credit.",
 };
