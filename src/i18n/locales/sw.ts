@@ -664,4 +664,11 @@ export const sw: Record<string, string> = {
   "Le nom et le prénom sont obligatoires.": "Jina la ukoo na jina la kwanza vinahitajika.",
   "Votre identité": "Utambulisho wako",
   "Pour finaliser votre inscription, renseignez votre identité.": "Ili kukamilisha usajili, weka utambulisho wako.",
+  "Cette image n'est pas valide. Choisissez une photo au format JPEG ou PNG.": "Picha hii si sahihi. Chagua picha ya JPEG au PNG.",
+  "Cette photo est trop lourde (2 Mo au maximum).": "Picha hii ni nzito mno (MB 2 kwa kiwango cha juu).",
+  "Cette photo est trop grande (1024 x 1024 pixels au maximum).": "Picha hii ni kubwa mno (pikseli 1024 x 1024 kwa kiwango cha juu).",
+  "Trop de changements de photo. Réessayez dans une heure.": "Mabadiliko mengi ya picha. Jaribu tena baada ya saa moja.",
+  "Photo en attente de validation": "Picha inasubiri uthibitisho",
+  "Photo refusée": "Picha imekataliwa",
+  "Motif : {note}": "Sababu: {note}",
 };

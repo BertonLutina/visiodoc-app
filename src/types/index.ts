@@ -19,7 +19,15 @@ export interface User {
   lastName: string;
   role: UserRole;
   phone?: string;
+  /** Photo PUBLIQUE approuvée d'un prestataire (users.avatar_url) ; jamais écrite par le client. */
   avatarUrl?: string;
+  /** Photo privée validée d'un patient (users.avatar_path), lue par URL signée. */
+  avatarPath?: string;
+  /** Photo de prestataire en attente de revue (users.avatar_pending_path). */
+  avatarPendingPath?: string;
+  avatarReviewStatus?: 'pending' | 'approved' | 'rejected';
+  /** Motif du refus de la photo (users.avatar_review_note). */
+  avatarReviewNote?: string;
   countryCode?: string;
   /** Langue choisie par le patient (parmi celles de son pays), ex: 'Lingala'. */
   preferredLanguage?: string;

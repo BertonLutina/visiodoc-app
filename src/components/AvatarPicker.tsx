@@ -5,14 +5,18 @@ import { Camera, Image as ImageIcon, Trash2 } from 'lucide-react-native';
 import { Avatar } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
-import { removeAvatarFile, uploadAvatar } from '@/services/avatar';
+import { avatarErrorMessage, removeAvatar, uploadAvatar } from '@/services/avatar';
+import { useAvatarUri } from '@/hooks/useAvatarUri';
+import { supabaseConfigured } from '@/lib/supabase';
 import { useT } from '@/i18n';
 
 type Tone = 'primary' | 'clay';
 
 /**
  * Pastille de profil : toucher ouvre un choix (caméra / galerie / supprimer).
- * Envoie la photo dans le bucket `avatars` puis enregistre l'URL dans `users.avatar_url`.
+ * La photo est convertie en JPEG, envoyée dans `avatars-private/<id>/incoming/` puis validée par
+ * `finalize-avatar` : le client n'écrit jamais `users.avatar_url` (MOB-1611-2).
+ * Prestataire : l'état « en attente de validation » / « refusée » (avec le motif) s'affiche sous la pastille.
  */
 export function AvatarPicker({
   initials,
@@ -23,22 +27,26 @@ export function AvatarPicker({
   size?: number;
   tone?: Tone;
 }) {
-  const { user, updateProfile } = useAuth();
+  const { user, reloadProfile } = useAuth();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Mode démo (sans Supabase) uniquement : aperçu local de la photo choisie.
+  const [demoUri, setDemoUri] = useState<string | null>(null);
+  const remoteUri = useAvatarUri(user);
   const t = useT();
   const badgeBg = tone === 'clay' ? colors.accent : colors.primary;
+  const isProvider = user?.role === 'provider';
+  const hasPhoto = !!(demoUri || user?.avatarUrl || user?.avatarPath || user?.avatarPendingPath);
 
   const apply = async (asset: ImagePicker.ImagePickerAsset) => {
     if (!user) return;
     setBusy(true);
     try {
-      const previous = user.avatarUrl;
-      const url = await uploadAvatar(user.id, { uri: asset.uri, mimeType: asset.mimeType ?? 'image/jpeg' });
-      await updateProfile({ avatarUrl: url });
-      if (previous && previous !== url) void removeAvatarFile(previous);
-    } catch (e: any) {
-      Alert.alert(t('Photo non enregistrée'), e?.message ?? t('Réessayez dans un instant.'));
+      await uploadAvatar(user.id, { uri: asset.uri, width: asset.width, height: asset.height });
+      if (!supabaseConfigured) setDemoUri(asset.uri);
+      else await reloadProfile();
+    } catch (e: unknown) {
+      Alert.alert(t('Photo non enregistrée'), avatarErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -48,7 +56,7 @@ export function AvatarPicker({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     allowsEditing: true,
     aspect: [1, 1],
-    quality: 0.7,
+    quality: 0.9,
   };
 
   const fromLibrary = async () => {
@@ -75,14 +83,14 @@ export function AvatarPicker({
 
   const remove = async () => {
     setSheetOpen(false);
-    if (!user?.avatarUrl) return;
+    if (!hasPhoto) return;
     setBusy(true);
     try {
-      const previous = user.avatarUrl;
-      await updateProfile({ avatarUrl: '' });
-      void removeAvatarFile(previous);
-    } catch (e: any) {
-      Alert.alert(t('Photo non supprimée'), e?.message ?? t('Réessayez dans un instant.'));
+      await removeAvatar();
+      setDemoUri(null);
+      if (supabaseConfigured) await reloadProfile();
+    } catch (e: unknown) {
+      Alert.alert(t('Photo non supprimée'), avatarErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -95,6 +103,8 @@ export function AvatarPicker({
     </Pressable>
   );
 
+  const review = isProvider ? user?.avatarReviewStatus : undefined;
+
   return (
     <>
       <Pressable
@@ -103,7 +113,7 @@ export function AvatarPicker({
         accessibilityRole="button"
         accessibilityLabel={t('Changer la photo de profil')}
       >
-        <Avatar initials={initials} size={size} tone={tone} uri={user?.avatarUrl} />
+        <Avatar initials={initials} size={size} tone={tone} uri={demoUri ?? remoteUri} />
         <View
           className="absolute items-center justify-center rounded-full border-2 border-white"
           style={{ width: 28, height: 28, right: -2, bottom: -2, backgroundColor: badgeBg }}
@@ -112,13 +122,29 @@ export function AvatarPicker({
         </View>
       </Pressable>
 
+      {review === 'pending' ? (
+        <Text className="font-sans-semibold text-xs text-center mt-2" style={{ color: colors.accent }}>
+          {t('Photo en attente de validation')}
+        </Text>
+      ) : null}
+      {review === 'rejected' ? (
+        <View className="mt-2 items-center">
+          <Text className="font-sans-semibold text-xs text-center text-danger">{t('Photo refusée')}</Text>
+          {user?.avatarReviewNote ? (
+            <Text className="font-sans text-xs text-muted text-center mt-0.5">
+              {t('Motif : {note}', { note: user.avatarReviewNote })}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
       <Modal visible={sheetOpen} transparent animationType="fade" onRequestClose={() => setSheetOpen(false)}>
         <Pressable className="flex-1 justify-end" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onPress={() => setSheetOpen(false)}>
           <View className="bg-surface rounded-t-3xl pb-6">
             <Text className="font-serif-bold text-xl text-ink px-5 pt-5 pb-2">{t('Photo de profil')}</Text>
             <Row icon={Camera} label={t('Prendre une photo')} onPress={fromCamera} />
             <Row icon={ImageIcon} label={t('Choisir dans la galerie')} onPress={fromLibrary} />
-            {user?.avatarUrl ? <Row icon={Trash2} label={t('Supprimer la photo')} onPress={remove} danger /> : null}
+            {hasPhoto ? <Row icon={Trash2} label={t('Supprimer la photo')} onPress={remove} danger /> : null}
             <Pressable onPress={() => setSheetOpen(false)} className="px-5 pt-4">
               <Text className="font-sans-bold text-base text-muted text-center">{t('Annuler')}</Text>
             </Pressable>

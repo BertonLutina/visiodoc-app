@@ -664,4 +664,11 @@ export const ln: Record<string, string> = {
   "Le nom et le prénom sont obligatoires.": "Kombo ya libota mpe kombo ya liboso esengeli.",
   "Votre identité": "Bopesi na yo",
   "Pour finaliser votre inscription, renseignez votre identité.": "Mpo na kosukisa komikomisa, tia bopesi na yo.",
+  "Cette image n'est pas valide. Choisissez une photo au format JPEG ou PNG.": "Elili oyo ezali malamu te. Pona elili ya JPEG to PNG.",
+  "Cette photo est trop lourde (2 Mo au maximum).": "Elili oyo ezali kilo mingi (Mo 2 mingi).",
+  "Cette photo est trop grande (1024 x 1024 pixels au maximum).": "Elili oyo ezali monene mingi (pixels 1024 x 1024 mingi).",
+  "Trop de changements de photo. Réessayez dans une heure.": "Ozali kobongola elili mingi. Meka lisusu na ngonga moko.",
+  "Photo en attente de validation": "Elili ezali kozela kondimama",
+  "Photo refusée": "Elili ekangami",
+  "Motif : {note}": "Ntina: {note}",
 };

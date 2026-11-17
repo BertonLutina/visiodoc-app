@@ -133,9 +133,12 @@ interface AuthContextType {
   /** Inscription patient : `requiresEmailConfirmation` vrai = e-mail à confirmer, pas de session ouverte. */
   registerPatient: (input: RegisterPatientInput) => Promise<{ requiresEmailConfirmation: boolean }>;
   registerProvider: (input: RegisterProviderInput) => Promise<void>;
+  /** Ne modifie jamais les colonnes `avatar_*` : la photo passe par `finalize-avatar` (voir `src/services/avatar.ts`). */
   updateProfile: (
-    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage' | 'avatarUrl'>>,
+    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage'>>,
   ) => Promise<void>;
+  /** Relit sa propre ligne `users` (par exemple après `finalize-avatar`). */
+  reloadProfile: () => Promise<void>;
   /** Vrai au lancement si la session restaurée attend la biométrie. */
   locked: boolean;
   /** Prénom du compte verrouillé (écran de verrou). */
@@ -171,6 +174,9 @@ const providerMockUser: User = {
   doctorStatus: 'VALIDE_ABO_ACTIF',
 };
 
+const isReviewStatus = (v: unknown): v is 'pending' | 'approved' | 'rejected' =>
+  v === 'pending' || v === 'approved' || v === 'rejected';
+
 function mapUserRow(row: any, role: MobileRole): User {
   return {
     id: row.id,
@@ -180,6 +186,10 @@ function mapUserRow(row: any, role: MobileRole): User {
     role,
     phone: row.phone ?? undefined,
     avatarUrl: row.avatar_url ?? undefined,
+    avatarPath: row.avatar_path ?? undefined,
+    avatarPendingPath: row.avatar_pending_path ?? undefined,
+    avatarReviewStatus: isReviewStatus(row.avatar_review_status) ? row.avatar_review_status : undefined,
+    avatarReviewNote: row.avatar_review_note ?? undefined,
     // `users.country_id` est une FK → table `countries` ; le code pays vit dans countries.code
     countryCode: row.countries?.code ?? undefined,
     preferredLanguage: row.preferred_language ?? undefined,
@@ -725,8 +735,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const reloadProfile = async () => {
+    if (!supabaseConfigured || !supabase || !user) return;
+    const result = await loadProfile(user.id);
+    if (result.status === 'ok') setUser(result.user);
+  };
+
   const updateProfile = async (
-    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage' | 'avatarUrl'>>,
+    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage'>>,
   ) => {
     setLoading(true);
     try {
@@ -737,7 +753,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (partial.phone !== undefined) patch.phone = partial.phone || null;
         if (partial.countryCode !== undefined) patch.country_id = countryIdForCode(partial.countryCode);
         if (partial.preferredLanguage !== undefined) patch.preferred_language = partial.preferredLanguage || null;
-        if (partial.avatarUrl !== undefined) patch.avatar_url = partial.avatarUrl || null;
         if (Object.keys(patch).length) {
           const { error } = await supabase.from('users').update(patch).eq('id', user.id);
           if (error) throw error;
@@ -837,6 +852,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       registerPatient,
       registerProvider,
       updateProfile,
+      reloadProfile,
       locked,
       lockedFirstName: pendingUser?.firstName ?? '',
       unlock,

@@ -664,4 +664,11 @@ export const en: Record<string, string> = {
   "Le nom et le prénom sont obligatoires.": "Last name and first name are required.",
   "Votre identité": "Your identity",
   "Pour finaliser votre inscription, renseignez votre identité.": "To finish signing up, please enter your identity.",
+  "Cette image n'est pas valide. Choisissez une photo au format JPEG ou PNG.": "This image is not valid. Please choose a JPEG or PNG photo.",
+  "Cette photo est trop lourde (2 Mo au maximum).": "This photo is too large (2 MB maximum).",
+  "Cette photo est trop grande (1024 x 1024 pixels au maximum).": "This photo is too big (1024 x 1024 pixels maximum).",
+  "Trop de changements de photo. Réessayez dans une heure.": "Too many photo changes. Try again in an hour.",
+  "Photo en attente de validation": "Photo awaiting validation",
+  "Photo refusée": "Photo rejected",
+  "Motif : {note}": "Reason: {note}",
 };

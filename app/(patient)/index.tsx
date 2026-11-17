@@ -7,6 +7,7 @@ import { Avatar, Badge, Card, Eyebrow } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
+import { useAvatarUri } from '@/hooks/useAvatarUri';
 import { getUpcomingConsultations, getPastConsultations } from '@/services/patientApi';
 import { useLanguage, useT } from '@/i18n';
 
@@ -21,6 +22,7 @@ export default function PatientDashboard() {
   const t = useT();
   const { code: lang } = useLanguage();
   const { user } = useAuth();
+  const avatarUri = useAvatarUri(user);
   const uid = user?.id ?? 'patient-1';
   const up = useAsync(() => getUpcomingConsultations(uid), [uid, lang]);
   const pastReq = useAsync(() => getPastConsultations(uid), [uid, lang]);
@@ -57,7 +59,7 @@ export default function PatientDashboard() {
             <Text className="font-sans-medium text-sm text-muted">{t('Bonjour,')}</Text>
             <Text className="font-serif-bold text-2xl text-ink mt-0.5">{fullName}</Text>
           </View>
-          <Avatar initials={initials} uri={user?.avatarUrl} />
+          <Avatar initials={initials} uri={avatarUri} />
         </View>
 
         {/* Prochaine consultation */}
