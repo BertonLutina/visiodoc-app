@@ -653,4 +653,5 @@ export const ln: Record<string, string> = {
   "Délai de 10 minutes dépassé : la consultation va être annulée (médecin absent) et le patient remboursé en avoir.": "Ntango ya miniti 10 eleki : consultation ekolongolama (monganga azali te) mpe mobange akozongisama mbongo na portefeuille na ye.",
   "Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 10 minutes qui suivent": "Okoki kobanda libiangi kaka uta ngonga oyo etiamaki mpe na kati ya miniti 10 oyo elandi",
   "Consultation à {time} : lancez l'appel dans les 10 minutes qui suivent l'heure prévue, sinon elle sera annulée (médecin absent) et le patient remboursé en avoir.": "Consultation na {time} : banda libiangi na kati ya miniti 10 nsima ya ngonga oyo etiamaki, soki te ekolongolama (monganga azali te) mpe mobange akozongisama mbongo na portefeuille na ye.",
+  "Remboursement : médecin absent": "Kozongisama : monganga azali te",
 };

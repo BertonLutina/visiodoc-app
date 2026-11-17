@@ -416,6 +416,43 @@ export function mapPaymentRow(row: {
   };
 }
 
+/** Type de `patient_wallet_transactions` posé par le serveur pour l'avoir « médecin absent » ([MOB-1611-1]). */
+export const NOSHOW_CREDIT_TYPE = 'noshow_credit';
+
+/** Ligne d'avoir `noshow_credit` (montant en unité principale : `NUMERIC(18,2)`, pas ×100) → ligne d'historique, crédit. */
+export function mapWalletCreditRow(row: {
+  id: string;
+  amount?: number | string | null;
+  created_at?: string | null;
+}): WalletTransaction {
+  return {
+    id: `wallet-${row.id}`,
+    label: 'Remboursement : médecin absent',
+    date: row.created_at
+      ? new Date(row.created_at).toLocaleDateString(appLocale(), { day: 'numeric', month: 'short', year: 'numeric' })
+      : '',
+    amount: Math.abs(Number(row.amount) || 0),
+  };
+}
+
+/** Avoirs `noshow_credit` du patient. Source complémentaire : une erreur (RLS, réseau) n'empêche jamais d'afficher les paiements. */
+async function readNoshowCredits(patientId: string): Promise<{ ts: number; tx: WalletTransaction }[]> {
+  try {
+    const res = await supabase!
+      .from('patient_wallet_transactions')
+      .select('id, transaction_type, amount, created_at')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (!res || res.error) return [];
+    return ((res.data ?? []) as any[])
+      .filter((row) => row.transaction_type === NOSHOW_CREDIT_TYPE)
+      .map((row) => ({ ts: Date.parse(row.created_at ?? '') || 0, tx: mapWalletCreditRow(row) }));
+  } catch {
+    return [];
+  }
+}
+
 const emptyWallet = (): Wallet => ({
   balance: 0,
   currency: '',
@@ -444,7 +481,13 @@ export async function getWallet(patientId: string): Promise<Wallet> {
   }
   if (error) throw error;
   const rows = (data ?? []) as any[];
-  const transactions = rows.map(mapPaymentRow);
+  const credits = await readNoshowCredits(patientId);
+  const transactions =
+    credits.length === 0
+      ? rows.map(mapPaymentRow)
+      : [...rows.map((row) => ({ ts: Date.parse(row.created_at ?? '') || 0, tx: mapPaymentRow(row) })), ...credits]
+          .sort((a, b) => b.ts - a.ts)
+          .map((e) => e.tx);
   const balance = rows
     .filter((row: { status?: string | null }) => row.status === 'SUCCESS')
     .reduce((sum: number, row: { amount?: number | null }) => sum + (Number(row.amount) || 0) / 100, 0);
