@@ -4,7 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Button, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
-import { formatMoney, typeLabel } from '@/utils/format';
+import { formatMoney, isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
 import { getCountry, type CountryConfig } from '@/config/countries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
@@ -52,6 +52,8 @@ function Row({
   const t = useT();
   // `pending_payment` : réservée mais pas payée → jamais présentée comme confirmée ni rejoignable.
   const sb = c.awaitingPayment ? { label: 'Paiement en attente', tone: 'amber' as const } : statusBadge[c.status];
+  // Médecin absent ([MOB-1611-1]) : annulée par le serveur, patient remboursé en avoir (libellé du guide).
+  const badgeLabel = isProviderAbsent(c.status, c.cancelReason) ? providerAbsentLabel() : t(sb.label);
   return (
     <Card className="mb-3">
       <View className="flex-row items-center">
@@ -62,7 +64,7 @@ function Row({
           </Text>
           <Text className="font-sans text-xs text-muted mt-0.5">{c.doctor.specialty}</Text>
         </View>
-        <Badge label={t(sb.label)} tone={sb.tone} />
+        <Badge label={badgeLabel} tone={sb.tone} />
       </View>
       <Text className="font-sans-semibold text-sm text-clay mt-3">{c.dateLabel}</Text>
       <Text className="font-sans text-sm text-muted mt-0.5">

@@ -102,6 +102,16 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
     expect(load().mapConsultation({ ...base, consultation_type: 'audio' }).type).toBe('phone');
   });
 
+  it('expose cancel_reason (médecin absent) et laisse undefined sans motif', () => {
+    const base = { id: 'c1', doctor_id: 'd1', scheduled_at: '2099-01-01T09:00:00Z', status: 'cancelled' };
+    expect(load().mapConsultation({ ...base, cancel_reason: 'provider_absent' })).toMatchObject({
+      status: 'cancelled',
+      cancelReason: 'provider_absent',
+    });
+    expect(load().mapConsultation({ ...base, cancel_reason: null }).cancelReason).toBeUndefined();
+    expect(load().mapConsultation(base).cancelReason).toBeUndefined();
+  });
+
   it('maps an empty video_room_id to undefined (it would break the call route), keeps a real one', () => {
     const base = { id: 'c1', doctor_id: 'd1', scheduled_at: '2099-01-01T09:00:00Z', status: 'scheduled' };
     expect(load().mapConsultation({ ...base, video_room_id: '' }).roomId).toBeUndefined();

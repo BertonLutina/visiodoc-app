@@ -647,4 +647,5 @@ export const ln: Record<string, string> = {
   "Valider": "Kondima",
   "Effacer": "Kolongola",
   "Le délai de 10 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.": "Ntango ya miniti 10 ya kobanda libiangi eleki : consultation elongolami (monganga azalaki te) mpe mobange azongisami mbongo na portefeuille na ye.",
+  "Médecin absent : remboursé en avoir": "Monganga azalaki te : azongisami na portefeuille",
 };

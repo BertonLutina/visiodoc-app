@@ -163,6 +163,7 @@ export function mapConsultation(row: any): Consultation {
       row.status === 'scheduled' && row.payment_status === 'pending'
         ? 'pending'
         : normalizeConsultationStatus(row.status),
+    cancelReason: typeof row.cancel_reason === 'string' && row.cancel_reason ? row.cancel_reason : undefined,
     roomId: row.video_room_id || undefined,
   };
 }

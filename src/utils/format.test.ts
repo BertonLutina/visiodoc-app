@@ -35,6 +35,23 @@ describe('formatAmountInCurrency (revenus : jamais la devise du pays actif pour 
   });
 });
 
+describe('médecin absent ([MOB-1611-1])', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const f = () => require('./format');
+
+  it('cancelled + provider_absent = médecin absent ; tout autre cas non', () => {
+    expect(f().isProviderAbsent('cancelled', 'provider_absent')).toBe(true);
+    expect(f().isProviderAbsent('cancelled', null)).toBe(false);
+    expect(f().isProviderAbsent('cancelled', 'patient_cancelled')).toBe(false);
+    expect(f().isProviderAbsent('no_show', 'provider_absent')).toBe(false);
+    expect(f().isProviderAbsent(undefined, undefined)).toBe(false);
+  });
+
+  it('libellé du guide', () => {
+    expect(f().providerAbsentLabel()).toBe('Médecin absent : remboursé en avoir');
+  });
+});
+
 describe('consultation type mapping (DB CHECK allows only video | audio | chat)', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const f = () => require('./format');

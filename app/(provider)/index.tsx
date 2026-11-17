@@ -26,7 +26,7 @@ import {
 } from '@/services/providerApi';
 import { buildAlerts, countdownLabel } from '@/services/dashboardMetrics';
 import { currentProvider } from '@/data/mockProvider';
-import { formatAmountInCurrency, typeLabel } from '@/utils/format';
+import { formatAmountInCurrency, isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
 import { translate } from '@/i18n';
 import type { ProviderConsultation } from '@/types/provider';
 import { useLanguage, useT } from '@/i18n';
@@ -52,7 +52,11 @@ function statusBadge(c: ProviderConsultation) {
     case 'in_progress':
       return <Badge label={translate('En cours')} tone="green" />;
     case 'cancelled':
-      return <Badge label={translate('Annulée')} tone="red" />;
+      return isProviderAbsent(c.rawStatus, c.cancelReason) ? (
+        <Badge label={providerAbsentLabel()} tone="red" />
+      ) : (
+        <Badge label={translate('Annulée')} tone="red" />
+      );
     case 'no_show':
       return <Badge label={translate('Absent')} tone="red" />;
     case 'pending_payment':

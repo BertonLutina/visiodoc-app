@@ -677,6 +677,17 @@ describe('pagination des lectures de revenus (plafond PostgREST de 1000 lignes)'
 describe('provider consultation mapping and startConsultation', () => {
   afterEach(() => jest.dontMock('@/lib/supabase'));
 
+  it('expose cancel_reason (médecin absent) dans cancelReason', () => {
+    jest.resetModules();
+    const { mapConsultation } = require('./providerApi');
+    const base = { id: 'c1', scheduled_at: '2099-01-01T09:00:00Z', status: 'cancelled', patient: { id: 'p1' } };
+    expect(mapConsultation({ ...base, cancel_reason: 'provider_absent' })).toMatchObject({
+      rawStatus: 'cancelled',
+      cancelReason: 'provider_absent',
+    });
+    expect(mapConsultation({ ...base, cancel_reason: null }).cancelReason).toBeUndefined();
+  });
+
   it('maps an empty video_room_id to undefined and audio to the phone type', () => {
     jest.resetModules();
     const { mapConsultation } = require('./providerApi');

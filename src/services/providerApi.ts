@@ -297,6 +297,7 @@ export function mapConsultation(row: any): ProviderConsultation {
     durationMin: row.duration ?? 30,
     status: normalizeConsultationStatus(row.status),
     rawStatus: row.status,
+    cancelReason: typeof row.cancel_reason === 'string' && row.cancel_reason ? row.cancel_reason : undefined,
     scheduledAt: row.scheduled_at,
     roomId: row.video_room_id || undefined,
   };

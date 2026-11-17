@@ -647,4 +647,5 @@ export const sw: Record<string, string> = {
   "Valider": "Thibitisha",
   "Effacer": "Futa",
   "Le délai de 10 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.": "Muda wa dakika 10 wa kuanza simu umepita: ushauri umeghairiwa (daktari hakufika) na mgonjwa amerudishiwa pesa kwenye pochi yake.",
+  "Médecin absent : remboursé en avoir": "Daktari hakufika: umerudishiwa kwenye pochi",
 };

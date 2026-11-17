@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
-import { typeLabel } from '@/utils/format';
+import { isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
 import { canStartConsultation } from '@/utils/canStart';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
@@ -31,6 +31,8 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
         </View>
         {unpaid ? (
           <Badge label={t('Paiement en attente')} tone="amber" />
+        ) : isProviderAbsent(c.rawStatus, c.cancelReason) ? (
+          <Badge label={providerAbsentLabel()} tone="red" />
         ) : c.rawStatus === 'cancelled' ? (
           <Badge label={t('Annulée')} tone="red" />
         ) : c.rawStatus === 'no_show' ? (
