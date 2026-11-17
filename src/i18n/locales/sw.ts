@@ -654,4 +654,11 @@ export const sw: Record<string, string> = {
   "Date de naissance": "Tarehe ya kuzaliwa",
   "Ville (facultatif)": "Jiji (si lazima)",
   "Commune (facultatif)": "Wilaya / commune (si lazima)",
+  "Envoyer le code par WhatsApp": "Tuma msimbo kupitia WhatsApp",
+  "Envoyer le code par SMS": "Tuma msimbo kwa SMS",
+  "On vous envoie un code de confirmation.": "Tutakutumia msimbo wa uthibitisho.",
+  "Vous allez recevoir le code par {channel} ; il est valable 1 minute.": "Utapokea msimbo kupitia {channel}; unatumika kwa dakika 1.",
+  "Vous allez recevoir le code par {channel} ; il est valable {minutes} minutes.": "Utapokea msimbo kupitia {channel}; unatumika kwa dakika {minutes}.",
+  "Votre code de confirmation vous a été envoyé": "Msimbo wako wa uthibitisho umetumwa",
+  "Votre code de confirmation vous a été envoyé par {channel}": "Msimbo wako wa uthibitisho umetumwa kupitia {channel}",
 };

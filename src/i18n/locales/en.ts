@@ -654,4 +654,11 @@ export const en: Record<string, string> = {
   "Date de naissance": "Date of birth",
   "Ville (facultatif)": "City (optional)",
   "Commune (facultatif)": "Commune (optional)",
+  "Envoyer le code par WhatsApp": "Send the code via WhatsApp",
+  "Envoyer le code par SMS": "Send the code by SMS",
+  "On vous envoie un code de confirmation.": "We will send you a confirmation code.",
+  "Vous allez recevoir le code par {channel} ; il est valable 1 minute.": "You will receive the code via {channel}; it is valid for 1 minute.",
+  "Vous allez recevoir le code par {channel} ; il est valable {minutes} minutes.": "You will receive the code via {channel}; it is valid for {minutes} minutes.",
+  "Votre code de confirmation vous a été envoyé": "Your confirmation code has been sent",
+  "Votre code de confirmation vous a été envoyé par {channel}": "Your confirmation code has been sent via {channel}",
 };

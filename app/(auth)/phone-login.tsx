@@ -17,6 +17,7 @@ import {
   loginCredentialsErrorMessage,
   markCodeSent,
 } from '@/services/registration';
+import { fetchOtpDeliveryInfo, otpIntroText, otpSentText, sendCodeLabel, type OtpDeliveryInfo } from '@/services/otpDelivery';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -43,6 +44,17 @@ export default function PhoneLogin() {
   // Temporisation de 60 s entre deux envois du code (guide, étape 8.3), par numéro E.164 et conservée
   // hors de l'écran (module) : revenir en arrière puis rouvrir l'écran ne la contourne pas.
   const [now, setNow] = useState(() => Date.now());
+  // Canal et durée du code (RPC publique) ; `null` tant que la lecture n'a pas abouti : libellé neutre.
+  const [otpInfo, setOtpInfo] = useState<OtpDeliveryInfo | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchOtpDeliveryInfo().then((info) => {
+      if (!cancelled) setOtpInfo(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const country = getAfricanCountry(countryCode);
   const fullPhone = toE164(local, country?.dialCode) ?? '';
@@ -164,9 +176,9 @@ export default function PhoneLogin() {
           </ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
             {step === 'phone'
-              ? t('On vous envoie un code de confirmation par WhatsApp.')
+              ? otpIntroText(otpInfo)
               : step === 'code'
-                ? t('Votre code de confirmation vous a été envoyé par WhatsApp')
+                ? otpSentText(otpInfo)
                 : t("Ajoutez un e-mail et un mot de passe pour pouvoir aussi vous connecter par e-mail.")}
           </Text>
           {step === 'code' ? (
@@ -193,7 +205,7 @@ export default function PhoneLogin() {
               </View>
             ) : null}
             <Button
-              label={remaining > 0 ? t('Recevoir le code ({seconds} s)', { seconds: remaining }) : t('Recevoir le code')}
+              label={remaining > 0 ? t('Recevoir le code ({seconds} s)', { seconds: remaining }) : sendCodeLabel(otpInfo)}
               variant={variant}
               loading={sending}
               disabled={!phoneValid || remaining > 0}

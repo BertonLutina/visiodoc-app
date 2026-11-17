@@ -654,4 +654,11 @@ export const ln: Record<string, string> = {
   "Date de naissance": "Mokolo ya mbotama",
   "Ville (facultatif)": "Engumba (soki olingi)",
   "Commune (facultatif)": "Komini (soki olingi)",
+  "Envoyer le code par WhatsApp": "Tinda kode na WhatsApp",
+  "Envoyer le code par SMS": "Tinda kode na SMS",
+  "On vous envoie un code de confirmation.": "Tokotinda yo kode ya kondimisa.",
+  "Vous allez recevoir le code par {channel} ; il est valable 1 minute.": "Okozwa kode na {channel} ; ekosalela monati 1.",
+  "Vous allez recevoir le code par {channel} ; il est valable {minutes} minutes.": "Okozwa kode na {channel} ; ekosalela minati {minutes}.",
+  "Votre code de confirmation vous a été envoyé": "Kode na yo ya kondimisa etindami",
+  "Votre code de confirmation vous a été envoyé par {channel}": "Kode na yo ya kondimisa etindami na {channel}",
 };
