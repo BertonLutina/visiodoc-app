@@ -348,16 +348,23 @@ export async function startConsultation(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Issue de l'écriture `in_progress` : démarrée, refusée par la base (42501, hors fenêtre), ou panne. */
+export type StartOutcome = 'started' | 'denied' | 'error';
+
 /**
- * Variante des écrans : le statut `in_progress` est cosmétique (la porte réelle est `get-video-token`), un
- * refus ou une panne ne doit jamais empêcher un prestataire de rejoindre l'appel. Ne lève jamais ; aucune
- * donnée personnelle journalisée (seulement le code d'erreur).
+ * Variante des écrans. La base n'accepte `in_progress` que pour le médecin, de `scheduled_at` à +10 min
+ * ([MOB-1611-1]) : un refus `42501` est renvoyé en `denied` (l'écran affiche le message du guide et n'ouvre pas
+ * l'appel). Une panne réseau reste `error` : elle n'empêche pas de rejoindre (`get-video-token` fait foi). Ne lève
+ * jamais ; aucune donnée personnelle journalisée (seulement le code d'erreur).
  */
-export async function startConsultationBestEffort(id: string): Promise<void> {
+export async function startConsultationBestEffort(id: string): Promise<StartOutcome> {
   try {
     await startConsultation(id);
+    return 'started';
   } catch (e) {
-    console.warn('startConsultation failed', (e as { code?: unknown } | null)?.code ?? 'unknown');
+    const code = (e as { code?: unknown } | null)?.code;
+    console.warn('startConsultation failed', code ?? 'unknown');
+    return code === '42501' ? 'denied' : 'error';
   }
 }
 

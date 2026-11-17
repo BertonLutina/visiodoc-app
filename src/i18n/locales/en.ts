@@ -648,4 +648,8 @@ export const en: Record<string, string> = {
   "Effacer": "Clear",
   "Le délai de 10 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.": "The 10-minute window to start the call has passed: the consultation is cancelled (provider absent) and the patient is refunded as wallet credit.",
   "Médecin absent : remboursé en avoir": "Provider absent: refunded as wallet credit",
+  "Démarrage possible à l'heure prévue, dans {time}": "You can start at the scheduled time, in {time}",
+  "Lancez l'appel dans les {time} qui restent, sinon la consultation sera annulée (médecin absent).": "Start the call within the {time} remaining, otherwise the consultation will be cancelled (provider absent).",
+  "Délai de 10 minutes dépassé : la consultation va être annulée (médecin absent) et le patient remboursé en avoir.": "The 10-minute window has passed: the consultation will be cancelled (provider absent) and the patient refunded as wallet credit.",
+  "Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 10 minutes qui suivent": "You can only start the call from the scheduled time and during the 10 minutes that follow",
 };

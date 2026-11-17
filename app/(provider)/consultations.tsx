@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
@@ -8,7 +7,9 @@ import { isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format
 import { canStartConsultation } from '@/utils/canStart';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
-import { getProviderConsultations, getTodayConsultations, startConsultationBestEffort } from '@/services/providerApi';
+import { getProviderConsultations, getTodayConsultations } from '@/services/providerApi';
+import { launchProviderCall, useStartWindow } from '@/hooks/useStartWindow';
+import { canStartNow, startWindowMessage } from '@/utils/startWindow';
 import { currentProvider } from '@/data/mockProvider';
 import type { ProviderConsultation } from '@/types/provider';
 import { useLanguage, useT } from '@/i18n';
@@ -19,6 +20,9 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
   const t = useT();
   // `pending_payment` : réservée par le patient mais pas payée → ni confirmée, ni démarrable.
   const unpaid = c.rawStatus === 'pending_payment';
+  const win = useStartWindow(c.scheduledAt, c.rawStatus);
+  const startable = canStartNow(win);
+  const winMessage = startWindowMessage(win);
   return (
     <Card className="mb-3">
       <View className="flex-row items-center">
@@ -47,21 +51,26 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
         {c.dateLabel} · {typeLabel(c.type)} · {c.durationMin} {t('min')}
       </Text>
       {canStart && canStartConsultation(c.rawStatus) && (
-        <View className="flex-row mt-3">
-          <Pressable
-            onPress={async () => {
-              // Statut cosmétique : un échec ne bloque jamais l'entrée dans l'appel (`get-video-token` fait foi).
-              await startConsultationBestEffort(c.id);
-              router.push(`/call/${c.roomId ?? c.id}`);
-            }}
-            className="flex-1 bg-accent rounded-2xl py-3.5 items-center mr-2"
-          >
-            <Text className="text-white font-sans-bold">{t('Démarrer')}</Text>
-          </Pressable>
-          <Pressable className="flex-1 border border-line rounded-2xl py-3.5 items-center bg-surface">
-            <Text className="text-ink font-sans-bold">{t('Notes')}</Text>
-          </Pressable>
-        </View>
+        <>
+          <View className="flex-row mt-3">
+            <Pressable
+              onPress={() => launchProviderCall(c)}
+              disabled={!startable}
+              accessibilityState={{ disabled: !startable }}
+              className={`flex-1 rounded-2xl py-3.5 items-center mr-2 ${startable ? 'bg-accent' : 'bg-line'}`}
+            >
+              <Text className={`font-sans-bold ${startable ? 'text-white' : 'text-muted'}`}>{t('Démarrer')}</Text>
+            </Pressable>
+            <Pressable className="flex-1 border border-line rounded-2xl py-3.5 items-center bg-surface">
+              <Text className="text-ink font-sans-bold">{t('Notes')}</Text>
+            </Pressable>
+          </View>
+          {!!winMessage && (
+            <Text className={`font-sans-semibold text-xs mt-2 ${win.phase === 'before' ? 'text-muted' : 'text-danger'}`}>
+              {winMessage}
+            </Text>
+          )}
+        </>
       )}
     </Card>
   );

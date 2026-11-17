@@ -739,20 +739,20 @@ describe('startConsultationBestEffort (the DB in_progress status never gates joi
     return require('./providerApi');
   };
 
-  it('resolves when the update succeeds', async () => {
-    await expect(load({ error: null }).startConsultationBestEffort('c1')).resolves.toBeUndefined();
+  it('returns started when the update succeeds', async () => {
+    await expect(load({ error: null }).startConsultationBestEffort('c1')).resolves.toBe('started');
   });
 
-  it('resolves (never throws) when the update is refused by the database', async () => {
+  it('returns denied (never throws) when the update is refused 42501 by the database (hors fenêtre)', async () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    await expect(load({ error: { code: '42501', message: 'denied for patient Jean' } }).startConsultationBestEffort('c1')).resolves.toBeUndefined();
+    await expect(load({ error: { code: '42501', message: 'denied for patient Jean' } }).startConsultationBestEffort('c1')).resolves.toBe('denied');
     // Pas de PII : seulement le code d'erreur.
     expect(JSON.stringify(warn.mock.calls)).not.toContain('Jean');
   });
 
-  it('resolves when the request itself rejects (network)', async () => {
+  it('returns error when the request itself rejects (network): joining stays possible', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    await expect(load(new Error('Network request failed')).startConsultationBestEffort('c1')).resolves.toBeUndefined();
+    await expect(load(new Error('Network request failed')).startConsultationBestEffort('c1')).resolves.toBe('error');
   });
 
   it('startConsultation itself still throws the database error', async () => {
