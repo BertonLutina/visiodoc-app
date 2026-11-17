@@ -108,3 +108,14 @@ describe('completePhoneIdentity : aucune ligne users mise à jour', () => {
     expect(mockUpsert).not.toHaveBeenCalled();
   });
 });
+
+describe('completePhoneIdentity : patient mineur refusé par la base (MOB-1711-3)', () => {
+  it('affiche le message des 18 ans quand le trigger renvoie PATIENT_MUST_BE_ADULT', async () => {
+    mockUpsert.mockResolvedValue({
+      error: { code: '23514', message: 'PATIENT_MUST_BE_ADULT', details: null },
+    });
+    await expect(completePhoneIdentity('user-1', input)).rejects.toThrow(
+      'Vous devez avoir au moins 18 ans révolus pour vous inscrire.',
+    );
+  });
+});

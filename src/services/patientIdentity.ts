@@ -72,7 +72,13 @@ export async function completePhoneIdentity(userId: string, input: PhoneIdentity
   const { error: patientError } = await supabase
     .from('patients')
     .upsert(buildPatientsRow(userId, input), { onConflict: 'user_id' });
-  if (patientError) throw patientError;
+  if (patientError) {
+    // MOB-1711-3 : la base refuse un patient mineur (trigger, code 23514, message PATIENT_MUST_BE_ADULT).
+    if (/PATIENT_MUST_BE_ADULT/.test(`${patientError.message ?? ''} ${patientError.details ?? ''}`)) {
+      throw new Error(translate('Vous devez avoir au moins 18 ans révolus pour vous inscrire.'));
+    }
+    throw patientError;
+  }
 
   await recordPlacesBestEffort(input);
 }
