@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -9,6 +9,7 @@ import {
   Star,
   Brain,
   Bell,
+  HelpCircle,
   LogOut,
   ChevronRight,
 } from 'lucide-react-native';
@@ -17,6 +18,7 @@ import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { BiometricToggleRow } from '@/components/BiometricToggleRow';
 import { PreferencesSection } from '@/components/PreferencesSection';
+import { LegalAccountSection, SUPPORT_EMAIL } from '@/components/LegalAccountSection';
 import { providerGate } from '@/services/accessPolicy';
 import { useAsync } from '@/hooks/useAsync';
 import { useFocusEffect } from 'expo-router';
@@ -56,6 +58,11 @@ export default function ProviderProfile() {
     },
     { icon: Brain, label: 'Analyse IA', value: 'Bientôt disponible', disabled: true },
     { icon: Bell, label: 'Notifications', onPress: () => router.push('/notifications') },
+    {
+      icon: HelpCircle,
+      label: 'Aide & Support',
+      onPress: () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Aide%20VisioDoc`),
+    },
   ];
 
   const onLogout = async () => {
@@ -102,6 +109,8 @@ export default function ProviderProfile() {
         <PreferencesSection tone="accent" />
 
         <BiometricToggleRow tone="accent" />
+
+        <LegalAccountSection />
 
         <Pressable
           onPress={onLogout}

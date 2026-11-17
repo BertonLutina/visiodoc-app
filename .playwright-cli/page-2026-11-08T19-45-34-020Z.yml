@@ -1,0 +1,12 @@
+- generic [ref=e2]:
+  - complementary "Gestion des cookies et vie privée":
+    - generic [ref=e6]:
+      - generic [ref=e11]:
+        - heading "Gestion des cookies et vie privée RGPD" [level=2] [ref=e12]:
+          - generic [ref=e13]: Gestion des cookies et vie privée
+          - generic [ref=e14]: RGPD
+        - paragraph [ref=e18]: VisioDoc utilise des cookies nécessaires pour assurer le bon fonctionnement de la plateforme. Nous pouvons également utiliser des cookies de mesure d'audience ou de personnalisation avec votre consentement. Vous pouvez accepter, refuser ou personnaliser vos choix à tout moment.
+      - generic [ref=e19]:
+        - button "Personnaliser" [ref=e20] [cursor=pointer]
+        - button "Refuser tout" [ref=e25] [cursor=pointer]
+        - button "Accepter tout" [ref=e26] [cursor=pointer]

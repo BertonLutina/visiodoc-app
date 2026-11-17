@@ -646,6 +646,7 @@ export type OverrideInput = {
   date: string; // 'YYYY-MM-DD'
   isAvailable: boolean;
   ranges: { startTime: string; endTime: string }[]; // vide si isAvailable=false
+  reason?: string | null; // motif d'une indisponibilité (« Congé », « Formation »…)
 };
 
 type OverrideRow = {
@@ -653,6 +654,7 @@ type OverrideRow = {
   start_time: string | null;
   end_time: string | null;
   is_available: boolean;
+  exception_reason?: string | null;
 };
 
 /** Pure : regroupe les lignes DB (une par plage) en une entrée par date. */
@@ -660,7 +662,13 @@ export function groupOverrideRows(rows: OverrideRow[]): OverrideInput[] {
   const byDate = new Map<string, OverrideInput>();
   for (const r of rows) {
     if (!r.is_available) {
-      byDate.set(r.specific_date, { date: r.specific_date, isAvailable: false, ranges: [] });
+      const reason = r.exception_reason?.trim();
+      byDate.set(r.specific_date, {
+        date: r.specific_date,
+        isAvailable: false,
+        ranges: [],
+        ...(reason ? { reason } : {}),
+      });
       continue;
     }
     const range = { startTime: (r.start_time ?? '').slice(0, 5), endTime: (r.end_time ?? '').slice(0, 5) };
@@ -673,14 +681,85 @@ export function groupOverrideRows(rows: OverrideRow[]): OverrideInput[] {
 
 export async function getOverrides(doctorId: string): Promise<OverrideInput[]> {
   if (useMock()) return [];
-  const { data, error } = await supabase!
+  const run = (columns: string) =>
+    supabase!
+      .from('doctor_availability')
+      .select(columns)
+      .eq('doctor_id', doctorId)
+      .eq('recurrence_type', 'specific_date')
+      .order('specific_date', { ascending: true });
+  let res = await run('specific_date, start_time, end_time, is_available, exception_reason');
+  // Base sans la colonne exception_reason : on lit quand même les dates, sans les motifs.
+  if (res.error && isMissingColumnError(res.error)) {
+    res = await run('specific_date, start_time, end_time, is_available');
+  }
+  if (res.error) throw res.error;
+  return groupOverrideRows((res.data ?? []) as unknown as OverrideRow[]);
+}
+
+type OverrideDbRow = {
+  doctor_id: string;
+  recurrence_type: string;
+  specific_date: string;
+  day_of_week: null;
+  start_time: string | null;
+  end_time: string | null;
+  is_available: boolean;
+  is_exception?: boolean;
+  exception_reason?: string | null;
+};
+
+/** Insère les lignes ; si is_exception / exception_reason n'existent pas en base, réessaie sans. */
+async function insertOverrideRows(rows: OverrideDbRow[]): Promise<void> {
+  const { error } = await supabase!.from('doctor_availability').insert(rows);
+  if (!error) return;
+  if (!isMissingColumnError(error)) throw error;
+  const plain = rows.map(({ is_exception: _e, exception_reason: _r, ...rest }) => rest);
+  const retry = await supabase!.from('doctor_availability').insert(plain);
+  if (retry.error) throw retry.error;
+}
+
+const exceptionRow = (doctorId: string, date: string, reason?: string | null): OverrideDbRow => ({
+  doctor_id: doctorId,
+  recurrence_type: 'specific_date',
+  specific_date: date,
+  day_of_week: null,
+  start_time: null,
+  end_time: null,
+  is_available: false,
+  is_exception: true,
+  exception_reason: reason?.trim() ? reason.trim() : null,
+});
+
+/**
+ * Marque plusieurs jours indisponibles d'un coup (congé, formation, vacances…). Remplace
+ * tout override existant sur ces dates : une exception a priorité sur les horaires.
+ */
+export async function saveUnavailableDates(
+  doctorId: string,
+  dates: string[],
+  reason?: string | null,
+): Promise<void> {
+  if (useMock() || dates.length === 0) return;
+  const { error: delErr } = await supabase!
     .from('doctor_availability')
-    .select('specific_date, start_time, end_time, is_available')
+    .delete()
     .eq('doctor_id', doctorId)
     .eq('recurrence_type', 'specific_date')
-    .order('specific_date', { ascending: true });
+    .in('specific_date', dates);
+  if (delErr) throw delErr;
+  await insertOverrideRows(dates.map((date) => exceptionRow(doctorId, date, reason)));
+}
+
+export async function deleteOverrides(doctorId: string, dates: string[]): Promise<void> {
+  if (useMock() || dates.length === 0) return;
+  const { error } = await supabase!
+    .from('doctor_availability')
+    .delete()
+    .eq('doctor_id', doctorId)
+    .eq('recurrence_type', 'specific_date')
+    .in('specific_date', dates);
   if (error) throw error;
-  return groupOverrideRows((data ?? []) as OverrideRow[]);
 }
 
 export async function saveOverride(doctorId: string, input: OverrideInput): Promise<void> {
@@ -693,15 +772,6 @@ export async function saveOverride(doctorId: string, input: OverrideInput): Prom
     .eq('specific_date', input.date);
   if (delErr) throw delErr;
 
-  type OverrideDbRow = {
-    doctor_id: string;
-    recurrence_type: string;
-    specific_date: string;
-    day_of_week: null;
-    start_time: string | null;
-    end_time: string | null;
-    is_available: boolean;
-  };
   const rows: OverrideDbRow[] = input.isAvailable
     ? input.ranges.map((r) => ({
         doctor_id: doctorId,
@@ -712,19 +782,8 @@ export async function saveOverride(doctorId: string, input: OverrideInput): Prom
         end_time: r.endTime,
         is_available: true,
       }))
-    : [
-        {
-          doctor_id: doctorId,
-          recurrence_type: 'specific_date',
-          specific_date: input.date,
-          day_of_week: null,
-          start_time: null,
-          end_time: null,
-          is_available: false,
-        },
-      ];
-  const { error } = await supabase!.from('doctor_availability').insert(rows);
-  if (error) throw error;
+    : [exceptionRow(doctorId, input.date, input.reason)];
+  await insertOverrideRows(rows);
 }
 
 export async function deleteOverride(doctorId: string, date: string): Promise<void> {

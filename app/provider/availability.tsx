@@ -122,6 +122,9 @@ export default function Availability() {
     return { year: now.getFullYear(), month: now.getMonth() + 1 };
   });
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  // Même période, deux façons de la saisir : deux champs de date ou un calendrier en ligne.
+  const [calendarView, setCalendarView] = useState(false);
+  const [activeField, setActiveField] = useState<'start' | 'end'>('start');
 
   const bounds = useMemo(() => {
     const min = new Date();
@@ -288,6 +291,28 @@ export default function Availability() {
     setDatePicker(null);
   };
 
+  const onToggleCalendarView = (on: boolean) => {
+    setCalendarView(on);
+    if (on) {
+      const [year, month] = period.start.split('-').map(Number);
+      setCalendar({ year, month });
+      setActiveField('start');
+    }
+  };
+
+  const onCalendarSelect = (key: string) => {
+    setPeriod((current) => {
+      const next = activeField === 'start' ? { ...current, start: key } : { ...current, end: key };
+      return next.start <= next.end ? next : { start: next.end, end: next.start };
+    });
+    setActiveField((f) => (f === 'start' ? 'end' : 'start'));
+  };
+
+  const periodRangeKeys = useMemo(
+    () => (calendarView && !periodTooLong ? new Set(eachDateKey(period.start, period.end)) : new Set<string>()),
+    [calendarView, periodTooLong, period.start, period.end],
+  );
+
   const toggleSlot = (key: string) =>
     setExcluded((current) => (current.includes(key) ? current.filter((k) => k !== key) : [...current, key]));
 
@@ -380,28 +405,78 @@ export default function Availability() {
           {t('Définissez la période, puis les horaires de chaque jour. Indiquez l\'heure et la durée de pause dans chaque plage.')}
         </Text>
 
-        <Text className="font-sans-bold text-ink mb-3">{t('Période')}</Text>
-        <View className="bg-surface rounded-3xl border border-line p-4 mb-5">
-          <View className="flex-row">
-            <View className="flex-1 mr-2">
-              <Text className="font-sans text-xs text-muted mb-2">{t('Du')}</Text>
-              <Pressable
-                onPress={() => openDatePicker('start')}
-                className="bg-bg rounded-2xl py-3 px-3 border border-line"
-              >
-                <Text className="font-sans-bold text-ink text-center">{formatDateLabel(period.start, t)}</Text>
-              </Pressable>
-            </View>
-            <View className="flex-1 ml-2">
-              <Text className="font-sans text-xs text-muted mb-2">{t('Au')}</Text>
-              <Pressable
-                onPress={() => openDatePicker('end')}
-                className="bg-bg rounded-2xl py-3 px-3 border border-line"
-              >
-                <Text className="font-sans-bold text-ink text-center">{formatDateLabel(period.end, t)}</Text>
-              </Pressable>
-            </View>
+        <View className="flex-row items-center justify-between mb-3">
+          <Text className="font-sans-bold text-ink">{calendarView ? t('Calendrier') : t('Période')}</Text>
+          <View className="flex-row items-center">
+            <Text className={`font-sans-bold text-xs ${calendarView ? 'text-muted' : 'text-accent'}`}>{t('Période')}</Text>
+            <Switch
+              value={calendarView}
+              onValueChange={onToggleCalendarView}
+              trackColor={{ false: colors.line, true: colors.accent }}
+              thumbColor={colors.white}
+              ios_backgroundColor={colors.line}
+              style={{ marginHorizontal: 8, transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+            />
+            <Text className={`font-sans-bold text-xs ${calendarView ? 'text-accent' : 'text-muted'}`}>{t('Calendrier')}</Text>
           </View>
+        </View>
+        <View className="bg-surface rounded-3xl border border-line p-4 mb-5">
+          {calendarView ? (
+            <>
+              <View className="flex-row mb-4">
+                {(['start', 'end'] as const).map((field) => {
+                  const on = activeField === field;
+                  return (
+                    <Pressable
+                      key={field}
+                      onPress={() => setActiveField(field)}
+                      className={`flex-1 rounded-2xl py-3 px-3 border ${field === 'start' ? 'mr-2' : 'ml-2'} ${
+                        on ? 'border-accent bg-peach' : 'border-line bg-bg'
+                      }`}
+                    >
+                      <Text className="font-sans text-xs text-muted mb-1">{field === 'start' ? t('Du') : t('Au')}</Text>
+                      <Text className="font-sans-bold text-ink text-sm">
+                        {formatDateLabel(field === 'start' ? period.start : period.end, t)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <MonthCalendar
+                year={calendar.year}
+                month={calendar.month}
+                monthStatus={{}}
+                selectedDate={activeField === 'start' ? period.start : period.end}
+                onSelectDate={onCalendarSelect}
+                onChangeMonth={(year, month) => setCalendar({ year, month })}
+                minDate={bounds.min}
+                maxDate={bounds.max}
+                alwaysSelectable
+                configuredDates={periodRangeKeys}
+              />
+            </>
+          ) : (
+            <View className="flex-row">
+              <View className="flex-1 mr-2">
+                <Text className="font-sans text-xs text-muted mb-2">{t('Du')}</Text>
+                <Pressable
+                  onPress={() => openDatePicker('start')}
+                  className="bg-bg rounded-2xl py-3 px-3 border border-line"
+                >
+                  <Text className="font-sans-bold text-ink text-center">{formatDateLabel(period.start, t)}</Text>
+                </Pressable>
+              </View>
+              <View className="flex-1 ml-2">
+                <Text className="font-sans text-xs text-muted mb-2">{t('Au')}</Text>
+                <Pressable
+                  onPress={() => openDatePicker('end')}
+                  className="bg-bg rounded-2xl py-3 px-3 border border-line"
+                >
+                  <Text className="font-sans-bold text-ink text-center">{formatDateLabel(period.end, t)}</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
           <Text className="font-sans text-xs text-muted mt-3 leading-5">
             {t('Ces horaires se répètent chaque semaine entre ces deux dates.')}
           </Text>

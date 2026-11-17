@@ -17,6 +17,7 @@ import { getCountry } from '@/config/countries';
 import { useAuth } from '@/contexts/AuthContext';
 import { BiometricToggleRow } from '@/components/BiometricToggleRow';
 import { PreferencesSection } from '@/components/PreferencesSection';
+import { LegalAccountSection } from '@/components/LegalAccountSection';
 import { useT } from '@/i18n';
 
 const initialsOf = (a?: string, b?: string) =>
@@ -85,6 +86,8 @@ export default function PatientProfile() {
         <PreferencesSection />
 
         <BiometricToggleRow />
+
+        <LegalAccountSection />
 
         <Pressable
           onPress={onLogout}

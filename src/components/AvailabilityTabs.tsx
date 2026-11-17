@@ -5,7 +5,7 @@ import { useT } from '@/i18n';
 
 const TABS = [
   { key: 'weekly', label: 'Hebdomadaire', href: '/provider/availability' },
-  { key: 'overrides', label: 'Dates spécifiques', href: '/provider/availability-overrides' },
+  { key: 'overrides', label: 'Exceptions & Congés', href: '/provider/availability-overrides' },
   { key: 'settings', label: 'Réglages', href: '/provider/scheduling-settings' },
 ] as const;
 
@@ -23,7 +23,14 @@ export function AvailabilityTabs({ active }: { active: (typeof TABS)[number]['ke
             }}
             className={`flex-1 items-center py-2.5 rounded-xl ${on ? 'bg-accent' : ''}`}
           >
-            <Text className={`font-sans-bold text-xs ${on ? 'text-white' : 'text-muted'}`}>{translate(t.label)}</Text>
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
+              className={`font-sans-bold text-xs ${on ? 'text-white' : 'text-muted'}`}
+            >
+              {translate(t.label)}
+            </Text>
           </Pressable>
         );
       })}

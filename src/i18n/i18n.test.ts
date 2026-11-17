@@ -50,7 +50,7 @@ function usedKeys(): string[] {
 // Textes passés à t() via une variable (constantes, tableaux de libellés).
 const DYNAMIC_KEYS = [
   PROVIDER_PENDING_MESSAGE, PROVIDER_REJECTED_MESSAGE, PROVIDER_INCOMPLETE_MESSAGE, PROVIDER_SUSPENDED_MESSAGE,
-  'Hebdomadaire', 'Dates spécifiques', 'Réglages',
+  'Hebdomadaire', 'Exceptions & Congés', 'Réglages',
   'Connexion classique', 'Lien magique par email', 'Sans mot de passe', 'Numéro de téléphone',
   'Code de vérification par SMS', 'Email et mot de passe',
   'Consulter', 'Médecins dispo.', 'Historique médical', 'Recharger, payer', 'IA Médicale', 'Analyse symptômes',

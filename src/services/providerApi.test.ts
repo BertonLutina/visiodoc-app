@@ -90,6 +90,17 @@ describe('groupOverrideRows', () => {
     ]);
   });
 
+  it('carries the exception reason on unavailable days and ignores blank ones', () => {
+    const rows = [
+      { specific_date: '2026-10-12', start_time: null, end_time: null, is_available: false, exception_reason: ' Congé ' },
+      { specific_date: '2026-10-13', start_time: null, end_time: null, is_available: false, exception_reason: '  ' },
+    ];
+    expect(groupOverrideRows(rows)).toEqual([
+      { date: '2026-10-12', isAvailable: false, ranges: [], reason: 'Congé' },
+      { date: '2026-10-13', isAvailable: false, ranges: [] },
+    ]);
+  });
+
   it('keeps different dates as separate entries, sorted by date', () => {
     const rows = [
       { specific_date: '2026-10-20', start_time: '08:00:00', end_time: '11:00:00', is_available: true },

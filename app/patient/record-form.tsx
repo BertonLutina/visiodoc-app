@@ -1,3 +1,4 @@
+import { DateField } from '@/components/DateField';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -262,8 +263,8 @@ export default function RecordForm() {
         ) : null}
 
         <View className="flex-row">
-          <Field label={t('Date de début')} value={startDate} onChangeText={setStartDate} placeholder={t('AAAA-MM-JJ')} className="flex-1 mr-2" />
-          <Field label={t('Date de fin')} value={endDate} onChangeText={setEndDate} placeholder={t('AAAA-MM-JJ')} className="flex-1 ml-2" />
+          <DateField label={t('Date de début')} value={startDate} onChange={setStartDate} className="flex-1 mr-2" />
+          <DateField label={t('Date de fin')} value={endDate} onChange={setEndDate} minimumDate={startDate ? new Date(startDate) : undefined} className="flex-1 ml-2" />
         </View>
 
         <SectionTitle>{t('Pièce jointe')}</SectionTitle>

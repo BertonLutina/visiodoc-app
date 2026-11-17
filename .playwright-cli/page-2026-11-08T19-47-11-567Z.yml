@@ -1,0 +1,303 @@
+- generic [ref=f49e2]:
+  - generic [ref=f49e3]:
+    - banner [ref=f49e4]:
+      - generic [ref=f49e6]:
+        - generic [ref=f49e7]: VisioDoc
+        - navigation [ref=f49e14]:
+          - link "Prestataires" [ref=f49e15] [cursor=pointer]:
+            - /url: "#doctors"
+          - link "À propos" [ref=f49e16] [cursor=pointer]:
+            - /url: "#about"
+          - button "Contact" [ref=f49e17] [cursor=pointer]
+        - generic [ref=f49e18]:
+          - button "Sélectionner la langue" [ref=f49e20] [cursor=pointer]:
+            - generic [ref=f49e24]: FR
+          - button "Connexion Patient" [ref=f49e27] [cursor=pointer]
+          - button "Espace Presta" [ref=f49e28] [cursor=pointer]
+    - generic [ref=f49e36]:
+      - generic [ref=f49e37]:
+        - generic [ref=f49e38]:
+          - generic [ref=f49e39]: Télémédecine pour l'Afrique
+          - heading "Révolutionnez l'accès aux soins en Afrique" [level=1] [ref=f49e41]
+          - paragraph [ref=f49e44]: VisioDoc connecte patients et professionnels de soins de santé grâce à la télémédecine et au Mobile Money. Consultations sécurisées, paiements simplifiés.
+          - button "Réserver une consultation" [ref=f49e46] [cursor=pointer]
+        - generic [ref=f49e49]:
+          - generic [ref=f49e50]:
+            - generic [ref=f49e51]: 200K+
+            - generic [ref=f49e52]: Patients connectés
+          - generic [ref=f49e53]:
+            - generic [ref=f49e54]: 500+
+            - generic [ref=f49e55]: Médecins certifiés
+          - generic [ref=f49e56]:
+            - generic [ref=f49e57]: 1M+
+            - generic [ref=f49e58]: Consultations réalisées
+      - generic [ref=f49e60]:
+        - generic [ref=f49e61]:
+          - generic [ref=f49e62]:
+            - generic [ref=f49e69]:
+              - generic [ref=f49e70]: Dr. Mbala Kasongo
+              - generic [ref=f49e71]: Cardiologue - Kinshasa
+            - generic [ref=f49e77]: Consultation en cours...
+          - generic [ref=f49e78]:
+            - generic [ref=f49e79]:
+              - generic [ref=f49e82]: Prochaine consultation
+              - generic [ref=f49e83]: 14:30
+            - generic [ref=f49e84]:
+              - generic [ref=f49e90]: Patients aujourd'hui
+              - generic [ref=f49e91]: "12"
+            - generic [ref=f49e92]:
+              - generic [ref=f49e94]: Satisfaction
+              - generic [ref=f49e95]: 98%
+        - generic [ref=f49e96]: à partir de 1 USD
+        - generic [ref=f49e98]: Mobile Money
+    - region "Téléchargement de l'application mobile" [ref=f49e100]:
+      - generic [ref=f49e102]:
+        - generic [ref=f49e107]:
+          - generic [ref=f49e108]: Application mobile
+          - heading "Téléchargez l'application mobile" [level=2] [ref=f49e109]
+          - paragraph [ref=f49e110]: Consultez vos médecins et gérez vos rendez-vous directement depuis votre smartphone.
+        - generic [ref=f49e112]:
+          - status [ref=f49e113]
+          - generic [ref=f49e114]:
+            - button "Télécharger dans l'App Store - Bientôt disponible" [disabled] [ref=f49e116] [cursor=pointer]:
+              - generic [ref=f49e119]:
+                - generic [ref=f49e120]: Télécharger dans l'
+                - generic [ref=f49e121]: App Store
+            - button "Disponible sur Google Play - Bientôt disponible" [disabled] [ref=f49e123] [cursor=pointer]:
+              - generic [ref=f49e129]:
+                - generic [ref=f49e130]: DISPONIBLE SUR
+                - generic [ref=f49e131]: Google Play
+    - generic [ref=f49e133]:
+      - generic [ref=f49e134]:
+        - heading "Une solution adaptée aux réalités locales" [level=2] [ref=f49e135]
+        - paragraph [ref=f49e136]: VisioDoc transforme l'accès aux soins de santé avec des technologies adaptées à l'Afrique
+      - generic [ref=f49e137]:
+        - generic [ref=f49e138]:
+          - heading "Consultations vidéo sécurisées" [level=3] [ref=f49e143]
+          - paragraph [ref=f49e144]: Consultez vos professionnels de soins de santé en toute sécurité depuis chez vous, même avec une connexion limitée
+          - button "En savoir plus" [ref=f49e145] [cursor=pointer]
+        - generic [ref=f49e149]:
+          - heading "Paiement Mobile Money" [level=3] [ref=f49e153]
+          - paragraph [ref=f49e154]: Intégration native avec Vodacom, Airtel et Orange pour des paiements sécurisés avec escrow
+          - button "En savoir plus" [ref=f49e155] [cursor=pointer]
+        - generic [ref=f49e159]:
+          - heading "Fonctionnement hors-ligne" [level=3] [ref=f49e165]
+          - paragraph [ref=f49e166]: Mode dégradé SMS/USSD pour téléphones basiques et zones à connectivité limitée
+          - button "En savoir plus" [ref=f49e167] [cursor=pointer]
+        - generic [ref=f49e171]:
+          - heading "Dossiers médicaux sécurisés" [level=3] [ref=f49e175]
+          - paragraph [ref=f49e176]: Stockage sécurisé et chiffré de vos informations médicales accessibles partout
+          - button "En savoir plus" [ref=f49e177] [cursor=pointer]
+      - generic [ref=f49e182]:
+        - heading "Prêt à transformer l'accès aux soins ?" [level=3] [ref=f49e183]
+        - paragraph [ref=f49e184]: Rejoignez les milliers de patients et médecins qui font confiance à VisioDoc pour des soins de qualité.
+        - button "Commencer" [ref=f49e185] [cursor=pointer]
+    - generic [ref=f49e189]:
+      - heading "Notre impact en Afrique" [level=2] [ref=f49e191]
+      - generic [ref=f49e193]:
+        - generic [ref=f49e194]:
+          - generic [ref=f49e199]: 50%
+          - generic [ref=f49e200]: de consultations en zones rurales
+        - generic [ref=f49e202]:
+          - generic [ref=f49e207]: 228%
+          - generic [ref=f49e208]: croissance Mobile Money en 3 ans
+        - generic [ref=f49e210]:
+          - generic [ref=f49e214]: 30%
+          - generic [ref=f49e215]: réduction des coûts de transport
+        - generic [ref=f49e217]:
+          - generic [ref=f49e221]: 95%
+          - generic [ref=f49e222]: satisfaction patients
+      - generic [ref=f49e224]:
+        - paragraph [ref=f49e225]: Rejoignez la révolution de la santé numérique en Afrique
+        - button "Commencer" [ref=f49e226] [cursor=pointer]
+    - generic [ref=f49e232]:
+      - generic [ref=f49e233]:
+        - heading "À propos de VisioDoc" [level=2] [ref=f49e234]
+        - paragraph [ref=f49e235]: Notre mission est de rendre les soins de santé accessibles à tous, partout en Afrique, grâce à la technologie et l'innovation.
+      - generic [ref=f49e236]:
+        - generic [ref=f49e237]:
+          - heading "Notre Mission" [level=3] [ref=f49e238]
+          - paragraph [ref=f49e239]: "VisioDoc est né d'une vision simple mais puissante : utiliser la technologie pour résoudre le problème critique d'accès aux soins de santé en Afrique. Nous croyons que chaque personne mérite un accès rapide et abordable à des soins médicaux de qualité."
+          - paragraph [ref=f49e240]: Notre plateforme connecte les patients avec des professionnels de soins de santé qualifiés via des consultations vidéo sécurisées, éliminant les barrières géographiques et financières qui empêchent souvent l'accès aux soins.
+        - generic [ref=f49e241]:
+          - heading "Notre Histoire" [level=3] [ref=f49e242]
+          - paragraph [ref=f49e243]: Fondée en 2023, VisioDoc est née de la constatation que des millions de personnes en RDC et dans la région n'ont pas accès à des consultations médicales rapides et abordables. Avec seulement 1 médecin pour 10 000 habitants, nous avons développé une solution qui tire parti de la forte pénétration du Mobile Money.
+          - paragraph [ref=f49e244]: Aujourd'hui, nous sommes fiers de servir plus de 10 000 patients à travers 50+ villes, avec un réseau de plus de 500 médecins qualifiés. Notre taux de satisfaction de 95% témoigne de notre engagement envers l'excellence.
+      - generic [ref=f49e245]:
+        - heading "Nos Valeurs" [level=3] [ref=f49e246]
+        - generic [ref=f49e247]:
+          - generic [ref=f49e248]:
+            - heading "Qualité des Soins" [level=4] [ref=f49e252]
+            - paragraph [ref=f49e253]: Nous travaillons uniquement avec des professionnels de soins de santé certifiés et expérimentés pour garantir des soins de la plus haute qualité.
+          - generic [ref=f49e254]:
+            - heading "Sécurité & Confidentialité" [level=4] [ref=f49e258]
+            - paragraph [ref=f49e259]: Vos données médicales sont protégées par un cryptage de niveau bancaire et restent strictement confidentielles.
+          - generic [ref=f49e260]:
+            - heading "Accessibilité" [level=4] [ref=f49e265]
+            - paragraph [ref=f49e266]: Des consultations selon la disponibilité de nos professionnels de soins de santé, payables via Mobile Money, pour rendre les soins accessibles à tous.
+          - generic [ref=f49e267]:
+            - heading "Empathie" [level=4] [ref=f49e274]
+            - paragraph [ref=f49e275]: Nous plaçons l'humain au centre de tout ce que nous faisons, avec une approche bienveillante et personnalisée.
+      - generic [ref=f49e276]:
+        - heading "Notre Impact" [level=3] [ref=f49e277]
+        - generic [ref=f49e278]:
+          - generic [ref=f49e279]:
+            - generic [ref=f49e286]: 10,000+
+            - generic [ref=f49e287]: Patients Satisfaits
+          - generic [ref=f49e288]:
+            - generic [ref=f49e293]: 500+
+            - generic [ref=f49e294]: Prestataires Certifiés
+          - generic [ref=f49e295]:
+            - generic [ref=f49e300]: 50+
+            - generic [ref=f49e301]: Villes Couvertes
+          - generic [ref=f49e302]:
+            - generic [ref=f49e306]: 95%
+            - generic [ref=f49e307]: Taux de Satisfaction
+    - generic [ref=f49e309]:
+      - generic [ref=f49e310]:
+        - heading "Paiements Mobile Money intégrés" [level=2] [ref=f49e311]
+        - paragraph [ref=f49e312]: Système de wallet électronique avec escrow pour des transactions sécurisées
+      - generic [ref=f49e313]:
+        - heading "Intégration multi-opérateurs" [level=3] [ref=f49e314]
+        - generic [ref=f49e315]:
+          - generic [ref=f49e317]:
+            - heading "Vodacom" [level=4] [ref=f49e320]
+            - generic [ref=f49e321]: 46%
+            - generic [ref=f49e322]: part de marché
+          - generic [ref=f49e324]:
+            - heading "Airtel" [level=4] [ref=f49e327]
+            - generic [ref=f49e328]: 37.5%
+            - generic [ref=f49e329]: part de marché
+          - generic [ref=f49e331]:
+            - heading "Orange" [level=4] [ref=f49e334]
+            - generic [ref=f49e335]: 16%
+            - generic [ref=f49e336]: part de marché
+      - generic [ref=f49e337]:
+        - heading "Processus de paiement sécurisé" [level=3] [ref=f49e338]
+        - generic [ref=f49e339]:
+          - generic [ref=f49e340]:
+            - generic [ref=f49e341]: "1"
+            - heading "Réservation" [level=4] [ref=f49e347]
+            - paragraph [ref=f49e348]: Patient paie 1 USD via Mobile Money
+          - generic [ref=f49e349]:
+            - generic [ref=f49e350]: "2"
+            - heading "Escrow" [level=4] [ref=f49e356]
+            - paragraph [ref=f49e357]: Fonds bloqués en sécurité
+          - generic [ref=f49e358]:
+            - generic [ref=f49e359]: "3"
+            - heading "Consultation" [level=4] [ref=f49e366]
+            - paragraph [ref=f49e367]: Consultation vidéo avec le médecin
+          - generic [ref=f49e368]:
+            - generic [ref=f49e369]: "4"
+            - heading "Libération" [level=4] [ref=f49e377]
+            - paragraph [ref=f49e378]: Fonds libérés au médecin après consultation
+        - generic [ref=f49e379]: Protection complète avec remboursement automatique
+    - generic [ref=f49e385]:
+      - generic [ref=f49e386]:
+        - heading "Ce que disent nos utilisateurs" [level=2] [ref=f49e387]
+        - paragraph [ref=f49e388]: Des témoignages authentiques de notre communauté en Afrique
+      - generic [ref=f49e389]:
+        - generic [ref=f49e390]:
+          - paragraph [ref=f49e406]: "\"VisioDoc a changé ma vie. Je peux consulter un médecin pour mes enfants sans perdre une journée de travail. Le paiement Mobile Money est très pratique.\""
+          - generic [ref=f49e407]:
+            - img "Marie Lukamba" [ref=f49e408]
+            - generic [ref=f49e409]:
+              - generic [ref=f49e410]: Marie Lukamba
+              - generic [ref=f49e411]: Mère de famille
+              - generic [ref=f49e412]: Kinshasa
+        - generic [ref=f49e414]:
+          - paragraph [ref=f49e430]: "\"La plateforme me permet d'atteindre des patients dans des zones reculées. L'interface est intuitive et les paiements sont sécurisés.\""
+          - generic [ref=f49e431]:
+            - img "Dr. Emmanuel Tshiswaka" [ref=f49e432]
+            - generic [ref=f49e433]:
+              - generic [ref=f49e434]: Dr. Emmanuel Tshiswaka
+              - generic [ref=f49e435]: Médecin généraliste
+              - generic [ref=f49e436]: Lubumbashi
+        - generic [ref=f49e438]:
+          - paragraph [ref=f49e454]: "\"Même avec ma connexion internet parfois instable, j'arrive à consulter un médecin. Le mode SMS est très utile dans ma région.\""
+          - generic [ref=f49e455]:
+            - img "Pauline Ngozi" [ref=f49e456]
+            - generic [ref=f49e457]:
+              - generic [ref=f49e458]: Pauline Ngozi
+              - generic [ref=f49e459]: Étudiante
+              - generic [ref=f49e460]: Goma
+      - generic [ref=f49e464]:
+        - generic [ref=f49e465]:
+          - generic [ref=f49e466]: 23.1M
+          - generic [ref=f49e467]: Utilisateurs Mobile Money
+        - generic [ref=f49e468]:
+          - generic [ref=f49e469]: 99M
+          - generic [ref=f49e470]: Habitants en RDC
+        - generic [ref=f49e471]:
+          - generic [ref=f49e472]: 7/100K
+          - generic [ref=f49e473]: Médecins par habitant
+    - contentinfo [ref=f49e474]:
+      - generic [ref=f49e475]:
+        - generic [ref=f49e476]:
+          - generic [ref=f49e477]:
+            - generic [ref=f49e478]: VisioDoc
+            - paragraph [ref=f49e485]: La première plateforme de télémédecine adaptée aux réalités africaines.
+            - generic [ref=f49e486]:
+              - paragraph [ref=f49e487]: Application mobile
+              - generic [ref=f49e488]:
+                - status [ref=f49e489]
+                - generic [ref=f49e490]:
+                  - button "Télécharger dans l'App Store - Bientôt disponible" [disabled] [ref=f49e492] [cursor=pointer]:
+                    - generic [ref=f49e495]:
+                      - generic [ref=f49e496]: Télécharger dans l'
+                      - generic [ref=f49e497]: App Store
+                  - button "Disponible sur Google Play - Bientôt disponible" [disabled] [ref=f49e499] [cursor=pointer]:
+                    - generic [ref=f49e505]:
+                      - generic [ref=f49e506]: DISPONIBLE SUR
+                      - generic [ref=f49e507]: Google Play
+            - generic [ref=f49e508]:
+              - link [ref=f49e509] [cursor=pointer]:
+                - /url: "#"
+              - link [ref=f49e512] [cursor=pointer]:
+                - /url: "#"
+              - link [ref=f49e515] [cursor=pointer]:
+                - /url: "#"
+              - link [ref=f49e520] [cursor=pointer]:
+                - /url: "#"
+          - generic [ref=f49e524]:
+            - heading "Liens rapides" [level=3] [ref=f49e525]
+            - list [ref=f49e526]:
+              - listitem [ref=f49e527]:
+                - link "À propos" [ref=f49e528] [cursor=pointer]:
+                  - /url: "#about"
+              - listitem [ref=f49e529]:
+                - link "Mentions légales" [ref=f49e530] [cursor=pointer]:
+                  - /url: "?legal=mentions"
+              - listitem [ref=f49e531]:
+                - link "Confidentialité" [ref=f49e532] [cursor=pointer]:
+                  - /url: "?legal=confidentialite"
+              - listitem [ref=f49e533]:
+                - link "Conditions" [ref=f49e534] [cursor=pointer]:
+                  - /url: "?legal=conditions"
+              - listitem [ref=f49e535]:
+                - link "Support" [ref=f49e536] [cursor=pointer]:
+                  - /url: "#"
+              - listitem [ref=f49e537]:
+                - button "Gérer mes cookies" [ref=f49e538] [cursor=pointer]
+          - generic [ref=f49e539]:
+            - heading "Contact" [level=3] [ref=f49e540]
+            - generic [ref=f49e541]:
+              - generic [ref=f49e542]: Kinshasa, RDC
+              - generic [ref=f49e547]: +243 XX XXX XXXX
+              - generic [ref=f49e551]: contact@visiodoc.online
+        - generic [ref=f49e557]:
+          - generic [ref=f49e558]: © 2026 VisioDoc. Tous droits réservés.
+          - generic [ref=f49e559]:
+            - button "Gérer mes cookies" [ref=f49e560] [cursor=pointer]
+            - generic [ref=f49e561]: Fait avec ❤️ pour l'Afrique, propulsé par NEOTECH CONGO
+  - complementary "Gestion des cookies et vie privée":
+    - generic [ref=f49e563]:
+      - generic [ref=f49e568]:
+        - heading "Gestion des cookies et vie privée RGPD" [level=2] [ref=f49e569]:
+          - generic [ref=f49e570]: Gestion des cookies et vie privée
+          - generic [ref=f49e571]: RGPD
+        - paragraph [ref=f49e575]: VisioDoc utilise des cookies nécessaires pour assurer le bon fonctionnement de la plateforme. Nous pouvons également utiliser des cookies de mesure d'audience ou de personnalisation avec votre consentement. Vous pouvez accepter, refuser ou personnaliser vos choix à tout moment.
+      - generic [ref=f49e576]:
+        - button "Personnaliser" [ref=f49e577] [cursor=pointer]
+        - button "Refuser tout" [ref=f49e582] [cursor=pointer]
+        - button "Accepter tout" [ref=f49e583] [cursor=pointer]
