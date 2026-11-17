@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { specKey } from '@/services/specializationCatalog';
 import { edgeFunctionError, pwnedPasswordMessage, authErrorMessage, readHttpError } from '@/utils/authError';
 import { passwordIssue, passwordIssueMessage } from '@/services/passwordPolicy';
+import { birthDateIssue, birthDateMessage, normalizePlace } from '@/utils/birthDate';
 import {
   clearCredentialsPending,
   hasSubmittedCredentials,
@@ -149,6 +150,9 @@ export class RegisterPatientError extends Error {
   }
 }
 
+/** Refus d'âge renvoyé par `register-patient` (mineur ou plus de 125 ans). */
+export const UNDERAGE_SERVER_MESSAGE = 'Vous devez avoir au moins 18 ans révolus pour vous inscrire.';
+
 const kindForStatus = (status: number | undefined): RegisterPatientErrorKind => {
   if (status === 400 || status === 422) return 'validation';
   if (status === 409) return 'conflict';
@@ -179,6 +183,15 @@ async function toRegisterError(error: any): Promise<RegisterPatientError> {
   }
   const kind = kindForStatus(status);
   const retryAfter = kind === 'rate_limited' ? parseRetryAfter(response?.headers?.get?.('Retry-After')) : undefined;
+  if (status === 400) {
+    // MOB-1211-1 : 400 « Required » = date de naissance absente ; refus d'âge = texte français du serveur.
+    if (body?.error === 'Required') {
+      return new RegisterPatientError(kind, edgeFunctionError({ error: translate('La date de naissance est obligatoire.') }));
+    }
+    if (body?.error === UNDERAGE_SERVER_MESSAGE) {
+      return new RegisterPatientError(kind, edgeFunctionError({ error: translate(UNDERAGE_SERVER_MESSAGE) }));
+    }
+  }
   return new RegisterPatientError(kind, edgeFunctionError(body, error?.message), retryAfter);
 }
 
@@ -209,13 +222,19 @@ export interface RegisterPatientAccountInput {
   phone?: string;
   /** Code ISO du pays choisi, ex. 'CD'. */
   countryCode?: string;
+  /** `AAAA-MM-JJ`, obligatoire, 18 ans révolus (contrôlé avant l'appel). */
+  dateOfBirth: string;
+  /** Facultatives, 100 caractères au plus. */
+  city?: string;
+  commune?: string;
 }
 
 /**
  * `POST /functions/v1/register-patient` (jeton anonyme géré par `functions.invoke`).
  * Succès : le compte existe mais n'est PAS connecté, l'e-mail de confirmation est parti.
  *
- * - `gender` : vérifié AVANT tout appel réseau.
+ * - `gender` et `dateOfBirth` (18 ans révolus) : vérifiés AVANT tout appel réseau.
+ * - `city` / `commune` : facultatives, omises si vides.
  * - `countryId` : UUID du pays choisi si l'app le connaît (`COUNTRIES[code].id`), sinon omis
  *   (le serveur choisit la RDC). Jamais de repli silencieux ni de premier pays d'une liste.
  */
@@ -225,6 +244,12 @@ export async function registerPatientAccount(
   if (!isGender(input.gender)) {
     throw new Error(translate('Choisis ton genre : Masculin ou Féminin.'));
   }
+  const dobIssue = birthDateIssue(input.dateOfBirth);
+  if (dobIssue) throw new Error(birthDateMessage(dobIssue));
+  const city = normalizePlace(input.city);
+  if (city === null) throw new Error(translate('La ville ne doit pas dépasser 100 caractères.'));
+  const commune = normalizePlace(input.commune);
+  if (commune === null) throw new Error(translate('La commune ne doit pas dépasser 100 caractères.'));
   if (!supabase) throw new Error(translate('Backend non configuré.'));
 
   const phone = toE164(input.phone, dialCodeFor(input.countryCode));
@@ -236,6 +261,9 @@ export async function registerPatientAccount(
     firstName: input.firstName,
     lastName: input.lastName,
     gender: input.gender,
+    dateOfBirth: input.dateOfBirth.trim(),
+    ...(city ? { city } : {}),
+    ...(commune ? { commune } : {}),
     ...(phone ? { phone } : {}),
     ...(language ? { language } : {}),
     ...(countryId ? { countryId } : {}),

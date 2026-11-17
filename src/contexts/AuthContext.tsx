@@ -64,6 +64,10 @@ interface RegisterPatientInput {
   gender: Gender;
   /** Code ISO du pays choisi, ex: 'CD' */
   countryCode?: string;
+  /** `AAAA-MM-JJ`, 18 ans révolus (MOB-1211-1). */
+  dateOfBirth: string;
+  city?: string;
+  commune?: string;
 }
 
 interface RegisterProviderInput {

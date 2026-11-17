@@ -646,4 +646,12 @@ export const sw: Record<string, string> = {
   "Continuer": "Endelea",
   "Valider": "Thibitisha",
   "Effacer": "Futa",
+  "La date de naissance est obligatoire.": "Tarehe ya kuzaliwa inahitajika.",
+  "Date de naissance invalide.": "Tarehe ya kuzaliwa si sahihi.",
+  "Vous devez avoir au moins 18 ans révolus pour vous inscrire.": "Lazima uwe na umri wa angalau miaka 18 ili kujisajili.",
+  "La ville ne doit pas dépasser 100 caractères.": "Jina la jiji lisizidi herufi 100.",
+  "La commune ne doit pas dépasser 100 caractères.": "Jina la wilaya (commune) lisizidi herufi 100.",
+  "Date de naissance": "Tarehe ya kuzaliwa",
+  "Ville (facultatif)": "Jiji (si lazima)",
+  "Commune (facultatif)": "Wilaya / commune (si lazima)",
 };

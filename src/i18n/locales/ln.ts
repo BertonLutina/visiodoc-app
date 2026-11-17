@@ -646,4 +646,12 @@ export const ln: Record<string, string> = {
   "Continuer": "Kobanda",
   "Valider": "Kondima",
   "Effacer": "Kolongola",
+  "La date de naissance est obligatoire.": "Mokolo ya mbotama esengeli.",
+  "Date de naissance invalide.": "Mokolo ya mbotama ezali malamu te.",
+  "Vous devez avoir au moins 18 ans révolus pour vous inscrire.": "Osengeli kozala na bambula 18 mpe koleka mpo na komikomisa.",
+  "La ville ne doit pas dépasser 100 caractères.": "Kombo ya engumba esengeli koleka te bilembo 100.",
+  "La commune ne doit pas dépasser 100 caractères.": "Kombo ya komini esengeli koleka te bilembo 100.",
+  "Date de naissance": "Mokolo ya mbotama",
+  "Ville (facultatif)": "Engumba (soki olingi)",
+  "Commune (facultatif)": "Komini (soki olingi)",
 };

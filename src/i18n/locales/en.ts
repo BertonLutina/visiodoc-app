@@ -646,4 +646,12 @@ export const en: Record<string, string> = {
   "Continuer": "Continue",
   "Valider": "Confirm",
   "Effacer": "Clear",
+  "La date de naissance est obligatoire.": "Date of birth is required.",
+  "Date de naissance invalide.": "Invalid date of birth.",
+  "Vous devez avoir au moins 18 ans révolus pour vous inscrire.": "You must be at least 18 years old to sign up.",
+  "La ville ne doit pas dépasser 100 caractères.": "The city must not exceed 100 characters.",
+  "La commune ne doit pas dépasser 100 caractères.": "The commune must not exceed 100 characters.",
+  "Date de naissance": "Date of birth",
+  "Ville (facultatif)": "City (optional)",
+  "Commune (facultatif)": "Commune (optional)",
 };

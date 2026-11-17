@@ -7,11 +7,19 @@ import { CountryPicker } from '@/components/CountryPicker';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { PasswordField } from '@/components/PasswordField';
 import { GenderField } from '@/components/GenderField';
+import { DateField } from '@/components/DateField';
 import { ResendConfirmation } from '@/components/ResendConfirmation';
 import { passwordIssue } from '@/services/passwordPolicy';
 import { registerPatientErrorMessage, type Gender } from '@/services/registration';
+import { birthDateIssue, birthDateMessage, latestBirthDate, MAX_PLACE_LENGTH, parseIsoDate } from '@/utils/birthDate';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
+
+/** Borne haute du sélecteur : aujourd'hui moins 18 ans. */
+const maxBirthDate = (): Date => {
+  const d = parseIsoDate(latestBirthDate());
+  return d ? new Date(d.y, d.m - 1, d.d) : new Date();
+};
 
 export default function RegisterPatient() {
   const t = useT();
@@ -22,7 +30,10 @@ export default function RegisterPatient() {
     email: '',
     phone: '',
     password: '',
+    city: '',
+    commune: '',
   });
+  const [dateOfBirth, setDateOfBirth] = useState('');
   const [gender, setGender] = useState<Gender | null>(null); // aucun choix par défaut
   const [countryCode, setCountryCode] = useState('CD'); // RD Congo par défaut
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -35,6 +46,12 @@ export default function RegisterPatient() {
   const onSubmit = async () => {
     setErrorMsg(null);
     if (!gender) return;
+    // Contrôle des 18 ans révolus avant l'appel (le serveur le refait).
+    const dobIssue = birthDateIssue(dateOfBirth);
+    if (dobIssue) {
+      setErrorMsg(birthDateMessage(dobIssue));
+      return;
+    }
     try {
       const result = await registerPatient({
         firstName: form.firstName,
@@ -44,6 +61,9 @@ export default function RegisterPatient() {
         password: form.password,
         gender,
         countryCode,
+        dateOfBirth,
+        city: form.city,
+        commune: form.commune,
       });
       // Pas de connexion ni de redirection automatique tant que l'adresse n'est pas confirmée.
       if (result.requiresEmailConfirmation) setSent({ email: form.email.trim(), at: Date.now() });
@@ -108,8 +128,29 @@ export default function RegisterPatient() {
           onChangeText={set('phone')}
         />
         <GenderField value={gender} onChange={setGender} />
+        <DateField
+          label={t('Date de naissance')}
+          value={dateOfBirth}
+          onChange={setDateOfBirth}
+          placeholder={t('Choisir une date')}
+          maximumDate={maxBirthDate()}
+        />
         <PasswordField label={t('Mot de passe')} value={form.password} onChangeText={set('password')} />
         <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
+        <Field
+          label={t('Ville (facultatif)')}
+          placeholder="Kinshasa"
+          maxLength={MAX_PLACE_LENGTH}
+          value={form.city}
+          onChangeText={set('city')}
+        />
+        <Field
+          label={t('Commune (facultatif)')}
+          placeholder="Gombe"
+          maxLength={MAX_PLACE_LENGTH}
+          value={form.commune}
+          onChangeText={set('commune')}
+        />
 
         {errorMsg ? (
           <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
@@ -120,7 +161,7 @@ export default function RegisterPatient() {
         <Button
           label={t('Créer mon compte')}
           loading={loading}
-          disabled={passwordIssue(form.password) !== null || !gender}
+          disabled={passwordIssue(form.password) !== null || !gender || !dateOfBirth}
           onPress={onSubmit}
           className="mt-2"
         />

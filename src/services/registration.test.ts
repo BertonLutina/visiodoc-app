@@ -242,6 +242,9 @@ const patientInput = {
   gender: 'female' as string | null | undefined,
   phone: '+243899999999',
   countryCode: 'CD' as string | undefined,
+  dateOfBirth: '1990-06-15',
+  city: undefined as string | undefined,
+  commune: undefined as string | undefined,
 };
 
 const okResponse = {
@@ -275,11 +278,62 @@ describe('registerPatientAccount', () => {
         firstName: 'Fatou',
         lastName: 'Kalala',
         gender: 'female',
+        dateOfBirth: '1990-06-15',
         phone: '+243899999999',
         language: 'fr',
         countryId: CD_UUID,
       },
     });
+  });
+
+  it('sends city and commune (trimmed) only when filled in', async () => {
+    await registerPatientAccount({ ...patientInput, city: '  Matadi ', commune: ' Nzanza' });
+    const body = mockInvoke.mock.calls[0][1].body;
+    expect(body.city).toBe('Matadi');
+    expect(body.commune).toBe('Nzanza');
+    mockInvoke.mockClear();
+    await registerPatientAccount({ ...patientInput, city: '  ', commune: '' });
+    const bare = mockInvoke.mock.calls[0][1].body;
+    expect(Object.keys(bare)).not.toContain('city');
+    expect(Object.keys(bare)).not.toContain('commune');
+  });
+
+  it('refuses a city or commune over 100 characters before any network call', async () => {
+    await expect(registerPatientAccount({ ...patientInput, city: 'a'.repeat(101) })).rejects.toThrow();
+    await expect(registerPatientAccount({ ...patientInput, commune: 'a'.repeat(101) })).rejects.toThrow();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('refuses a minor with the server wording, before any network call', async () => {
+    const minor = `${new Date().getFullYear() - 10}-01-01`;
+    await expect(registerPatientAccount({ ...patientInput, dateOfBirth: minor })).rejects.toThrow(
+      'Vous devez avoir au moins 18 ans révolus pour vous inscrire.',
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('refuses a missing or malformed date of birth before any network call', async () => {
+    await expect(registerPatientAccount({ ...patientInput, dateOfBirth: '' })).rejects.toThrow(
+      'La date de naissance est obligatoire.',
+    );
+    await expect(registerPatientAccount({ ...patientInput, dateOfBirth: '15/06/1990' })).rejects.toThrow();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('maps a server 400 "Required" to the date-of-birth message', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(400, { error: 'Required' }) });
+    const err: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
+    expect(err.kind).toBe('validation');
+    expect(registerPatientErrorMessage(err)).toBe('La date de naissance est obligatoire.');
+  });
+
+  it('keeps the server age refusal text', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(400, { error: 'Vous devez avoir au moins 18 ans révolus pour vous inscrire.' }),
+    });
+    const err: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
+    expect(registerPatientErrorMessage(err)).toBe('Vous devez avoir au moins 18 ans révolus pour vous inscrire.');
   });
 
   it('never calls auth.signUp / signInWithPassword and never touches the users table', async () => {
