@@ -1,4 +1,11 @@
-import { canStartNow, formatCountdown, providerStartWindow, startDeniedMessage, startWindowMessage } from './startWindow';
+import {
+  canStartNow,
+  formatCountdown,
+  providerStartWindow,
+  startDeniedMessage,
+  startReminderBanner,
+  startWindowMessage,
+} from './startWindow';
 import { resetServerClock, serverNowMs, syncServerClock } from './serverClock';
 
 const T0 = Date.parse('2026-11-17T10:00:00.000Z');
@@ -94,5 +101,27 @@ describe('startWindowMessage / startDeniedMessage', () => {
     expect(startDeniedMessage()).toBe(
       "Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 10 minutes qui suivent",
     );
+  });
+});
+
+describe('startReminderBanner (bandeau rouge avant la consultation suivante)', () => {
+  const banner = (nowMs: number, status = 'scheduled') =>
+    startReminderBanner(providerStartWindow(SCHEDULED, status, nowMs), SCHEDULED);
+  it('absent à plus de 60 minutes de l’heure prévue', () => {
+    expect(banner(T0 - 61 * 60_000)).toBeNull();
+  });
+  it('visible dès 60 minutes avant, avec l’heure et la règle des 10 minutes', () => {
+    const b = banner(T0 - 60 * 60_000);
+    expect(b).toMatch(/\d{2}:\d{2}/);
+    expect(b).toContain('10 minutes');
+    expect(b).toContain('médecin absent');
+  });
+  it('visible pendant la fenêtre ouverte', () => {
+    expect(banner(T0 + 5 * 60_000)).not.toBeNull();
+  });
+  it('absent une fois la fenêtre dépassée, pour un appel en cours ou une heure inconnue', () => {
+    expect(banner(T0 + 601_000)).toBeNull();
+    expect(banner(T0 + 5 * 60_000, 'in_progress')).toBeNull();
+    expect(startReminderBanner(providerStartWindow(undefined, 'scheduled', T0), undefined)).toBeNull();
   });
 });

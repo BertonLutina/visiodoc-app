@@ -652,4 +652,5 @@ export const sw: Record<string, string> = {
   "Lancez l'appel dans les {time} qui restent, sinon la consultation sera annulée (médecin absent).": "Anzisha simu ndani ya {time} iliyobaki, vinginevyo ushauri utaghairiwa (daktari hakufika).",
   "Délai de 10 minutes dépassé : la consultation va être annulée (médecin absent) et le patient remboursé en avoir.": "Muda wa dakika 10 umepita: ushauri utaghairiwa (daktari hakufika) na mgonjwa atarudishiwa pesa kwenye pochi yake.",
   "Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 10 minutes qui suivent": "Unaweza kuanzisha simu tu kuanzia saa iliyopangwa na ndani ya dakika 10 zinazofuata",
+  "Consultation à {time} : lancez l'appel dans les 10 minutes qui suivent l'heure prévue, sinon elle sera annulée (médecin absent) et le patient remboursé en avoir.": "Mashauriano saa {time}: anzisha simu ndani ya dakika 10 baada ya muda uliopangwa, vinginevyo yatafutwa (daktari hakufika) na mgonjwa atarudishiwa kwenye pochi.",
 };

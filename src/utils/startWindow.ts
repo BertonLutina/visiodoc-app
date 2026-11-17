@@ -71,3 +71,25 @@ export function startWindowMessage(state: StartWindowState): string | null {
 export function startDeniedMessage(): string {
   return translate("Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 10 minutes qui suivent");
 }
+
+/** Le bandeau rouge « lancez l'appel » apparaît à partir de 60 minutes avant l'heure prévue. */
+export const START_BANNER_LEAD_MS = 60 * 60_000;
+
+/**
+ * Bandeau rouge côté médecin avant la consultation suivante ([MOB-1611-1]) : il rappelle qu'un appel non lancé
+ * dans les 10 minutes qui suivent l'heure prévue annule la consultation (médecin absent). Visible de 60 minutes
+ * avant l'heure prévue jusqu'à la fin de la fenêtre ; `null` ensuite, ou si l'appel est déjà lancé.
+ */
+export function startReminderBanner(state: StartWindowState, scheduledAt: string | null | undefined): string | null {
+  const show =
+    state.phase === 'open' || (state.phase === 'before' && state.msUntilStart <= START_BANNER_LEAD_MS);
+  if (!show) return null;
+  const d = new Date(typeof scheduledAt === 'string' ? scheduledAt : NaN);
+  const time = Number.isNaN(d.getTime())
+    ? ''
+    : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return translate(
+    "Consultation à {time} : lancez l'appel dans les 10 minutes qui suivent l'heure prévue, sinon elle sera annulée (médecin absent) et le patient remboursé en avoir.",
+    { time },
+  );
+}

@@ -24,7 +24,7 @@ import {
   getValidationStatus,
 } from '@/services/providerApi';
 import { launchProviderCall, useStartWindow } from '@/hooks/useStartWindow';
-import { canStartNow, startWindowMessage } from '@/utils/startWindow';
+import { canStartNow, startReminderBanner, startWindowMessage } from '@/utils/startWindow';
 import { buildAlerts, countdownLabel } from '@/services/dashboardMetrics';
 import { currentProvider } from '@/data/mockProvider';
 import { formatAmountInCurrency, isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
@@ -128,6 +128,7 @@ export default function ProviderDashboard() {
   const nextWin = useStartWindow(next?.scheduledAt, next?.rawStatus);
   const nextStartable = canStartNow(nextWin);
   const nextWinMessage = startWindowMessage(nextWin);
+  const nextBanner = startReminderBanner(nextWin, next?.scheduledAt);
   const maxRevenue = Math.max(1, ...(ov?.revenueSeries.map((m) => m.amount) ?? [1]));
   const subtitle = !ov
     ? ''
@@ -208,6 +209,18 @@ export default function ProviderDashboard() {
         {next && (
           <View className="px-5 mb-5">
             <SectionTitle>{t('Prochaine consultation')}</SectionTitle>
+            {!!nextBanner && (
+              <View
+                accessibilityRole="alert"
+                className="rounded-2xl px-4 py-3 mb-2 flex-row items-center"
+                style={{ backgroundColor: ALERT_STYLE.danger.bg }}
+              >
+                <AlertTriangle size={18} color={ALERT_STYLE.danger.fg} />
+                <Text className="flex-1 font-sans-semibold text-sm ml-3" style={{ color: ALERT_STYLE.danger.fg }}>
+                  {nextBanner}
+                </Text>
+              </View>
+            )}
             <Card>
               <View className="flex-row items-center">
                 <Avatar initials={next.patient.initials} size={46} tone="light" />
