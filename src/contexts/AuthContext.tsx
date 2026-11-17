@@ -28,6 +28,7 @@ import {
   shouldDropOnRestore,
 } from '@/services/loginCredentialsFlag';
 import { getServiceTypeCatalog } from '@/services/specializationCatalog';
+import { completePhoneIdentity, type PhoneIdentityInput } from '@/services/patientIdentity';
 import { isSessionExpiry, onSessionExpired, reportSessionExpiry } from '@/services/sessionExpiry';
 import { createSessionExpiryTracker } from '@/services/sessionExpiryTracker';
 import { COUNTRIES } from '@/config/countries';
@@ -120,6 +121,11 @@ interface AuthContextType {
   ) => Promise<{ user: User; outcome: LoginCredentialsOutcome }>;
   /** Abandon de l'étape e-mail + mot de passe : la session créée par l'OTP est fermée. */
   cancelLoginCredentials: () => void;
+  /**
+   * Identité d'un patient inscrit par téléphone (nom, genre, date de naissance 18 ans, ville, commune).
+   * `userId` = compte issu du code (la session existe déjà, même si l'app n'est pas encore ouverte).
+   */
+  completePatientIdentity: (userId: string, input: PhoneIdentityInput) => Promise<void>;
   /** Connexion sociale (Google, Microsoft/Outlook…). Renvoie l'utilisateur connecté. */
   signInWithProvider: (provider: OAuthProvider) => Promise<User | null>;
   /** Envoie un email de réinitialisation de mot de passe. */
@@ -637,6 +643,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const completePatientIdentity = async (userId: string, input: PhoneIdentityInput) => {
+    await completePhoneIdentity(userId, input);
+    setUser((u) =>
+      u && u.id === userId ? { ...u, firstName: input.firstName.trim(), lastName: input.lastName.trim() } : u,
+    );
+  };
+
   const sendPasswordReset = async (email: string) => {
     if (!supabaseConfigured || !supabase) {
       await new Promise((r) => setTimeout(r, 400));
@@ -818,6 +831,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyPhoneOtp,
       saveLoginCredentials,
       cancelLoginCredentials,
+      completePatientIdentity,
       signInWithProvider,
       sendPasswordReset,
       registerPatient,

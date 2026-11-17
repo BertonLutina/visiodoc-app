@@ -661,4 +661,7 @@ export const en: Record<string, string> = {
   "Vous allez recevoir le code par {channel} ; il est valable {minutes} minutes.": "You will receive the code via {channel}; it is valid for {minutes} minutes.",
   "Votre code de confirmation vous a été envoyé": "Your confirmation code has been sent",
   "Votre code de confirmation vous a été envoyé par {channel}": "Your confirmation code has been sent via {channel}",
+  "Le nom et le prénom sont obligatoires.": "Last name and first name are required.",
+  "Votre identité": "Your identity",
+  "Pour finaliser votre inscription, renseignez votre identité.": "To finish signing up, please enter your identity.",
 };

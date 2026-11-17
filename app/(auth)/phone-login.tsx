@@ -6,9 +6,14 @@ import { ChevronLeft, Smartphone } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { CountryPicker } from '@/components/CountryPicker';
 import { PasswordField } from '@/components/PasswordField';
+import { GenderField } from '@/components/GenderField';
+import { DateField } from '@/components/DateField';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
 import { toE164 } from '@/utils/phone';
+import { birthDateIssue, birthDateMessage, latestBirthDate, MAX_PLACE_LENGTH, parseIsoDate } from '@/utils/birthDate';
+import { needsPhoneIdentity } from '@/services/patientIdentity';
+import type { Gender } from '@/services/registration';
 import { authErrorMessage, providerRefusal, providerRefusalMessage } from '@/utils/authError';
 import { providerHomeHref } from '@/services/accessPolicy';
 import {
@@ -21,16 +26,33 @@ import { fetchOtpDeliveryInfo, otpIntroText, otpSentText, sendCodeLabel, type Ot
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
+/** Borne haute du sélecteur : aujourd'hui moins 18 ans. */
+const maxBirthDate = (): Date => {
+  const d = parseIsoDate(latestBirthDate());
+  return d ? new Date(d.y, d.m - 1, d.d) : new Date();
+};
+
 export default function PhoneLogin() {
   const t = useT();
-  const { sendPhoneOtp, verifyPhoneOtp, saveLoginCredentials, cancelLoginCredentials, loading } = useAuth();
+  const { sendPhoneOtp, verifyPhoneOtp, saveLoginCredentials, cancelLoginCredentials, completePatientIdentity, loading } =
+    useAuth();
   const { role } = useLocalSearchParams<{ role?: string }>();
   const isProvider = role === 'provider';
   const tint = isProvider ? colors.accent : colors.primary;
   const tileBg = isProvider ? 'bg-accent-50' : 'bg-primary-50';
   const variant = isProvider ? 'accent' : 'primary';
 
-  const [step, setStep] = useState<'phone' | 'code' | 'credentials'>('phone');
+  const [step, setStep] = useState<'phone' | 'code' | 'identity' | 'credentials'>('phone');
+  // Étape d'identité (patient sans nom) : compte issu du code, et suite à donner après l'enregistrement.
+  const [identityUserId, setIdentityUserId] = useState<string | null>(null);
+  const [afterIdentity, setAfterIdentity] = useState<'credentials' | 'home'>('home');
+  const [identityFirstName, setIdentityFirstName] = useState('');
+  const [identityLastName, setIdentityLastName] = useState('');
+  // Le genre n'est demandé qu'ici : il est repris dans le profil, jamais redemandé.
+  const [gender, setGender] = useState<Gender | null>(null);
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [city, setCity] = useState('');
+  const [commune, setCommune] = useState('');
   const [countryCode, setCountryCode] = useState('CD');
   const [local, setLocal] = useState('');
   const [code, setCode] = useState('');
@@ -105,6 +127,14 @@ export default function PhoneLogin() {
     setErrorMsg(null);
     try {
       const result = await verifyPhoneOtp(fullPhone, code);
+      // MOB-1211-1 : un patient sans identité renseigne d'abord nom, genre, date de naissance (18 ans), ville, commune.
+      if (!isProvider && result.user && needsPhoneIdentity(result.user)) {
+        setCode('');
+        setIdentityUserId(result.user.id);
+        setAfterIdentity(result.needsLoginCredentials ? 'credentials' : 'home');
+        setStep('identity');
+        return;
+      }
       if (result.needsLoginCredentials) {
         setCode('');
         setStep('credentials');
@@ -116,9 +146,37 @@ export default function PhoneLogin() {
     }
   };
 
+  const onSaveIdentity = async () => {
+    setErrorMsg(null);
+    if (!identityUserId) return;
+    const dobIssue = birthDateIssue(dateOfBirth);
+    if (dobIssue) {
+      setErrorMsg(birthDateMessage(dobIssue));
+      return;
+    }
+    setSaving(true);
+    try {
+      await completePatientIdentity(identityUserId, {
+        firstName: identityFirstName,
+        lastName: identityLastName,
+        gender,
+        dateOfBirth,
+        city,
+        commune,
+      });
+      if (afterIdentity === 'credentials') setStep('credentials');
+      else router.replace('/(patient)');
+    } catch (e: any) {
+      setErrorMsg(authErrorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const goBackToPhone = () => {
     cancelLoginCredentials();
     clearCredentials();
+    setIdentityUserId(null);
     setCode('');
     setErrorMsg(null);
     setStep('phone');
@@ -158,7 +216,9 @@ export default function PhoneLogin() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <View className="flex-row items-center px-5 pt-2 pb-2">
         <Pressable
-          onPress={() => (step === 'credentials' ? goBackToPhone() : step === 'code' ? setStep('phone') : router.back())}
+          onPress={() =>
+            step === 'credentials' || step === 'identity' ? goBackToPhone() : step === 'code' ? setStep('phone') : router.back()
+          }
           className="p-1 mr-2"
         >
           <ChevronLeft color={colors.ink} size={26} />
@@ -172,14 +232,22 @@ export default function PhoneLogin() {
             <Smartphone color={tint} size={28} />
           </View>
           <ScreenTitle center>
-            {step === 'phone' ? t('Votre numéro') : step === 'code' ? t('Entrez le code') : t('Vos identifiants de connexion')}
+            {step === 'phone'
+              ? t('Votre numéro')
+              : step === 'code'
+                ? t('Entrez le code')
+                : step === 'identity'
+                  ? t('Votre identité')
+                  : t('Vos identifiants de connexion')}
           </ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
             {step === 'phone'
               ? otpIntroText(otpInfo)
               : step === 'code'
                 ? otpSentText(otpInfo)
-                : t("Ajoutez un e-mail et un mot de passe pour pouvoir aussi vous connecter par e-mail.")}
+                : step === 'identity'
+                  ? t('Pour finaliser votre inscription, renseignez votre identité.')
+                  : t("Ajoutez un e-mail et un mot de passe pour pouvoir aussi vous connecter par e-mail.")}
           </Text>
           {step === 'code' ? (
             <Text className="font-sans text-sm text-muted mt-1 text-center">
@@ -240,6 +308,45 @@ export default function PhoneLogin() {
                     : t('Renvoyer le code')}
               </Text>
             </Pressable>
+          </>
+        ) : step === 'identity' ? (
+          <>
+            <Field label={t('Prénom')} placeholder="Marie" value={identityFirstName} onChangeText={setIdentityFirstName} />
+            <Field label={t('Nom')} placeholder="Konaté" value={identityLastName} onChangeText={setIdentityLastName} />
+            <GenderField value={gender} onChange={setGender} />
+            <DateField
+              label={t('Date de naissance')}
+              value={dateOfBirth}
+              onChange={setDateOfBirth}
+              placeholder={t('Choisir une date')}
+              maximumDate={maxBirthDate()}
+            />
+            <Field
+              label={t('Ville (facultatif)')}
+              placeholder="Kinshasa"
+              maxLength={MAX_PLACE_LENGTH}
+              value={city}
+              onChangeText={setCity}
+            />
+            <Field
+              label={t('Commune (facultatif)')}
+              placeholder="Gombe"
+              maxLength={MAX_PLACE_LENGTH}
+              value={commune}
+              onChangeText={setCommune}
+            />
+            {errorMsg ? (
+              <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
+                <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
+              </View>
+            ) : null}
+            <Button
+              label={t('Enregistrer et continuer')}
+              variant={variant}
+              loading={saving}
+              disabled={!identityFirstName.trim() || !identityLastName.trim() || !gender || !dateOfBirth}
+              onPress={onSaveIdentity}
+            />
           </>
         ) : (
           <>

@@ -661,4 +661,7 @@ export const sw: Record<string, string> = {
   "Vous allez recevoir le code par {channel} ; il est valable {minutes} minutes.": "Utapokea msimbo kupitia {channel}; unatumika kwa dakika {minutes}.",
   "Votre code de confirmation vous a été envoyé": "Msimbo wako wa uthibitisho umetumwa",
   "Votre code de confirmation vous a été envoyé par {channel}": "Msimbo wako wa uthibitisho umetumwa kupitia {channel}",
+  "Le nom et le prénom sont obligatoires.": "Jina la ukoo na jina la kwanza vinahitajika.",
+  "Votre identité": "Utambulisho wako",
+  "Pour finaliser votre inscription, renseignez votre identité.": "Ili kukamilisha usajili, weka utambulisho wako.",
 };

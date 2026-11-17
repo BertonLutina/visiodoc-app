@@ -661,4 +661,7 @@ export const ln: Record<string, string> = {
   "Vous allez recevoir le code par {channel} ; il est valable {minutes} minutes.": "Okozwa kode na {channel} ; ekosalela minati {minutes}.",
   "Votre code de confirmation vous a été envoyé": "Kode na yo ya kondimisa etindami",
   "Votre code de confirmation vous a été envoyé par {channel}": "Kode na yo ya kondimisa etindami na {channel}",
+  "Le nom et le prénom sont obligatoires.": "Kombo ya libota mpe kombo ya liboso esengeli.",
+  "Votre identité": "Bopesi na yo",
+  "Pour finaliser votre inscription, renseignez votre identité.": "Mpo na kosukisa komikomisa, tia bopesi na yo.",
 };
