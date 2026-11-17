@@ -237,6 +237,7 @@ export const ln: Record<string, string> = {
   "Masculin": "Mobali",
   "Féminin": "Mwasi",
   "Ville": "Engumba",
+  "Ton profil n'a pas pu être enregistré. Réessaie dans un instant.": "Profil na yo ekoki kobombama te. Meka lisusu mwa moke.",
   "Choisis ton genre : Masculin ou Féminin.": "Pona bosolo na yo: Mobali to Mwasi.",
   "Le mot de passe doit contenir au moins 10 caractères.": "Mot de passe esengeli kozala na bokoma 10 ata.",
   "Le mot de passe doit contenir au moins une lettre et un chiffre.": "Mot de passe esengeli kozala na ata elembo moko ya alfabe mpe motango moko.",

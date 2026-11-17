@@ -53,7 +53,7 @@ export async function completePhoneIdentity(userId: string, input: PhoneIdentity
   if (issue) throw new Error(issue);
   if (!supabaseConfigured || !supabase) return;
 
-  const { error: userError } = await supabase
+  const { data: updatedUsers, error: userError } = await supabase
     .from('users')
     .update({
       first_name: input.firstName.trim(),
@@ -61,8 +61,13 @@ export async function completePhoneIdentity(userId: string, input: PhoneIdentity
       gender: input.gender,
       identity_completed_at: new Date().toISOString(),
     })
-    .eq('id', userId);
+    .eq('id', userId)
+    .select('id');
   if (userError) throw userError;
+  // Un update qui ne touche aucune ligne ne renvoie pas d'erreur : ne jamais conclure à un succès silencieux.
+  if (!updatedUsers || updatedUsers.length === 0) {
+    throw new Error(translate("Ton profil n'a pas pu être enregistré. Réessaie dans un instant."));
+  }
 
   const { error: patientError } = await supabase
     .from('patients')

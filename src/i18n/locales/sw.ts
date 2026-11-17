@@ -237,6 +237,7 @@ export const sw: Record<string, string> = {
   "Masculin": "Mwanaume",
   "Féminin": "Mwanamke",
   "Ville": "Jiji",
+  "Ton profil n'a pas pu être enregistré. Réessaie dans un instant.": "Wasifu wako haukuweza kuhifadhiwa. Jaribu tena baada ya muda mfupi.",
   "Choisis ton genre : Masculin ou Féminin.": "Chagua jinsia yako: Mwanaume au Mwanamke.",
   "Le mot de passe doit contenir au moins 10 caractères.": "Nenosiri lazima liwe na angalau herufi 10.",
   "Le mot de passe doit contenir au moins une lettre et un chiffre.": "Nenosiri lazima liwe na angalau herufi moja na tarakimu moja.",

@@ -237,6 +237,7 @@ export const en: Record<string, string> = {
   "Masculin": "Male",
   "Féminin": "Female",
   "Ville": "City",
+  "Ton profil n'a pas pu être enregistré. Réessaie dans un instant.": "Your profile could not be saved. Please try again in a moment.",
   "Choisis ton genre : Masculin ou Féminin.": "Choose your gender: Male or Female.",
   "Le mot de passe doit contenir au moins 10 caractères.": "The password must contain at least 10 characters.",
   "Le mot de passe doit contenir au moins une lettre et un chiffre.": "The password must contain at least one letter and one digit.",

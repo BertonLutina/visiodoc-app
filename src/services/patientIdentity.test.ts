@@ -9,6 +9,7 @@ import { setCurrentLangCode } from '@/i18n/core';
 
 const mockUpdate = jest.fn();
 const mockEq = jest.fn();
+const mockSelect = jest.fn();
 const mockUpsert = jest.fn();
 const mockRpc = jest.fn();
 const mockFrom = jest.fn();
@@ -31,8 +32,9 @@ const input: PhoneIdentityInput = {
 
 beforeEach(() => {
   setCurrentLangCode('fr');
-  [mockUpdate, mockEq, mockUpsert, mockRpc, mockFrom].forEach((m) => m.mockReset());
-  mockEq.mockResolvedValue({ error: null });
+  [mockUpdate, mockEq, mockSelect, mockUpsert, mockRpc, mockFrom].forEach((m) => m.mockReset());
+  mockSelect.mockResolvedValue({ data: [{ id: 'u1' }], error: null });
+  mockEq.mockReturnValue({ select: mockSelect });
   mockUpdate.mockReturnValue({ eq: mockEq });
   mockUpsert.mockResolvedValue({ error: null });
   mockRpc.mockResolvedValue({ data: null, error: null });
@@ -94,5 +96,15 @@ describe('completePhoneIdentity', () => {
 describe('buildPatientsRow', () => {
   it('maps empty city and commune to null', () => {
     expect(buildPatientsRow('u', { ...input, city: '', commune: undefined })).toMatchObject({ city: null, commune: null });
+  });
+});
+
+describe('completePhoneIdentity : aucune ligne users mise à jour', () => {
+  it('refuse un succès silencieux quand la mise à jour ne touche aucune ligne', async () => {
+    mockSelect.mockResolvedValue({ data: [], error: null });
+    await expect(completePhoneIdentity('user-1', input)).rejects.toThrow(
+      "Ton profil n'a pas pu être enregistré. Réessaie dans un instant.",
+    );
+    expect(mockUpsert).not.toHaveBeenCalled();
   });
 });
