@@ -1,6 +1,6 @@
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 import { translate } from '@/i18n/core';
-import { isGender, type Gender } from '@/services/registration';
+import { isGender, mapCountryNotOpenError, type Gender } from '@/services/registration';
 import { countryUsesPostnom } from '@/config/countries';
 import { identityNamesIssue } from '@/utils/identityNames';
 import { birthDateIssue, birthDateMessage, normalizePlace } from '@/utils/birthDate';
@@ -74,7 +74,7 @@ export async function completePhoneIdentity(userId: string, input: PhoneIdentity
     })
     .eq('id', userId)
     .select('id');
-  if (userError) throw userError;
+  if (userError) throw mapCountryNotOpenError(userError);
   // Un update qui ne touche aucune ligne ne renvoie pas d'erreur : ne jamais conclure à un succès silencieux.
   if (!updatedUsers || updatedUsers.length === 0) {
     throw new Error(translate("Ton profil n'a pas pu être enregistré. Réessaie dans un instant."));
@@ -88,7 +88,7 @@ export async function completePhoneIdentity(userId: string, input: PhoneIdentity
     if (/PATIENT_MUST_BE_ADULT/.test(`${patientError.message ?? ''} ${patientError.details ?? ''}`)) {
       throw new Error(translate('Vous devez avoir au moins 18 ans révolus pour vous inscrire.'));
     }
-    throw patientError;
+    throw mapCountryNotOpenError(patientError);
   }
 
   await recordPlacesBestEffort(input);

@@ -149,3 +149,18 @@ describe('completePhoneIdentity : patient mineur refusé par la base (MOB-1711-3
     );
   });
 });
+
+describe('completePhoneIdentity : pays non ouvert (COUNTRY_NOT_OPEN, 23514)', () => {
+  const message = "Visiodoc n'est pas encore disponible dans ce pays.";
+
+  it('traduit COUNTRY_NOT_OPEN renvoyé par la mise à jour de users', async () => {
+    mockSelect.mockResolvedValue({ data: null, error: { code: '23514', message: 'COUNTRY_NOT_OPEN', details: null } });
+    await expect(completePhoneIdentity('user-1', input)).rejects.toThrow(message);
+    expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  it('traduit COUNTRY_NOT_OPEN renvoyé par la ligne patients', async () => {
+    mockUpsert.mockResolvedValue({ error: { code: '23514', message: 'COUNTRY_NOT_OPEN', details: null } });
+    await expect(completePhoneIdentity('user-1', input)).rejects.toThrow(message);
+  });
+});

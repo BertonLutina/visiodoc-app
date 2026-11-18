@@ -161,6 +161,15 @@ export const FIRST_OR_POSTNOM_SERVER_MESSAGE = 'Le prénom ou le post-nom est ob
 /** 400 du serveur (et erreur base `COUNTRY_NOT_OPEN`) : pays non ouvert aux inscriptions. */
 export const COUNTRY_NOT_OPEN_MESSAGE = "Visiodoc n'est pas encore disponible dans ce pays.";
 
+/** Erreur base `COUNTRY_NOT_OPEN` (SQLSTATE 23514, trigger sur `users`) → message traduit, sinon l'erreur telle quelle. */
+export function mapCountryNotOpenError<E>(error: E): E | Error {
+  const e = error as { message?: string; details?: string } | null | undefined;
+  if (/COUNTRY_NOT_OPEN/.test(`${e?.message ?? ''} ${e?.details ?? ''}`)) {
+    return new Error(translate(COUNTRY_NOT_OPEN_MESSAGE));
+  }
+  return error;
+}
+
 const kindForStatus = (status: number | undefined): RegisterPatientErrorKind => {
   if (status === 400 || status === 422) return 'validation';
   if (status === 409) return 'conflict';

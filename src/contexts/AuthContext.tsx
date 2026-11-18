@@ -28,6 +28,7 @@ import {
   shouldDropOnRestore,
 } from '@/services/loginCredentialsFlag';
 import { getServiceTypeCatalog } from '@/services/specializationCatalog';
+import { mapCountryNotOpenError } from '@/services/registration';
 import { completePhoneIdentity, type PhoneIdentityInput } from '@/services/patientIdentity';
 import { isSessionExpiry, onSessionExpired, reportSessionExpiry } from '@/services/sessionExpiry';
 import { createSessionExpiryTracker } from '@/services/sessionExpiryTracker';
@@ -757,7 +758,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (partial.preferredLanguage !== undefined) patch.preferred_language = partial.preferredLanguage || null;
         if (Object.keys(patch).length) {
           const { error } = await supabase.from('users').update(patch).eq('id', user.id);
-          if (error) throw error;
+          if (error) throw mapCountryNotOpenError(error);
         }
       }
       setUser((u) => (u ? { ...u, ...partial } : u));
