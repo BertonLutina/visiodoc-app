@@ -4,6 +4,13 @@ import { AFRICAN_COUNTRIES, type AfricanCountry } from '@/config/africanCountrie
 /** Repli (lecture impossible, backend non configuré) : uniquement la RDC, jamais toute l'Afrique. */
 export const FALLBACK_COUNTRY_CODE = 'CD';
 
+/**
+ * Pays OUVERTS aux inscriptions (Visiodoc du compte).
+ * TODO(countries.signup_open) : demande en cours côté serveur. Dès que la colonne existe, la lire
+ * (select('code, signup_open'), filtrer signup_open = true) et supprimer cette constante locale.
+ */
+export const SIGNUP_OPEN_COUNTRY_CODES: readonly string[] = ['CD'];
+
 let cache: string[] | null = null;
 let inflight: Promise<string[]> | null = null;
 
@@ -11,6 +18,15 @@ let inflight: Promise<string[]> | null = null;
 export function knownActiveCountries(activeCodes: string[]): AfricanCountry[] {
   const set = new Set(activeCodes.map((c) => c.toUpperCase()));
   return AFRICAN_COUNTRIES.filter((c) => set.has(c.code));
+}
+
+/** Pays proposables pour le Visiodoc du compte : actifs en base ∩ connus ∩ ouverts aux inscriptions. */
+export function openSignupCountries(
+  activeCodes: string[],
+  openCodes: readonly string[] = SIGNUP_OPEN_COUNTRY_CODES,
+): AfricanCountry[] {
+  const open = new Set(openCodes.map((c) => c.toUpperCase()));
+  return knownActiveCountries(activeCodes).filter((c) => open.has(c.code));
 }
 
 export function fallbackCountries(): AfricanCountry[] {
@@ -43,9 +59,9 @@ export async function fetchActiveCountryCodes(): Promise<string[]> {
   return inflight;
 }
 
-/** Pays proposables : actifs ∩ connus ; repli RDC si vide ou en erreur. */
+/** Pays proposables (Visiodoc du compte) : actifs ∩ connus ∩ ouverts ; repli RDC si vide ou en erreur. */
 export async function getActiveCountries(): Promise<AfricanCountry[]> {
-  const list = knownActiveCountries(await fetchActiveCountryCodes());
+  const list = openSignupCountries(await fetchActiveCountryCodes());
   return list.length > 0 ? list : fallbackCountries();
 }
 

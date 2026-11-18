@@ -32,6 +32,22 @@ export function CountryPicker({ label, value, onSelect }: Props) {
     setQuery('');
   };
 
+  // Un seul Visiodoc ouvert : pas de sélecteur inutile, simple affichage en lecture seule.
+  if (countries.length <= 1) {
+    return (
+      <View className="mb-4" testID="country-readonly">
+        {label ? <Text className="text-sm font-sans-semibold text-ink mb-2">{label}</Text> : null}
+        <View
+          className="flex-row items-center rounded-2xl px-4 py-3.5 bg-surface"
+          style={{ borderWidth: 1, borderColor: colors.line }}
+        >
+          <Text className="text-xl mr-3">{selected.flag}</Text>
+          <Text className="flex-1 text-base text-ink font-sans-medium">{selected.name}</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View className="mb-4">
       {label ? <Text className="text-sm font-sans-semibold text-ink mb-2">{label}</Text> : null}

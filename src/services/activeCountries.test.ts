@@ -2,6 +2,8 @@ import {
   fallbackCountries,
   getActiveCountries,
   knownActiveCountries,
+  openSignupCountries,
+  SIGNUP_OPEN_COUNTRY_CODES,
   resetActiveCountriesCache,
 } from './activeCountries';
 
@@ -57,6 +59,19 @@ describe('activeCountries', () => {
     mockResult.mockResolvedValueOnce({ data: null, error: { message: 'x' } });
     await getActiveCountries();
     mockResult.mockResolvedValueOnce({ data: [{ code: 'CD' }, { code: 'CM' }], error: null });
-    expect((await getActiveCountries()).length).toBe(2);
+    expect((await getActiveCountries()).length).toBe(1);
+  });
+
+  it('Visiodoc list = open countries only (CM active but not open is absent)', async () => {
+    expect(SIGNUP_OPEN_COUNTRY_CODES).toEqual(['CD']);
+    expect(openSignupCountries(['CD', 'CM']).map((c) => c.code)).toEqual(['CD']);
+    expect(openSignupCountries(['CM'], ['CD', 'CM']).map((c) => c.code)).toEqual(['CM']);
+    mockResult.mockResolvedValue({ data: [{ code: 'CD' }, { code: 'CM' }], error: null });
+    expect((await getActiveCountries()).map((c) => c.code)).toEqual(['CD']);
+  });
+
+  it('falls back to DRC when no open country is active', async () => {
+    mockResult.mockResolvedValue({ data: [{ code: 'CM' }], error: null });
+    expect((await getActiveCountries()).map((c) => c.code)).toEqual(['CD']);
   });
 });
