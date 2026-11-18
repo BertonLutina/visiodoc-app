@@ -137,20 +137,25 @@ export async function searchCommunes(
 }
 
 /**
- * Enregistre une saisie libre inconnue via les RPC serveur (réservées aux utilisateurs connectés,
- * comme sur le web). Au mieux : n'échoue jamais, ne bloque jamais l'écran.
+ * Enregistre une saisie libre inconnue via les RPC serveur `record_city_if_not_exists` puis
+ * `record_commune_if_not_exists` (commune rattachée à l'id de la ville renvoyé), comme `authProvisioning` du web.
+ * Les RPC sont réservées aux utilisateurs connectés : à appeler une fois la session ouverte. L'inscription
+ * par e-mail n'a pas de session, c'est l'Edge Function `register-patient` qui enregistre côté serveur.
+ * Un nom choisi dans les propositions ne déclenche rien. Au mieux : n'échoue jamais.
  */
 export async function recordPlaceIfNew(
   city: string,
   commune: string,
   countryCode: string = DEFAULT_COUNTRY,
 ): Promise<void> {
-  const c = city.trim();
+  const c = city.replace(/\s+/g, ' ').trim();
   if (!c || !supabase) return;
   try {
-    const known = (await loadCities(countryCode)).some((x) => normalizeText(x.name) === normalizeText(c));
-    let cityId: string | null = null;
-    if (!known) {
+    const known = (await loadCities(countryCode)).find((x) => normalizeText(x.name) === normalizeText(c));
+    let cityId: string;
+    if (known) {
+      cityId = known.id;
+    } else {
       const { data, error } = await supabase.rpc('record_city_if_not_exists', {
         p_name: c,
         p_country_code: countryCode,
@@ -158,13 +163,11 @@ export async function recordPlaceIfNew(
       if (error || !data) return;
       cityId = data as string;
       cityCache.delete(countryCode);
-    } else {
-      cityId = (await loadCities(countryCode)).find((x) => normalizeText(x.name) === normalizeText(c))!.id;
     }
-    const com = commune.trim();
+    const com = commune.replace(/\s+/g, ' ').trim();
     if (!com || cityId.startsWith('static-city-')) return;
-    const knownCom = (communeCache.get(cityId) ?? []).some((x) => normalizeText(x.name) === normalizeText(com));
-    if (knownCom) return;
+    const communes = known ? await loadCommunes({ id: cityId, name: c }) : [];
+    if (communes.some((x) => normalizeText(x.name) === normalizeText(com))) return;
     await supabase.rpc('record_commune_if_not_exists', { p_city_id: cityId, p_name: com });
     communeCache.delete(cityId);
   } catch {

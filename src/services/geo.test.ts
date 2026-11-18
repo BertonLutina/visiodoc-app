@@ -17,6 +17,7 @@ jest.mock('@/lib/supabase', () => {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockResult.mockReset();
   resetGeoCache();
   mockRpc.mockResolvedValue({ data: 'new-id', error: null });
 });
@@ -71,6 +72,21 @@ describe('recordPlaceIfNew', () => {
     await recordPlaceIfNew('Nouvelleville', 'Centre', 'CD');
     expect(mockRpc).toHaveBeenCalledWith('record_city_if_not_exists', { p_name: 'Nouvelleville', p_country_code: 'CD' });
     expect(mockRpc).toHaveBeenCalledWith('record_commune_if_not_exists', { p_city_id: 'new-id', p_name: 'Centre' });
+  });
+  it('does nothing for a city and commune chosen from the lists', async () => {
+    mockResult.mockResolvedValue({ data: rows, error: null });
+    await recordPlaceIfNew('  lubumbashi ', '', 'CD');
+    expect(mockRpc).not.toHaveBeenCalled();
+    resetGeoCache();
+    mockResult.mockResolvedValueOnce({ data: rows, error: null }).mockResolvedValueOnce({ data: [{ id: 'k1', name: 'Gombe' }], error: null });
+    await recordPlaceIfNew('Lubumbashi', 'GOMBE', 'CD');
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+  it('records only the commune when the city is known but the commune is free', async () => {
+    mockResult.mockResolvedValueOnce({ data: rows, error: null }).mockResolvedValueOnce({ data: [{ id: 'k1', name: 'Gombe' }], error: null });
+    await recordPlaceIfNew('Lubumbashi', 'Nouvelle  commune', 'CD');
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockRpc).toHaveBeenCalledWith('record_commune_if_not_exists', { p_city_id: 'c2', p_name: 'Nouvelle commune' });
   });
   it('never throws on RPC failure', async () => {
     mockResult.mockResolvedValue({ data: rows, error: null });
