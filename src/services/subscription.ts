@@ -121,7 +121,9 @@ export async function createPendingSubscription(input: {
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message ?? translate("Impossible de créer l'abonnement."));
+    // Jamais le texte technique de la base à l'écran : on journalise le code, on affiche un message traduit.
+    if (error) console.warn('[subscription] création refusée', error.code ?? 'unknown');
+    throw new Error(translate("Impossible de créer l'abonnement."));
   }
   return { id: (data as { id: string }).id };
 }
