@@ -679,4 +679,7 @@ export const sw: Record<string, string> = {
   "Photo refusée": "Picha imekataliwa",
   "Motif : {note}": "Sababu: {note}",
   "Choisissez d'abord une ville.": "Chagua jiji kwanza.",
+  "Indicatif : {name}. Appuyez pour changer.": "Msimbo wa nchi: {name}. Gusa kubadilisha.",
+  "Choisir un indicatif": "Chagua msimbo wa nchi",
+  "Visiodoc du compte": "Visiodoc ya akaunti",
 };

@@ -381,6 +381,13 @@ describe('registerPatientAccount', () => {
     expect(mockInvoke.mock.calls[0][1].body.countryId).toBe(NE_UUID);
   });
 
+  it('the phone dialling code does not change the countryId sent (Belgian number, DRC Visiodoc)', async () => {
+    await registerPatientAccount({ ...patientInput, countryCode: 'CD', phone: '+32475123456' });
+    const body = mockInvoke.mock.calls[0][1].body;
+    expect(body.phone).toBe('+32475123456');
+    expect(body.countryId).toBe(CD_UUID);
+  });
+
   it('omits countryId when the chosen code has no country UUID in the app config', async () => {
     await registerPatientAccount({ ...patientInput, countryCode: 'SN' });
     const body = mockInvoke.mock.calls[0][1].body;

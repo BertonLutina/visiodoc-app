@@ -679,4 +679,7 @@ export const en: Record<string, string> = {
   "Photo refusée": "Photo rejected",
   "Motif : {note}": "Reason: {note}",
   "Choisissez d'abord une ville.": "Choose a city first.",
+  "Indicatif : {name}. Appuyez pour changer.": "Dialling code: {name}. Tap to change.",
+  "Choisir un indicatif": "Choose a dialling code",
+  "Visiodoc du compte": "Account Visiodoc",
 };

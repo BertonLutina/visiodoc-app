@@ -4,8 +4,8 @@ import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { CountryPicker } from '@/components/CountryPicker';
+import { PhoneField } from '@/components/PhoneField';
 import { CityCommuneFields } from '@/components/CityCommuneFields';
-import { getAfricanCountry } from '@/config/africanCountries';
 import { countryUsesPostnom } from '@/config/countries';
 import { identityNamesComplete } from '@/utils/identityNames';
 import { PasswordField } from '@/components/PasswordField';
@@ -37,7 +37,6 @@ export default function RegisterPatient() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // Renseigné après un 200 `requiresEmailConfirmation` : on affiche « Vérifie ta boîte e-mail ».
   const [sent, setSent] = useState<{ email: string; at: number } | null>(null);
-  const country = getAfricanCountry(countryCode);
   const usesPostnom = countryUsesPostnom(countryCode);
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -123,13 +122,7 @@ export default function RegisterPatient() {
           value={form.email}
           onChangeText={set('email')}
         />
-        <Field
-          label={t('Téléphone')}
-          placeholder={`${country?.dialCode ?? ''} 81 234 5678`}
-          keyboardType="phone-pad"
-          value={form.phone}
-          onChangeText={set('phone')}
-        />
+        <PhoneField label={t('Téléphone')} onChange={set('phone')} />
         <GenderField value={gender} onChange={setGender} />
         <DateField
           label={t('Date de naissance')}
@@ -140,7 +133,7 @@ export default function RegisterPatient() {
           startOnYearSelection
         />
         <PasswordField label={t('Mot de passe')} value={form.password} onChangeText={set('password')} />
-        <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
+        <CountryPicker label={t('Visiodoc du compte')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
         <CityCommuneFields
           city={form.city}
           commune={form.commune}

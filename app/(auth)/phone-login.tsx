@@ -4,15 +4,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Smartphone } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
-import { CountryPicker } from '@/components/CountryPicker';
+import { PhoneField } from '@/components/PhoneField';
+import { splitE164 } from '@/data/dialCodes';
 import { CityCommuneFields } from '@/components/CityCommuneFields';
 import { recordPlaceIfNew } from '@/services/geo';
 import { PasswordField } from '@/components/PasswordField';
 import { GenderField } from '@/components/GenderField';
 import { DateField } from '@/components/DateField';
-import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
-import { toE164 } from '@/utils/phone';
 import { birthDateIssue, birthDateMessage } from '@/utils/birthDate';
 import { needsPhoneIdentity, PHONE_IDENTITY_COUNTRY_CODE } from '@/services/patientIdentity';
 import { countryUsesPostnom } from '@/config/countries';
@@ -53,8 +52,9 @@ export default function PhoneLogin() {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [city, setCity] = useState('');
   const [commune, setCommune] = useState('');
-  const [countryCode, setCountryCode] = useState('CD');
-  const [local, setLocal] = useState('');
+  // Connexion : aucun choix de Visiodoc. Pays de l'étape d'identité d'une première inscription : RDC (inchangé).
+  const countryCode = PHONE_IDENTITY_COUNTRY_CODE;
+  const [fullPhone, setFullPhone] = useState('');
   const [code, setCode] = useState('');
   const [sending, setSending] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -78,8 +78,6 @@ export default function PhoneLogin() {
     };
   }, []);
 
-  const country = getAfricanCountry(countryCode);
-  const fullPhone = toE164(local, country?.dialCode) ?? '';
   const remaining = codeCooldownRemaining(fullPhone, now);
 
   useEffect(() => {
@@ -99,7 +97,8 @@ export default function PhoneLogin() {
     setConfirmPassword('');
   };
 
-  const phoneValid = local.replace(/\D/g, '').length >= 8;
+  // Au moins 8 chiffres nationaux (hors indicatif), comme avant la séparation indicatif / numéro.
+  const phoneValid = (splitE164(fullPhone)?.national.length ?? 0) >= 8;
 
   const handleError = (e: any) => {
     const refusal = providerRefusal(e);
@@ -260,15 +259,7 @@ export default function PhoneLogin() {
 
         {step === 'phone' ? (
           <>
-            <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
-            <Field
-              label={t('Numéro de téléphone')}
-              placeholder={`${country?.dialCode ?? ''} 81 234 5678`}
-              keyboardType="phone-pad"
-              value={local}
-              onChangeText={setLocal}
-              hint={local ? t('Sera envoyé au {phone}', { phone: fullPhone }) : undefined}
-            />
+            <PhoneField label={t('Numéro de téléphone')} onChange={setFullPhone} />
             {errorMsg ? (
               <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
                 <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>

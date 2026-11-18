@@ -679,4 +679,7 @@ export const ln: Record<string, string> = {
   "Photo refusée": "Elili ekangami",
   "Motif : {note}": "Ntina: {note}",
   "Choisissez d'abord une ville.": "Pona engumba liboso.",
+  "Indicatif : {name}. Appuyez pour changer.": "Indicatif: {name}. Fina mpo na kobongola.",
+  "Choisir un indicatif": "Pona indicatif",
+  "Visiodoc du compte": "Visiodoc ya kompte",
 };
