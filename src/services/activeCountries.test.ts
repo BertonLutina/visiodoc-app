@@ -3,17 +3,22 @@ import {
   getActiveCountries,
   knownActiveCountries,
   openSignupCountries,
-  SIGNUP_OPEN_COUNTRY_CODES,
   resetActiveCountriesCache,
 } from './activeCountries';
 
 const mockResult = jest.fn();
 const mockSelect = jest.fn();
+const mockColumns = jest.fn();
+const mockEq = jest.fn();
 jest.mock('@/lib/supabase', () => ({
   supabasePublic: {
     from: (...a: unknown[]) => {
       mockSelect(...a);
-      const chain: any = { select: () => chain, eq: () => chain, order: () => mockResult() };
+      const chain: any = {
+        select: (...s: unknown[]) => (mockColumns(...s), chain),
+        eq: (...e: unknown[]) => (mockEq(...e), chain),
+        order: () => mockResult(),
+      };
       return chain;
     },
   },
@@ -59,19 +64,28 @@ describe('activeCountries', () => {
     mockResult.mockResolvedValueOnce({ data: null, error: { message: 'x' } });
     await getActiveCountries();
     mockResult.mockResolvedValueOnce({ data: [{ code: 'CD' }, { code: 'CM' }], error: null });
-    expect((await getActiveCountries()).length).toBe(1);
+    expect((await getActiveCountries()).map((c) => c.code).sort()).toEqual(['CD', 'CM']);
   });
 
-  it('Visiodoc list = open countries only (CM active but not open is absent)', async () => {
-    expect(SIGNUP_OPEN_COUNTRY_CODES).toEqual(['CD']);
-    expect(openSignupCountries(['CD', 'CM']).map((c) => c.code)).toEqual(['CD']);
-    expect(openSignupCountries(['CM'], ['CD', 'CM']).map((c) => c.code)).toEqual(['CM']);
+  it('reads countries.signup_open (anon) and filters on it', async () => {
     mockResult.mockResolvedValue({ data: [{ code: 'CD' }, { code: 'CM' }], error: null });
+    expect((await getActiveCountries()).map((c) => c.code)).toEqual(['CM', 'CD']);
+    expect(mockColumns).toHaveBeenCalledWith('code, signup_open');
+    expect(mockEq).toHaveBeenCalledWith('is_active', true);
+    expect(mockEq).toHaveBeenCalledWith('signup_open', true);
+    expect(openSignupCountries(['CM', 'XX']).map((c) => c.code)).toEqual(['CM']);
+  });
+
+  it('falls back to DRC only when the signup_open column is not applied yet (unknown column)', async () => {
+    mockResult.mockResolvedValue({
+      data: null,
+      error: { code: '42703', message: 'column countries.signup_open does not exist' },
+    });
     expect((await getActiveCountries()).map((c) => c.code)).toEqual(['CD']);
   });
 
-  it('falls back to DRC when no open country is active', async () => {
-    mockResult.mockResolvedValue({ data: [{ code: 'CM' }], error: null });
+  it('falls back to DRC when the server returns no open country', async () => {
+    mockResult.mockResolvedValue({ data: [], error: null });
     expect((await getActiveCountries()).map((c) => c.code)).toEqual(['CD']);
   });
 });
