@@ -8,6 +8,8 @@ import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getMedicalRecords } from '@/services/patientApi';
+import { listPatientChildren } from '@/services/childrenApi';
+import { belongsToPerson, personScope, type PersonKey } from '@/utils/recordPerson';
 import { RECORD_KIND_META, RECORD_KINDS } from '@/services/medicalRecordTaxonomy';
 import type { MedicalRecordKind } from '@/types';
 import { useLanguage, useT } from '@/i18n';
@@ -18,7 +20,13 @@ export default function MedicalRecords() {
   const { user } = useAuth();
   const uid = user?.id ?? 'patient-1';
   const [active, setActive] = useState('Tout');
-  const { data: records } = useAsync(() => getMedicalRecords(uid), [uid, lang]);
+  // « Moi / Léa / Paul » : les relevés de chaque personne restent séparés.
+  const [person, setPerson] = useState<PersonKey>('self');
+  const { data: children } = useAsync(() => listPatientChildren(), [uid]);
+  const { data: records } = useAsync(
+    () => getMedicalRecords(uid, personScope(person)),
+    [uid, lang, person],
+  );
 
   const filters = useMemo(
     () => [
@@ -32,11 +40,11 @@ export default function MedicalRecords() {
     // Une entrée archivée (`status === 'inactive'`) est une information périmée : ne jamais
     // la présenter au patient comme si elle était toujours d'actualité. Pas de bascule côté
     // patient — contrairement à la fiche prestataire, qui a besoin de l'historique complet.
-    const all = (records ?? []).filter((r) => r.status !== 'inactive');
+    const all = (records ?? []).filter((r) => r.status !== 'inactive' && belongsToPerson(r, person));
     const f = filters.find((x) => x.key === active);
     if (!f?.match) return all;
     return all.filter((r) => r.kind === f.match);
-  }, [active, records, filters]);
+  }, [active, records, filters, person]);
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
@@ -46,6 +54,32 @@ export default function MedicalRecords() {
         </Pressable>
         <Text className="font-sans-bold text-lg text-ink">{t('Dossier médical')}</Text>
       </View>
+
+      {(children ?? []).length > 0 ? (
+        <View className="px-5 pb-2">
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {[{ key: 'self' as PersonKey, label: t('Moi') }, ...(children ?? []).map((c) => ({ key: c.id as PersonKey, label: c.firstName }))].map((p) => {
+              const on = p.key === person;
+              return (
+                <Pressable
+                  key={p.key}
+                  onPress={() => setPerson(p.key)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: on }}
+                  className={`px-4 py-2 rounded-full mr-2 ${on ? 'bg-accent' : 'bg-surface border border-line'}`}
+                >
+                  <Text className={`text-sm font-sans-semibold ${on ? 'text-white' : 'text-muted'}`}>{p.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {person !== 'self' ? (
+            <Pressable onPress={() => router.push(`/children/${person}`)} className="self-start mt-2">
+              <Text className="font-sans-semibold text-xs text-primary underline">{t('Profil santé et accès des médecins')}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       <View className="px-5 pb-2">
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>

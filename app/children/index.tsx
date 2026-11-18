@@ -79,7 +79,8 @@ export default function MyChildren() {
           const age = calculateChildAge(c.dateOfBirth);
           const m = c.measurements;
           return (
-            <Card key={c.id} className="mb-3">
+            <Pressable key={c.id} onPress={() => router.push(`/children/${c.id}`)}>
+            <Card className="mb-3">
               <View className="flex-row items-center">
                 <Avatar initials={`${c.firstName.charAt(0)}${c.lastName.charAt(0)}`.toUpperCase() || '?'} size={44} tone="light" />
                 <View className="flex-1 ml-3.5">
@@ -98,6 +99,7 @@ export default function MyChildren() {
                 {m?.measuredAt ? ` (${measurementAgeText(m.measuredAt)})` : ''}
               </Text>
             </Card>
+            </Pressable>
           );
         })}
       </ScrollView>
