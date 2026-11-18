@@ -15,8 +15,8 @@ type Method = {
 };
 
 const methods: Method[] = [
-  { icon: Lock, label: 'Email et mot de passe', sub: 'Connexion classique', href: '/(auth)/password-login-provider' },
   { icon: Smartphone, label: 'Numéro de téléphone', sub: 'Code de vérification par SMS', href: '/(auth)/phone-login' },
+  { icon: Lock, label: 'Email et mot de passe', sub: 'Connexion classique', href: '/(auth)/password-login-provider' },
 ];
 
 export default function LoginProvider() {
