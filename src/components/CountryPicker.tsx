@@ -6,6 +6,7 @@ import { type AfricanCountry } from '@/config/africanCountries';
 import { useActiveCountries } from '@/hooks/useActiveCountries';
 import { colors } from '@/theme/colors';
 import { useT } from '@/i18n';
+import { filterByPrefix } from '@/services/geo';
 
 type Props = {
   label?: string;
@@ -21,16 +22,9 @@ export function CountryPicker({ label, value, onSelect }: Props) {
   const countries = useActiveCountries();
   const selected = countries.find((c) => c.code === value) ?? countries[0];
 
-  const list = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return countries;
-    return countries.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.dialCode.includes(q) ||
-        c.code.toLowerCase().includes(q),
-    );
-  }, [query, countries]);
+  const list = useMemo(() => filterByPrefix(countries, query, countries.length), [query, countries]);
+  // Un seul pays actif : une recherche n'aurait aucun intérêt.
+  const searchable = countries.length > 1;
 
   const choose = (c: AfricanCountry) => {
     onSelect(c);
@@ -69,6 +63,7 @@ export function CountryPicker({ label, value, onSelect }: Props) {
           </View>
 
           {/* Recherche */}
+          {searchable ? (
           <View className="px-5 pb-2">
             <View
               className="flex-row items-center rounded-2xl px-4 bg-surface"
@@ -86,6 +81,7 @@ export function CountryPicker({ label, value, onSelect }: Props) {
               />
             </View>
           </View>
+          ) : null}
 
           <FlatList
             data={list}
