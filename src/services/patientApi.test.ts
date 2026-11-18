@@ -691,6 +691,20 @@ describe('public doctor catalog (public_provider_listing)', () => {
     jest.dontMock('@/lib/supabase');
   });
 
+  it('filter "Consultations pour enfants": only accepts_children = true is requested from the view', async () => {
+    const { getDoctors } = require('./patientApi');
+    publicEq.mockReturnValue({ order: publicOrder });
+    await getDoctors({ acceptsChildren: true });
+    expect(publicEq).toHaveBeenCalledWith('accepts_children', true);
+    expect(publicOrder).toHaveBeenCalledWith('rating', { ascending: false });
+  });
+
+  it('without the children filter, accepts_children is not filtered on', async () => {
+    const { getDoctors } = require('./patientApi');
+    await getDoctors();
+    expect(publicEq).not.toHaveBeenCalled();
+  });
+
   it('reads public_provider_listing (never users) with the exact columns, best rated first', async () => {
     const { getDoctors } = require('./patientApi');
     await getDoctors();

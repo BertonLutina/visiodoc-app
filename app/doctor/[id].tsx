@@ -1,6 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Video, MessageCircle, Phone, CalendarX } from 'lucide-react-native';
 import { Avatar, Button, SectionTitle, Stars } from '@/components/ui';
@@ -12,11 +12,23 @@ import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabaseConfigured } from '@/lib/supabase';
 import { useAsync } from '@/hooks/useAsync';
+import { BookingForSelector } from '@/components/BookingForSelector';
+import {
+  ChildBookingError,
+  childErrorMessage,
+  getLatestChildMeasurements,
+  listPatientChildren,
+  parseMeasurementInput,
+  recordChildMeasurement,
+  validateMeasurements,
+} from '@/services/childrenApi';
+import { effectiveBookingFor, measurementsToRecord, resolveBookingTarget, type BookingFor } from '@/utils/bookingFor';
 import {
   bookAndPayConsultation,
   getConsultationById,
   getDoctor,
   shouldHideCommercialInfo,
+  BookingRejectedError,
   SlotUnavailableError,
 } from '@/services/patientApi';
 import { PaymentConfirmationError } from '@/services/paymentAttempt';
@@ -61,6 +73,34 @@ export default function DoctorProfile() {
   const [type, setType] = useState<ConsultationType>('video');
   const [booking, setBooking] = useState(false);
 
+  // « Pour moi » / « Pour mon enfant » : `child_id` n'est envoyé que pour un enfant.
+  const [bookingForRaw, setBookingFor] = useState<BookingFor>('self');
+  const [childId, setChildId] = useState<string | null>(null);
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
+  const bookingFor = effectiveBookingFor(bookingForRaw, doctor?.acceptsChildren);
+  const childrenReq = useAsync(() => (signedIn ? listPatientChildren() : Promise.resolve([])), [signedIn]);
+  const childList = childrenReq.data ?? [];
+  useFocusEffect(
+    React.useCallback(() => {
+      childrenReq.reload();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
+  const measurementsReq = useAsync(
+    () => (bookingFor === 'child' && childId ? getLatestChildMeasurements(childId) : Promise.resolve(null)),
+    [bookingFor, childId],
+  );
+  const knownMeasurements = measurementsReq.data ?? null;
+  useEffect(() => {
+    // Préremplissage avec les dernières mesures connues (modifiables).
+    setWeight(knownMeasurements?.weightKg != null ? String(knownMeasurements.weightKg) : '');
+    setHeight(knownMeasurements?.heightCm != null ? String(knownMeasurements.heightCm) : '');
+  }, [knownMeasurements, childId]);
+  useEffect(() => {
+    if (bookingFor === 'child' && !childId && childList.length > 0) setChildId(childList[0].id);
+  }, [bookingFor, childId, childList]);
+
   const {
     data: monthStatus,
     loading: monthLoading,
@@ -94,12 +134,41 @@ export default function DoctorProfile() {
   const doBook = async () => {
     if (!doctor || !activeSlot || doctor.fee === null || !doctor.currencyCode || hideCommercial) return;
     // Widget non configuré OU devise inconnue : on ne crée pas de consultation impayable (avant l'insert).
+    const target = resolveBookingTarget({ bookingFor, childId, providerAcceptsChildren: doctor.acceptsChildren });
+    if (!target.ok) {
+      Alert.alert(
+        t('Réservation impossible'),
+        target.reason === 'child_required'
+          ? t('Veuillez sélectionner ou ajouter un enfant pour continuer.')
+          : childErrorMessage('provider_does_not_accept_children'),
+      );
+      return;
+    }
+    // Mesures facultatives : enregistrées (RPC) seulement si elles ont changé, avant la réservation.
+    let toRecord: { weightKg: number | null; heightCm: number | null } | null = null;
+    if (target.childId) {
+      const w = parseMeasurementInput(weight);
+      const h = parseMeasurementInput(height);
+      if (Number.isNaN(w) || Number.isNaN(h) || validateMeasurements(w, h, { required: false })) {
+        Alert.alert(t('Réservation impossible'), childErrorMessage('measurement_out_of_range'));
+        return;
+      }
+      toRecord = measurementsToRecord({ weightKg: w, heightCm: h }, knownMeasurements);
+    }
     if (supabaseConfigured && !paymentWidgetPreflight(doctor.currencyCode).ok) {
       Alert.alert(t('Paiement indisponible.'), t("Le paiement n'est pas disponible pour le moment. Réessaie plus tard."));
       return;
     }
     setBooking(true);
     try {
+      if (target.childId && toRecord) {
+        try {
+          await recordChildMeasurement(target.childId, toRecord.weightKg, toRecord.heightCm, null);
+        } catch (mErr) {
+          // Les mesures sont facultatives : un échec ne bloque pas la réservation.
+          console.warn('[enfants] mesure non enregistrée', (mErr as { code?: unknown } | null)?.code ?? 'inconnue');
+        }
+      }
       // insert pending_payment → register-payment-attempt → widget → confirm-consultation-payment
       const result = await bookAndPayConsultation(
         {
@@ -110,6 +179,7 @@ export default function DoctorProfile() {
           type,
           fee: doctor.fee,
           currencyCode: doctor.currencyCode,
+          childId: target.childId,
         },
         createOpenPaymentWidget({
           amount: doctor.fee,
@@ -150,7 +220,10 @@ export default function DoctorProfile() {
         Alert.alert(t('Paiement non démarré'), e.message);
         router.replace('/(patient)/appointments');
       } else {
-        Alert.alert(t('Réservation impossible'), e?.message ?? t('Réessayez plus tard.'));
+        Alert.alert(
+          t('Réservation impossible'),
+          e instanceof ChildBookingError || e instanceof BookingRejectedError ? e.message : childErrorMessage(e),
+        );
       }
     } finally {
       setBooking(false);
@@ -333,6 +406,25 @@ export default function DoctorProfile() {
                 );
               })}
             </View>
+
+            {signedIn ? (
+              <>
+                <SectionTitle>{t('Pour qui ?')}</SectionTitle>
+                <BookingForSelector
+                  providerAcceptsChildren={doctor.acceptsChildren === true}
+                  bookingFor={bookingFor}
+                  onChangeBookingFor={setBookingFor}
+                  children={childList}
+                  selectedChildId={childId}
+                  onSelectChild={setChildId}
+                  measurements={knownMeasurements}
+                  weight={weight}
+                  height={height}
+                  onChangeWeight={setWeight}
+                  onChangeHeight={setHeight}
+                />
+              </>
+            ) : null}
 
             <Button
               label={

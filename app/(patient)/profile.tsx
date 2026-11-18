@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   User as UserIcon,
   FileText,
+  Baby,
   Wallet,
   Bell,
   HelpCircle,
@@ -37,6 +38,7 @@ export default function PatientProfile() {
 
   const actions: Row[] = [
     { icon: UserIcon, label: 'Modifier le profil', onPress: () => router.push('/profile-edit') },
+    { icon: Baby, label: 'Mes enfants', onPress: () => router.push('/children') },
     { icon: FileText, label: 'Dossier médical', onPress: () => router.push('/records') },
     { icon: Wallet, label: 'Portefeuille', onPress: () => router.push('/(patient)/wallet') },
     { icon: Bell, label: 'Notifications', onPress: () => router.push('/notifications') },

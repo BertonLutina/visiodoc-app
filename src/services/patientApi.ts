@@ -9,7 +9,7 @@ import type {
   WalletTransaction,
 } from '@/types';
 import { isMedicalRecordKind } from './medicalRecordTaxonomy';
-import { childErrorCode, childErrorText } from './childrenApi';
+import { ChildBookingError, childErrorCode, childErrorText } from './childrenApi';
 import { videoRoomId } from './videoToken';
 import { fromDbConsultationType, normalizeConsultationStatus, toDbConsultationType } from '@/utils/format';
 import { appLocale, translate } from '@/i18n/core';
@@ -299,7 +299,7 @@ export async function bookConsultation(input: BookConsultationInput): Promise<{ 
   if (error) {
     // Refus serveur propres aux enfants : message traduit, jamais le texte brut.
     const childCode = input.childId ? childErrorCode(error) : null;
-    if (childCode) throw new Error(childErrorText(childCode));
+    if (childCode) throw new ChildBookingError(childErrorText(childCode));
     if (error.code === '23P01') throw new SlotUnavailableError('overlap');
     if (error.code === '23505' && error.message?.includes('one_booking_per_provider_per_day')) {
       throw new SlotUnavailableError('daily-limit');

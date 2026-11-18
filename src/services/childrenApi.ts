@@ -91,6 +91,14 @@ export function childErrorCode(error: unknown): ChildErrorCode | null {
   return CHILD_ERROR_CODES.find((code) => message.includes(code)) ?? null;
 }
 
+/** Erreur de réservation/écriture dont le message est déjà traduit et affichable tel quel. */
+export class ChildBookingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ChildBookingError';
+  }
+}
+
 /** Message affichable pour un code connu (texte traduit, jamais le texte brut du serveur). */
 export function childErrorText(code: ChildErrorCode): string {
   switch (code) {
