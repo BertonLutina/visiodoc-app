@@ -388,7 +388,7 @@ export function mapMedicalRecordRow(row: any): MedicalRecord {
  */
 export async function getMedicalRecords(
   patientId: string,
-  scope?: { childId: string | null },
+  scope: { childId: string | null },
 ): Promise<MedicalRecord[]> {
   if (useMock()) return mock.medicalRecords;
   let query = supabase!
@@ -397,7 +397,7 @@ export async function getMedicalRecords(
       'id, patient_id, child_id, doctor_id, consultation_id, record_type, title, description, category, severity, status, date_recorded, start_date, end_date, attachments, metadata, created_at',
     )
     .eq('patient_id', patientId);
-  if (scope) query = scope.childId ? query.eq('child_id', scope.childId) : query.is('child_id', null);
+  query = scope.childId ? query.eq('child_id', scope.childId) : query.is('child_id', null);
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapMedicalRecordRow);

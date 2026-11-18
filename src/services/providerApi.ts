@@ -461,7 +461,7 @@ export async function getLatestRecordByPatient(doctorId: string): Promise<Map<st
 export async function getPatientConsultationHistory(
   doctorId: string,
   patientId: string,
-  scope?: { childId: string | null },
+  scope: { childId: string | null },
 ): Promise<ProviderConsultation[]> {
   if (useMock()) return mock.providerUpcomingConsultations.filter((c) => c.patient.id === patientId);
   let query = supabase!
@@ -470,7 +470,7 @@ export async function getPatientConsultationHistory(
     .eq('doctor_id', doctorId)
     .eq('patient_id', patientId);
   // Par personne : les consultations du parent et celles de chaque enfant ne se mélangent pas.
-  if (scope) query = scope.childId ? query.eq('child_id', scope.childId) : query.is('child_id', null);
+  query = scope.childId ? query.eq('child_id', scope.childId) : query.is('child_id', null);
   const { data, error } = await query.order('scheduled_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapConsultation);
