@@ -21,6 +21,8 @@ type Props = {
   countryCode?: string;
   /** Anti-rebond de la saisie (ms) ; réglable pour les tests. */
   debounceMs?: number;
+  /** Mode « ville seule » : aucun champ commune (inscription prestataire). */
+  cityOnly?: boolean;
 };
 
 function useDebounced<T>(value: T, delay: number): T {
@@ -116,6 +118,7 @@ export function CityCommuneFields({
   onCommuneChange,
   countryCode = 'CD',
   debounceMs = GEO_DEBOUNCE_MS,
+  cityOnly = false,
 }: Props) {
   const t = useT();
   const [citySuggestions, setCitySuggestions] = useState<CityItem[]>([]);
@@ -136,7 +139,7 @@ export function CityCommuneFields({
   const hasCity = city.trim().length > 0;
   useEffect(() => {
     let active = true;
-    if (!hasCity) {
+    if (!hasCity || cityOnly) {
       setCommuneSuggestions([]);
       return;
     }
@@ -146,10 +149,10 @@ export function CityCommuneFields({
     return () => {
       active = false;
     };
-  }, [hasCity, dCity, dCommune, countryCode]);
+  }, [hasCity, cityOnly, dCity, dCommune, countryCode]);
 
   const changeCity = (v: string) => {
-    if (normalizeText(v) !== normalizeText(city)) onCommuneChange('');
+    if (!cityOnly && normalizeText(v) !== normalizeText(city)) onCommuneChange('');
     onCityChange(v);
   };
 
@@ -163,6 +166,7 @@ export function CityCommuneFields({
         onChangeText={changeCity}
         suggestions={citySuggestions}
       />
+      {cityOnly ? null : (
       <SuggestField
         testID="geo-commune"
         label={t('Commune (facultatif)')}
@@ -173,6 +177,7 @@ export function CityCommuneFields({
         disabled={!hasCity}
         hint={t("Choisissez d'abord une ville.")}
       />
+      )}
     </>
   );
 }

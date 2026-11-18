@@ -6,6 +6,7 @@ import { Stethoscope } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { Autocomplete } from '@/components/Autocomplete';
 import { CountryPicker } from '@/components/CountryPicker';
+import { CityCommuneFields } from '@/components/CityCommuneFields';
 import { SPECIALIZATIONS } from '@/config/specializations';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
@@ -106,7 +107,14 @@ export default function RegisterProvider() {
               onChangeText={set('phone')}
             />
             <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
-            <Field label={t('Ville')} placeholder="Kinshasa" value={form.city} onChangeText={set('city')} />
+            <CityCommuneFields
+              cityOnly
+              city={form.city}
+              commune=""
+              countryCode={countryCode}
+              onCityChange={set('city')}
+              onCommuneChange={() => {}}
+            />
             <Autocomplete
               label={t('Spécialisation')}
               value={form.specialization}
