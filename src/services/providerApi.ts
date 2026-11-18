@@ -352,7 +352,7 @@ export async function startConsultation(id: string): Promise<void> {
 export type StartOutcome = 'started' | 'denied' | 'error';
 
 /**
- * Variante des écrans. La base n'accepte `in_progress` que pour le médecin, de `scheduled_at` à +10 min
+ * Variante des écrans. La base n'accepte `in_progress` que pour le médecin, de `scheduled_at` à +15 min
  * ([MOB-1611-1]) : un refus `42501` est renvoyé en `denied` (l'écran affiche le message du guide et n'ouvre pas
  * l'appel). Une panne réseau reste `error` : elle n'empêche pas de rejoindre (`get-video-token` fait foi). Ne lève
  * jamais ; aucune donnée personnelle journalisée (seulement le code d'erreur).

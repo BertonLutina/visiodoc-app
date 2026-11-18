@@ -1,7 +1,7 @@
 /**
  * Horloge serveur estimée : le serveur fait foi pour la fenêtre de démarrage (guide [MOB-1611-1]). Le guide ne
  * fournit pas d'heure serveur dédiée ; on déduit le décalage de l'horloge de l'appareil de l'en-tête HTTP `Date`
- * des réponses Supabase (précision d'environ 1 s, suffisante pour une fenêtre de 10 minutes). Sans mesure, le
+ * des réponses Supabase (précision d'environ 1 s, suffisante pour une fenêtre de 15 minutes). Sans mesure, le
  * décalage vaut 0 (horloge de l'appareil). Dans tous les cas, le serveur re-vérifie (`get-video-token`, 42501).
  */
 let offsetMs = 0;

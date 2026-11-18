@@ -2,10 +2,10 @@ import { translate } from '@/i18n/core';
 
 /**
  * Fenêtre de démarrage d'un appel par le médecin (guide [MOB-1611-1]) : de `scheduled_at` (jamais avant) à
- * `scheduled_at` + 10 minutes. Passé ce délai le serveur annule la consultation (médecin absent) et rembourse
+ * `scheduled_at` + 15 minutes. Passé ce délai le serveur annule la consultation (médecin absent) et rembourse
  * le patient en avoir. Constante alignée sur `PROVIDER_START_WINDOW_MINUTES` côté serveur.
  */
-export const PROVIDER_START_WINDOW_MINUTES = 10;
+export const PROVIDER_START_WINDOW_MINUTES = 15;
 const WINDOW_MS = PROVIDER_START_WINDOW_MINUTES * 60_000;
 
 export type StartWindowState =
@@ -60,7 +60,7 @@ export function startWindowMessage(state: StartWindowState): string | null {
       );
     case 'over':
       return translate(
-        'Délai de 10 minutes dépassé : la consultation va être annulée (médecin absent) et le patient remboursé en avoir.',
+        'Délai de 15 minutes dépassé : la consultation va être annulée (médecin absent) et le patient remboursé en avoir.',
       );
     default:
       return null;
@@ -69,7 +69,7 @@ export function startWindowMessage(state: StartWindowState): string | null {
 
 /** Refus `42501` de la base : appel lancé hors de la fenêtre (ou par un autre utilisateur que le médecin). */
 export function startDeniedMessage(): string {
-  return translate("Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 10 minutes qui suivent");
+  return translate("Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 15 minutes qui suivent");
 }
 
 /** Le bandeau rouge « lancez l'appel » apparaît à partir de 60 minutes avant l'heure prévue. */
@@ -77,7 +77,7 @@ export const START_BANNER_LEAD_MS = 60 * 60_000;
 
 /**
  * Bandeau rouge côté médecin avant la consultation suivante ([MOB-1611-1]) : il rappelle qu'un appel non lancé
- * dans les 10 minutes qui suivent l'heure prévue annule la consultation (médecin absent). Visible de 60 minutes
+ * dans les 15 minutes qui suivent l'heure prévue annule la consultation (médecin absent). Visible de 60 minutes
  * avant l'heure prévue jusqu'à la fin de la fenêtre ; `null` ensuite, ou si l'appel est déjà lancé.
  */
 export function startReminderBanner(state: StartWindowState, scheduledAt: string | null | undefined): string | null {
@@ -89,7 +89,7 @@ export function startReminderBanner(state: StartWindowState, scheduledAt: string
     ? ''
     : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   return translate(
-    "Consultation à {time} : lancez l'appel dans les 10 minutes qui suivent l'heure prévue, sinon elle sera annulée (médecin absent) et le patient remboursé en avoir.",
+    "Consultation à {time} : lancez l'appel dans les 15 minutes qui suivent l'heure prévue, sinon elle sera annulée (médecin absent) et le patient remboursé en avoir.",
     { time },
   );
 }

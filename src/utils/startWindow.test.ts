@@ -11,7 +11,7 @@ import { resetServerClock, serverNowMs, syncServerClock } from './serverClock';
 const T0 = Date.parse('2026-11-17T10:00:00.000Z');
 const SCHEDULED = '2026-11-17T10:00:00.000Z';
 
-describe('providerStartWindow (guide MOB-1611-1 : de l’heure prévue à +10 min)', () => {
+describe('providerStartWindow (guide MOB-1611-1 : de l’heure prévue à +15 min (MOB-1811-2))', () => {
   it('avant l’heure prévue : bouton grisé, temps restant avant l’ouverture', () => {
     const s = providerStartWindow(SCHEDULED, 'scheduled', T0 - 90_000);
     expect(s).toEqual({ phase: 'before', msUntilStart: 90_000 });
@@ -20,17 +20,17 @@ describe('providerStartWindow (guide MOB-1611-1 : de l’heure prévue à +10 mi
   it('une seconde avant : encore fermé', () => {
     expect(providerStartWindow(SCHEDULED, 'scheduled', T0 - 1000).phase).toBe('before');
   });
-  it('à l’heure exacte : ouvert, 10 minutes restantes', () => {
+  it('à l’heure exacte : ouvert, 15 minutes restantes', () => {
     const s = providerStartWindow(SCHEDULED, 'scheduled', T0);
-    expect(s).toEqual({ phase: 'open', msLeft: 600_000 });
+    expect(s).toEqual({ phase: 'open', msLeft: 900_000 });
     expect(canStartNow(s)).toBe(true);
   });
   it('pendant la fenêtre : compte à rebours', () => {
-    expect(providerStartWindow(SCHEDULED, 'scheduled', T0 + 4 * 60_000)).toEqual({ phase: 'open', msLeft: 360_000 });
+    expect(providerStartWindow(SCHEDULED, 'scheduled', T0 + 4 * 60_000)).toEqual({ phase: 'open', msLeft: 660_000 });
   });
-  it('à +10 min pile : encore ouvert ; une seconde après : dépassé', () => {
-    expect(providerStartWindow(SCHEDULED, 'scheduled', T0 + 600_000).phase).toBe('open');
-    const over = providerStartWindow(SCHEDULED, 'scheduled', T0 + 601_000);
+  it('à +15 min pile : encore ouvert ; une seconde après : dépassé', () => {
+    expect(providerStartWindow(SCHEDULED, 'scheduled', T0 + 900_000).phase).toBe('open');
+    const over = providerStartWindow(SCHEDULED, 'scheduled', T0 + 901_000);
     expect(over).toEqual({ phase: 'over' });
     expect(canStartNow(over)).toBe(false);
   });
@@ -83,14 +83,14 @@ describe('startWindowMessage / startDeniedMessage', () => {
   it('avant l’heure : temps avant l’ouverture', () => {
     expect(startWindowMessage({ phase: 'before', msUntilStart: 125_000 })).toBe("Démarrage possible à l'heure prévue, dans 2:05");
   });
-  it('pendant la fenêtre : compte à rebours des 10 minutes', () => {
-    expect(startWindowMessage({ phase: 'open', msLeft: 600_000 })).toBe(
-      "Lancez l'appel dans les 10:00 qui restent, sinon la consultation sera annulée (médecin absent).",
+  it('pendant la fenêtre : compte à rebours des 15 minutes', () => {
+    expect(startWindowMessage({ phase: 'open', msLeft: 900_000 })).toBe(
+      "Lancez l'appel dans les 15:00 qui restent, sinon la consultation sera annulée (médecin absent).",
     );
   });
   it('après la fenêtre : message clair, remboursement en avoir', () => {
     expect(startWindowMessage({ phase: 'over' })).toBe(
-      'Délai de 10 minutes dépassé : la consultation va être annulée (médecin absent) et le patient remboursé en avoir.',
+      'Délai de 15 minutes dépassé : la consultation va être annulée (médecin absent) et le patient remboursé en avoir.',
     );
   });
   it('appel en cours ou heure inconnue : aucun message', () => {
@@ -99,7 +99,7 @@ describe('startWindowMessage / startDeniedMessage', () => {
   });
   it('refus 42501 : message du guide', () => {
     expect(startDeniedMessage()).toBe(
-      "Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 10 minutes qui suivent",
+      "Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 15 minutes qui suivent",
     );
   });
 });
@@ -110,17 +110,17 @@ describe('startReminderBanner (bandeau rouge avant la consultation suivante)', (
   it('absent à plus de 60 minutes de l’heure prévue', () => {
     expect(banner(T0 - 61 * 60_000)).toBeNull();
   });
-  it('visible dès 60 minutes avant, avec l’heure et la règle des 10 minutes', () => {
+  it('visible dès 60 minutes avant, avec l’heure et la règle des 15 minutes', () => {
     const b = banner(T0 - 60 * 60_000);
     expect(b).toMatch(/\d{2}:\d{2}/);
-    expect(b).toContain('10 minutes');
+    expect(b).toContain('15 minutes');
     expect(b).toContain('médecin absent');
   });
   it('visible pendant la fenêtre ouverte', () => {
     expect(banner(T0 + 5 * 60_000)).not.toBeNull();
   });
   it('absent une fois la fenêtre dépassée, pour un appel en cours ou une heure inconnue', () => {
-    expect(banner(T0 + 601_000)).toBeNull();
+    expect(banner(T0 + 901_000)).toBeNull();
     expect(banner(T0 + 5 * 60_000, 'in_progress')).toBeNull();
     expect(startReminderBanner(providerStartWindow(undefined, 'scheduled', T0), undefined)).toBeNull();
   });

@@ -65,7 +65,7 @@ export function normalizeConsultationStatus(status: string): ConsultationStatus 
   }
 }
 
-/** `consultations.cancel_reason` posé par le serveur quand le médecin n'a pas lancé l'appel dans les 10 minutes. */
+/** `consultations.cancel_reason` posé par le serveur quand le médecin n'a pas lancé l'appel dans les 15 minutes. */
 export const PROVIDER_ABSENT_REASON = 'provider_absent';
 
 /** Consultation annulée pour médecin absent ([MOB-1611-1]) : `cancelled` + `cancel_reason = 'provider_absent'`. */

@@ -11,7 +11,7 @@ import { reportSessionExpiry } from './sessionExpiry';
  *       opensAt, error }
  *   403 { success: false, error: 'Accès à cette salle refusé' }     401 { success: false, error: 'Non authentifié' }
  * L'identité (nom, e-mail pseudonyme, rôle modérateur / participant) est construite PAR LE SERVEUR : le corps ne
- * contient QUE `roomId`. La fenêtre (ouverture à l'heure prévue EXACTE, médecin : 10 min pour lancer l'appel sinon
+ * contient QUE `roomId`. La fenêtre (ouverture à l'heure prévue EXACTE, médecin : 15 min pour lancer l'appel sinon
  * `provider_start_window_over` ([MOB-1611-1]), fermeture 30 min après la fin) est appliquée côté
  * serveur : le client n'en déduit aucun refus, il relaie les codes 403.
  * ---------------------------------------------------------------------------------------------- */
@@ -79,7 +79,7 @@ export function videoFailure(
       return {
         kind: 'start_window_over',
         message: translate(
-          "Le délai de 10 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.",
+          "Le délai de 15 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.",
         ),
         opensAt: null,
       };
