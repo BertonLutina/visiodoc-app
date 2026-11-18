@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { BiometricToggleRow } from '@/components/BiometricToggleRow';
 import { PreferencesSection } from '@/components/PreferencesSection';
 import { LegalAccountSection, SUPPORT_EMAIL } from '@/components/LegalAccountSection';
+import { AcceptsChildrenSwitch } from '@/components/AcceptsChildren';
 import { providerGate } from '@/services/accessPolicy';
 import { useAsync } from '@/hooks/useAsync';
 import { useFocusEffect } from 'expo-router';
@@ -105,6 +106,8 @@ export default function ProviderProfile() {
             </Pressable>
           ))}
         </View>
+
+        {user?.id ? <AcceptsChildrenSwitch userId={user.id} /> : null}
 
         <PreferencesSection tone="accent" />
 

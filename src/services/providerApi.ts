@@ -4,6 +4,7 @@ import * as patientMock from '@/data/mock';
 import { logMedicalRecordEvent } from './auditLog';
 import { normalizeGender } from './registration';
 import { mapMedicalRecordRow } from './patientApi';
+import { calculateChildAge, normalizeChildGender } from './childrenApi';
 import { fromDbConsultationType, normalizeConsultationStatus, toDbConsultationType } from '@/utils/format';
 import { parseSpecializations, dedupeSpecializations, joinSpecializations } from './specializations';
 import type { ConsultationType } from '@/types';
@@ -202,7 +203,7 @@ export async function getDashboardOverview(doctorId: string): Promise<DashboardO
   if (nextRowId) {
     const { data: row } = await supabase!
       .from('consultations')
-      .select(`*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name )`)
+      .select(`*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name ), child:patient_children!child_id ( id, first_name, last_name, date_of_birth, gender )`)
       .eq('id', nextRowId)
       .maybeSingle();
     if (row) next = mapConsultation(row);
@@ -276,9 +277,23 @@ export async function getReviewSummary(doctorId: string, limit = 5): Promise<Rev
 }
 
 /* ---------- Consultations ---------- */
+/** Enfant d'une consultation (`child_id`) : âge de l'enfant, jamais celui du parent. */
+export function mapConsultationChild(row: any): ProviderConsultation['child'] {
+  const raw = Array.isArray(row?.child) ? row.child[0] : row?.child;
+  if (!row?.child_id || !raw) return undefined;
+  return {
+    id: row.child_id,
+    firstName: raw.first_name ?? '',
+    lastName: raw.last_name ?? '',
+    ageYears: calculateChildAge(raw.date_of_birth),
+    gender: normalizeChildGender(raw.gender),
+  };
+}
+
 export function mapConsultation(row: any): ProviderConsultation {
   const p = row.patient ?? {};
   return {
+    child: mapConsultationChild(row),
     id: row.id,
     patient: {
       id: p.id ?? row.patient_id,
@@ -310,7 +325,7 @@ export async function getProviderConsultations(
   const { data, error } = await supabase!
     .from('consultations')
     .select(
-      `*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name )`,
+      `*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name ), child:patient_children!child_id ( id, first_name, last_name, date_of_birth, gender )`,
     )
     .eq('doctor_id', doctorId)
     .in('status', statuses)
@@ -327,7 +342,7 @@ export async function getTodayConsultations(doctorId: string): Promise<ProviderC
   end.setDate(end.getDate() + 1);
   const { data, error } = await supabase!
     .from('consultations')
-    .select(`*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name )`)
+    .select(`*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name ), child:patient_children!child_id ( id, first_name, last_name, date_of_birth, gender )`)
     .eq('doctor_id', doctorId)
     // Agenda du jour : seule `pending_payment` (impayée) est exclue ; annulées / absents restent visibles (badges existants).
     .neq('status', 'pending_payment')
@@ -371,25 +386,52 @@ export async function getPatients(doctorId: string): Promise<ProviderPatient[]> 
   const { data, error } = await supabase!
     .from('consultations')
     .select(
-      `patient:users!consultations_patient_id_fkey ( id, first_name, last_name, date_of_birth, gender ), reason`,
+      `child_id, child:patient_children!child_id ( id, first_name, last_name, date_of_birth, gender ), patient:users!consultations_patient_id_fkey ( id, first_name, last_name, date_of_birth, gender ), reason`,
     )
     .eq('doctor_id', doctorId)
     .not('status', 'in', '("cancelled","no_show")');
   if (error) throw error;
+  return groupPatientRows((data ?? []) as any[]);
+}
+
+/**
+ * Une ligne par patient adulte et UNE LIGNE PAR ENFANT (consultations.child_id) : un enfant n'est jamais
+ * fondu dans la ligne du parent, et son âge et son genre sont ceux de l'enfant, jamais ceux du parent.
+ */
+export function groupPatientRows(rows: any[]): ProviderPatient[] {
   const seen = new Map<string, ProviderPatient>();
-  for (const row of data ?? []) {
-    const p: any = (row as any).patient;
-    if (p && !seen.has(p.id)) {
-      seen.set(p.id, {
-        id: p.id,
-        firstName: p.first_name ?? '',
-        lastName: p.last_name ?? '',
-        age: calculateAge(p.date_of_birth),
-        gender: normalizeGender(p.gender),
-        mainCondition: (row as any).reason ?? '',
-        initials: initials(p.first_name, p.last_name),
+  for (const row of rows) {
+    const p: any = row.patient;
+    if (!p) continue;
+    const rawChild: any = Array.isArray(row.child) ? row.child[0] : row.child;
+    if (row.child_id && rawChild) {
+      if (seen.has(row.child_id)) continue;
+      seen.set(row.child_id, {
+        id: row.child_id,
+        patientId: p.id,
+        childId: row.child_id,
+        parentName: `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim(),
+        firstName: rawChild.first_name ?? '',
+        lastName: rawChild.last_name ?? '',
+        age: calculateChildAge(rawChild.date_of_birth),
+        gender: normalizeChildGender(rawChild.gender),
+        mainCondition: row.reason ?? '',
+        initials: initials(rawChild.first_name, rawChild.last_name),
       });
+      continue;
     }
+    if (seen.has(p.id)) continue;
+    seen.set(p.id, {
+      id: p.id,
+      patientId: p.id,
+      childId: null,
+      firstName: p.first_name ?? '',
+      lastName: p.last_name ?? '',
+      age: calculateAge(p.date_of_birth),
+      gender: normalizeGender(p.gender),
+      mainCondition: row.reason ?? '',
+      initials: initials(p.first_name, p.last_name),
+    });
   }
   return [...seen.values()];
 }
@@ -403,13 +445,15 @@ export async function getLatestRecordByPatient(doctorId: string): Promise<Map<st
   const { data, error } = await supabase!
     .from('medical_records')
     .select(
-      'id, patient_id, doctor_id, consultation_id, record_type, title, description, category, severity, status, date_recorded, start_date, end_date, attachments, metadata, created_at',
+      'id, patient_id, child_id, doctor_id, consultation_id, record_type, title, description, category, severity, status, date_recorded, start_date, end_date, attachments, metadata, created_at',
     )
     .eq('doctor_id', doctorId)
     .order('created_at', { ascending: false });
   if (error) throw error;
   for (const row of data ?? []) {
-    if (!map.has(row.patient_id)) map.set(row.patient_id, mapMedicalRecordRow(row));
+    // Clé = l'enfant du relevé, sinon le patient : les relevés d'un enfant et ceux du parent ne se mélangent pas.
+    const key = row.child_id ?? row.patient_id;
+    if (!map.has(key)) map.set(key, mapMedicalRecordRow(row));
   }
   return map;
 }
@@ -417,14 +461,17 @@ export async function getLatestRecordByPatient(doctorId: string): Promise<Map<st
 export async function getPatientConsultationHistory(
   doctorId: string,
   patientId: string,
+  scope?: { childId: string | null },
 ): Promise<ProviderConsultation[]> {
   if (useMock()) return mock.providerUpcomingConsultations.filter((c) => c.patient.id === patientId);
-  const { data, error } = await supabase!
+  let query = supabase!
     .from('consultations')
-    .select(`*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name )`)
+    .select(`*, patient:users!consultations_patient_id_fkey ( id, first_name, last_name ), child:patient_children!child_id ( id, first_name, last_name, date_of_birth, gender )`)
     .eq('doctor_id', doctorId)
-    .eq('patient_id', patientId)
-    .order('scheduled_at', { ascending: false });
+    .eq('patient_id', patientId);
+  // Par personne : les consultations du parent et celles de chaque enfant ne se mélangent pas.
+  if (scope) query = scope.childId ? query.eq('child_id', scope.childId) : query.is('child_id', null);
+  const { data, error } = await query.order('scheduled_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapConsultation);
 }
@@ -488,6 +535,8 @@ export async function createMedicalRecord(input: MedicalRecordInput): Promise<{ 
       patient_id: input.patientId,
       doctor_id: input.doctorId,
       consultation_id: input.consultationId ?? null,
+      // Relevé d'un enfant : child_id explicite (le serveur le déduit aussi de la consultation et refuse un écart).
+      ...(input.childId ? { child_id: input.childId } : {}),
       record_type: input.kind,
       title: input.title,
       description: input.description ?? null,
@@ -807,6 +856,56 @@ export async function appendMedicalRecordAttachment(
 ): Promise<void> {
   if (useMock()) return;
   const { error } = await supabase!.from('medical_records').update({ attachments: [...existing, attachment] }).eq('id', id);
+  if (error) throw error;
+}
+
+/* ---------- Consultations pour des enfants (MOB-1311-1 §4, MOB-1711-1) ---------- */
+export interface AcceptsChildrenSettings {
+  /** null = pas encore de réponse (vide côté serveur). */
+  acceptsChildren: boolean | null;
+  /** « Ne plus afficher » : mémorisé côté serveur (hide_accepts_children_prompt). */
+  hidePrompt: boolean;
+}
+
+/** La question « Acceptez-vous les consultations pour des enfants ? » n'est posée que sans réponse ET sans « Ne plus afficher ». */
+export function shouldShowAcceptsChildrenPrompt(s: AcceptsChildrenSettings | null | undefined): boolean {
+  return !!s && s.acceptsChildren === null && !s.hidePrompt;
+}
+
+export function mapAcceptsChildrenRow(
+  row: { accepts_children?: boolean | null; hide_accepts_children_prompt?: boolean | null } | null,
+): AcceptsChildrenSettings {
+  return {
+    acceptsChildren: typeof row?.accepts_children === 'boolean' ? row.accepts_children : null,
+    hidePrompt: row?.hide_accepts_children_prompt === true,
+  };
+}
+
+/** Lecture sur SA propre ligne healthcare_professionals (user_id = auth.uid()). */
+export async function getAcceptsChildrenSettings(userId: string): Promise<AcceptsChildrenSettings> {
+  if (useMock()) return { acceptsChildren: null, hidePrompt: true };
+  const { data, error } = await supabase!
+    .from('healthcare_professionals')
+    .select('accepts_children, hide_accepts_children_prompt')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw error;
+  return mapAcceptsChildrenRow(data);
+}
+
+export async function setAcceptsChildren(userId: string, value: boolean): Promise<void> {
+  if (useMock()) return;
+  const { error } = await supabase!.from('healthcare_professionals').update({ accepts_children: value }).eq('user_id', userId);
+  if (error) throw error;
+}
+
+/** Case « Ne plus afficher ce message » : hide_accepts_children_prompt = true côté serveur. */
+export async function hideAcceptsChildrenPrompt(userId: string): Promise<void> {
+  if (useMock()) return;
+  const { error } = await supabase!
+    .from('healthcare_professionals')
+    .update({ hide_accepts_children_prompt: true })
+    .eq('user_id', userId);
   if (error) throw error;
 }
 

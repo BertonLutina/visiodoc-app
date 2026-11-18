@@ -10,6 +10,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { getPatients, getLatestRecordByPatient } from '@/services/providerApi';
 import { RECORD_KIND_META } from '@/services/medicalRecordTaxonomy';
 import { currentProvider } from '@/data/mockProvider';
+import { patientRoute } from '@/utils/patientRoute';
 import { useLanguage, useT } from '@/i18n';
 
 export default function ProviderRecords() {
@@ -28,7 +29,7 @@ export default function ProviderRecords() {
   );
 
   const list = useMemo(
-    () => (patients ?? []).filter((p) => `${p.firstName} ${p.lastName}`.toLowerCase().includes(query.toLowerCase())),
+    () => (patients ?? []).filter((p) => `${p.firstName} ${p.lastName} ${p.parentName ?? ''}`.toLowerCase().includes(query.toLowerCase())),
     [patients, query],
   );
 
@@ -65,12 +66,13 @@ export default function ProviderRecords() {
               ? `${t(RECORD_KIND_META[last.kind].label)} · ${last.date}`
               : t('Aucun dossier pour le moment');
           return (
-            <Pressable key={p.id} onPress={() => router.push(`/patient/${p.id}`)}>
+            <Pressable key={p.id} onPress={() => router.push(patientRoute(p))}>
               <Card className="mb-3 flex-row items-center">
                 <Avatar initials={p.initials} size={44} tone="light" />
                 <View className="flex-1 ml-3.5">
                   <Text className="font-sans-bold text-ink">
                     {p.firstName} {p.lastName}
+                    {p.childId ? ` (${t('Enfant')})` : ''}
                   </Text>
                   <Text className="font-sans text-xs text-muted mt-0.5">{lastLabel}</Text>
                 </View>

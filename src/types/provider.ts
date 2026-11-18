@@ -2,6 +2,7 @@
 import type { ConsultationStatus, ConsultationType } from '@/types';
 import type { Gender } from '@/services/registration';
 import type { ProviderEarnings } from '@/services/dashboardMetrics';
+import type { ConsultationChildInfo } from '@/types/children';
 
 export interface ProviderProfile {
   id: string;
@@ -31,7 +32,14 @@ export interface ProviderStats {
 }
 
 export interface ProviderPatient {
+  /** Clé unique de la ligne : l'id de l'enfant pour un enfant, sinon l'id du patient. */
   id: string;
+  /** Compte patient (le parent pour un enfant). Absent = `id`. */
+  patientId?: string;
+  /** Renseigné pour une ligne d'enfant : une ligne par enfant, jamais mélangée avec celle du parent. */
+  childId?: string | null;
+  /** Nom du parent, pour une ligne d'enfant. */
+  parentName?: string;
   firstName: string;
   lastName: string;
   /** `null` quand `users.date_of_birth` est absente — jamais un 0 trompeur. */
@@ -59,6 +67,8 @@ export interface PatientDetail {
 export interface ProviderConsultation {
   id: string;
   patient: { id: string; firstName: string; lastName: string; initials: string };
+  /** Consultation d'un enfant (`consultations.child_id`) : le patient soigné est l'enfant, `patient` est le parent. */
+  child?: ConsultationChildInfo;
   reason: string;
   dateLabel: string;
   type: ConsultationType;

@@ -28,6 +28,7 @@ import { buildAlerts, countdownLabel } from '@/services/dashboardMetrics';
 import { currentProvider } from '@/data/mockProvider';
 import { formatAmountInCurrency, typeLabel } from '@/utils/format';
 import { translate } from '@/i18n';
+import { AcceptsChildrenPrompt } from '@/components/AcceptsChildren';
 import type { ProviderConsultation } from '@/types/provider';
 import { useLanguage, useT } from '@/i18n';
 
@@ -158,6 +159,8 @@ export default function ProviderDashboard() {
           <Avatar initials={initials} tone="clay" uri={user?.avatarUrl} />
         </View>
 
+        {user?.id ? <AcceptsChildrenPrompt userId={user.id} /> : null}
+
         {overviewReq.loading && !ov && (
           <View className="py-10 items-center">
             <ActivityIndicator color={colors.accent} />
@@ -207,8 +210,16 @@ export default function ProviderDashboard() {
                 <Avatar initials={next.patient.initials} size={46} tone="light" />
                 <View className="flex-1 ml-3.5">
                   <Text className="font-sans-bold text-ink text-base">
-                    {next.patient.firstName} {next.patient.lastName}
+                    {next.child ? `${next.child.firstName} ${next.child.lastName}` : `${next.patient.firstName} ${next.patient.lastName}`}
                   </Text>
+                  {next.child ? (
+                    <Text className="font-sans text-xs text-clay mt-0.5">
+                      {t('Enfant · {age} ans · Parent : {parent}', {
+                        age: next.child.ageYears ?? '?',
+                        parent: `${next.patient.firstName} ${next.patient.lastName}`.trim(),
+                      })}
+                    </Text>
+                  ) : null}
                   <Text className="font-sans text-xs text-muted mt-0.5" numberOfLines={1}>
                     {next.reason || t('Motif non précisé')}
                   </Text>
@@ -383,9 +394,10 @@ export default function ProviderDashboard() {
               <Avatar initials={c.patient.initials} size={42} tone="light" />
               <View className="flex-1 ml-3.5">
                 <Text className="font-sans-bold text-ink">
-                  {c.patient.firstName} {c.patient.lastName}
+                  {c.child ? `${c.child.firstName} ${c.child.lastName}` : `${c.patient.firstName} ${c.patient.lastName}`}
                 </Text>
                 <Text className="font-sans text-xs text-clay mt-0.5">
+                  {c.child ? `${t('Enfant')} · ${c.child.ageYears ?? '?'} ${t('ans')} · ` : ''}
                   {c.dateLabel} · {typeLabel(c.type)}
                 </Text>
               </View>

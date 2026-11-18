@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getProviderConsultations, getTodayConsultations, startConsultationBestEffort } from '@/services/providerApi';
 import { currentProvider } from '@/data/mockProvider';
+import { ChildConsultationInfo } from '@/components/ChildConsultationInfo';
 import type { ProviderConsultation } from '@/types/provider';
 import { useLanguage, useT } from '@/i18n';
 
@@ -25,7 +26,7 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
         <Avatar initials={c.patient.initials} size={42} tone="light" />
         <View className="flex-1 ml-3.5">
           <Text className="font-sans-bold text-ink">
-            {c.patient.firstName} {c.patient.lastName}
+            {c.child ? `${c.child.firstName} ${c.child.lastName}` : `${c.patient.firstName} ${c.patient.lastName}`}
           </Text>
           <Text className="font-sans text-xs text-muted mt-0.5">{c.reason}</Text>
         </View>
@@ -44,6 +45,13 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
       <Text className="font-sans-semibold text-sm text-clay mt-3">
         {c.dateLabel} · {typeLabel(c.type)} · {c.durationMin} {t('min')}
       </Text>
+      {c.child && !['cancelled', 'no_show'].includes(c.rawStatus ?? '') ? (
+        <ChildConsultationInfo
+          child={c.child}
+          parentName={`${c.patient.firstName} ${c.patient.lastName}`.trim()}
+          consultationId={c.id}
+        />
+      ) : null}
       {canStart && canStartConsultation(c.rawStatus) && (
         <View className="flex-row mt-3">
           <Pressable

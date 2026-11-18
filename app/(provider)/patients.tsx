@@ -10,6 +10,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { getPatients } from '@/services/providerApi';
 import { genderLabel } from '@/services/registration';
 import { currentProvider } from '@/data/mockProvider';
+import { patientRoute } from '@/utils/patientRoute';
 import { useT } from '@/i18n';
 
 export default function ProviderPatients() {
@@ -19,7 +20,7 @@ export default function ProviderPatients() {
   const [query, setQuery] = useState('');
   const { data: patients, refreshing, refresh } = useAsync(() => getPatients(uid), [uid]);
   const list = (patients ?? []).filter((p) =>
-    `${p.firstName} ${p.lastName} ${p.mainCondition}`.toLowerCase().includes(query.toLowerCase()),
+    `${p.firstName} ${p.lastName} ${p.parentName ?? ''} ${p.mainCondition}`.toLowerCase().includes(query.toLowerCase()),
   );
 
   return (
@@ -55,12 +56,16 @@ export default function ProviderPatients() {
                 {p.firstName} {p.lastName}
               </Text>
               <Text className="font-sans text-xs text-muted mt-0.5">
+                {p.childId ? `${t('Enfant')} · ` : ''}
                 {p.age !== null ? `${p.age} ${t('ans')}` : t('Âge inconnu')}
                 {` · ${genderLabel(p.gender)}`}
               </Text>
+              {p.parentName ? (
+                <Text className="font-sans text-xs text-muted mt-0.5">{t('Parent : {parent}', { parent: p.parentName })}</Text>
+              ) : null}
               <Text className="font-sans text-xs text-clay mt-0.5">{p.mainCondition}</Text>
             </View>
-            <Pressable onPress={() => router.push(`/patient/${p.id}`)} className="bg-accent-50 px-4 py-2.5 rounded-2xl">
+            <Pressable onPress={() => router.push(patientRoute(p))} className="bg-accent-50 px-4 py-2.5 rounded-2xl">
               <Text className="text-accent font-sans-bold">{t('Voir')}</Text>
             </Pressable>
           </Card>

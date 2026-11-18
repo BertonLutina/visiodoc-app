@@ -416,6 +416,33 @@ export async function listChildDoctorAccess(childId: string, patientId: string):
   return buildChildDoctorAccess((consultations.data ?? []) as any[], (consents.data ?? []) as any[]);
 }
 
+/**
+ * Accès d'un médecin au dossier d'un enfant selon sa ligne de medical_record_child_consent. Sans ligne, l'accès est
+ * automatique (consultation confirmée) ; un accès retiré ou échu est refusé et prévaut sur la consultation.
+ */
+export function evaluateChildRecordAccess(
+  row: { consent_status?: string | null; expires_at?: string | null } | null,
+  now: Date = new Date(),
+): { hasAccess: boolean; isRevoked: boolean } {
+  if (!row) return { hasAccess: true, isRevoked: false };
+  if (row.consent_status === 'revoked') return { hasAccess: false, isRevoked: true };
+  if (row.expires_at && new Date(row.expires_at) < now) return { hasAccess: false, isRevoked: true };
+  return { hasAccess: true, isRevoked: false };
+}
+
+/** Lecture côté prestataire ; en cas d'erreur de lecture, l'accès n'est PAS présumé. */
+export async function checkChildRecordAccess(doctorId: string, childId: string): Promise<{ hasAccess: boolean; isRevoked: boolean }> {
+  if (useMock()) return { hasAccess: true, isRevoked: false };
+  const { data, error } = await supabase!
+    .from('medical_record_child_consent')
+    .select('consent_status, expires_at')
+    .eq('doctor_id', doctorId)
+    .eq('child_id', childId)
+    .maybeSingle();
+  if (error) return { hasAccess: false, isRevoked: false };
+  return evaluateChildRecordAccess(data);
+}
+
 export async function revokeChildRecordConsent(childId: string, doctorId: string): Promise<void> {
   if (useMock()) return;
   const { error } = await supabase!.rpc('revoke_child_record_consent', { p_child_id: childId, p_doctor_id: doctorId });

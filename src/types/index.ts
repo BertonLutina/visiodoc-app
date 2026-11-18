@@ -119,6 +119,8 @@ export interface MedicalRecordAttachment {
 export interface MedicalRecord {
   id: string;
   patientId: string;
+  /** `medical_records.child_id` : vide = le parent lui-même, sinon l'enfant concerné. */
+  childId?: string;
   doctorId: string;
   consultationId?: string;
   kind: MedicalRecordKind;
@@ -147,4 +149,6 @@ export interface MedicalRecordInput {
   endDate?: string;
   metadata?: Record<string, string>;
   consultationId?: string;
+  /** Relevé d'un enfant ; absent = le patient lui-même. */
+  childId?: string;
 }

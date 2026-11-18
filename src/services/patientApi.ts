@@ -364,6 +364,7 @@ export function mapMedicalRecordRow(row: any): MedicalRecord {
   return {
     id: row.id,
     patientId: row.patient_id,
+    childId: row.child_id ?? undefined,
     doctorId: row.doctor_id,
     consultationId: row.consultation_id ?? undefined,
     kind: isMedicalRecordKind(row.record_type) ? row.record_type : 'note',
@@ -381,15 +382,23 @@ export function mapMedicalRecordRow(row: any): MedicalRecord {
   };
 }
 
-export async function getMedicalRecords(patientId: string): Promise<MedicalRecord[]> {
+/**
+ * Relevés d'une personne. scope = { childId: null } pour le parent seul, { childId } pour un enfant seul : les
+ * relevés d'un enfant et ceux du parent ne sont jamais mélangés. Sans scope, tous les relevés lisibles.
+ */
+export async function getMedicalRecords(
+  patientId: string,
+  scope?: { childId: string | null },
+): Promise<MedicalRecord[]> {
   if (useMock()) return mock.medicalRecords;
-  const { data, error } = await supabase!
+  let query = supabase!
     .from('medical_records')
     .select(
-      'id, patient_id, doctor_id, consultation_id, record_type, title, description, category, severity, status, date_recorded, start_date, end_date, attachments, metadata, created_at',
+      'id, patient_id, child_id, doctor_id, consultation_id, record_type, title, description, category, severity, status, date_recorded, start_date, end_date, attachments, metadata, created_at',
     )
-    .eq('patient_id', patientId)
-    .order('created_at', { ascending: false });
+    .eq('patient_id', patientId);
+  if (scope) query = scope.childId ? query.eq('child_id', scope.childId) : query.is('child_id', null);
+  const { data, error } = await query.order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapMedicalRecordRow);
 }

@@ -29,12 +29,21 @@ import { useT } from '@/i18n';
 
 export default function RecordForm() {
   const t = useT();
-  const { patientId, recordId } = useLocalSearchParams<{ patientId: string; recordId?: string }>();
+  const { patientId, recordId, childId: childIdParam } = useLocalSearchParams<{
+    patientId: string;
+    recordId?: string;
+    childId?: string;
+  }>();
+  // Relevé d'un enfant : child_id explicite ; sinon relevé du parent seul.
+  const childId = childIdParam || undefined;
   const { user } = useAuth();
   const doctorId = user?.id ?? currentProvider.id;
   const isEdit = !!recordId;
 
-  const { data: records, error: recordsError } = useAsync(() => getMedicalRecords(patientId), [patientId]);
+  const { data: records, error: recordsError } = useAsync(
+    () => getMedicalRecords(patientId, { childId: childId ?? null }),
+    [patientId, childId],
+  );
   const existing = useMemo(() => (records ?? []).find((r) => r.id === recordId), [records, recordId]);
 
   const [kind, setKind] = useState<MedicalRecordKind>('note');
@@ -138,6 +147,7 @@ export default function RecordForm() {
       } else {
         const created = await createMedicalRecord({
           patientId,
+          childId,
           doctorId,
           kind,
           title,
