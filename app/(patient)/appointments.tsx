@@ -4,7 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Button, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
-import { formatAmountInCurrency, formatMoney, isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
+import { formatMoney, isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
 import { getCountry, type CountryConfig } from '@/config/countries';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
@@ -15,8 +15,8 @@ import {
 } from '@/services/patientApi';
 import {
   cancelScheduledConsultation,
+  buildCancellationMessage,
   getCancellationCreditPreview,
-  type CancellationCreditPreview,
 } from '@/services/consultationCancel';
 import { PaymentConfirmationError, reconcilePendingPayments } from '@/services/paymentAttempt';
 import { listPendingAttempts } from '@/services/pendingPaymentAttempt';
@@ -233,17 +233,6 @@ export default function Appointments() {
 
   const refreshAll = () => Promise.all([up.refresh(), pastReq.refresh()]);
 
-  /** Message de confirmation : le montant vient de l'aperçu serveur, jamais d'une règle calculée ici. */
-  const cancelMessage = (preview: CancellationCreditPreview | null) => {
-    if (!preview) return t("Le crédit éventuel sera calculé par le serveur au moment de l'annulation.");
-    if (preview.eligible) {
-      return t('Vous serez crédité de {amount} sur votre Portefeuille.', {
-        amount: formatAmountInCurrency(preview.amount, preview.currency),
-      });
-    }
-    return t('Aucun crédit (annulation moins de 24 h avant).');
-  };
-
   const confirmCancel = (c: Consultation, message: string) =>
     new Promise<boolean>((resolve) => {
       Alert.alert(
@@ -262,7 +251,7 @@ export default function Appointments() {
       setCancellingId(c.id);
       try {
         const preview = await getCancellationCreditPreview(c.id);
-        if (!(await confirmCancel(c, cancelMessage(preview)))) return;
+        if (!(await confirmCancel(c, buildCancellationMessage(preview)))) return;
         try {
           await cancelScheduledConsultation(c.id);
           Alert.alert(t('Consultation annulée'));

@@ -1,5 +1,6 @@
 import { supabase, supabaseConfigured } from '@/lib/supabase';
-import { translate } from '@/i18n/core';
+import { appLocale, translate } from '@/i18n/core';
+import { formatAmountInCurrency } from '@/utils/format';
 
 /** Aperçu serveur ([MOB-1811-7]) : la règle (24 h / rétractation 72 h) est appliquée par la base, jamais ici. */
 export interface CancellationCreditPreview {
@@ -77,4 +78,45 @@ export async function cancelScheduledConsultation(consultationId: string): Promi
       translate('Cette consultation ne peut plus être annulée (déjà annulée ou commencée). Actualise la liste.'),
     );
   }
+}
+
+/**
+ * Texte de confirmation avant l'annulation, composé à partir de l'aperçu serveur (jamais d'une règle locale).
+ * Aperçu indisponible : message prudent, sans promesse de montant.
+ */
+export function buildCancellationMessage(preview: CancellationCreditPreview | null): string {
+  if (!preview) return translate("Le crédit éventuel sera calculé par le serveur au moment de l'annulation.");
+  const parts: string[] = [];
+  if (preview.eligible) {
+    parts.push(
+      translate(
+        'Si vous annulez maintenant, vous serez crédité de {amount} dans votre portefeuille (avoir réutilisable pour une prochaine consultation).',
+        { amount: formatAmountInCurrency(preview.amount, preview.currency) },
+      ),
+    );
+    if (preview.rule === 'withdrawal_72h') {
+      parts.push(translate('Vous êtes dans le délai de rétractation de 72 heures après votre paiement.'));
+    }
+    const when = preview.deadline ? new Date(preview.deadline) : null;
+    if (when && Number.isFinite(when.getTime())) {
+      parts.push(
+        translate("Annulation avec crédit possible jusqu'au {deadline}", {
+          deadline: when.toLocaleString(appLocale(), {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        }),
+      );
+    }
+  } else {
+    parts.push(
+      translate(
+        'Moins de 24 heures avant la consultation et hors délai de rétractation : aucun crédit ne sera accordé.',
+      ),
+    );
+  }
+  return parts.join(' ');
 }

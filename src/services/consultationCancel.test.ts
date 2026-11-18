@@ -75,4 +75,29 @@ describe('consultationCancel', () => {
     selectMock.mockRejectedValue(new Error('boom'));
     await expect(load().cancelScheduledConsultation('c1')).rejects.toThrow("L'annulation a échoué. Réessaie plus tard.");
   });
+  it('buildCancellationMessage : crédit 24 h', () => {
+    const { buildCancellationMessage } = load();
+    const m = buildCancellationMessage({ eligible: true, rule: '24h', amount: 30000, currency: 'CDF', deadline: null });
+    expect(m).toMatch(/^Si vous annulez maintenant, vous serez crédité de .*30.*dans votre portefeuille \(avoir réutilisable pour une prochaine consultation\)\.$/);
+  });
+
+  it('buildCancellationMessage : rétractation 72 h et échéance', () => {
+    const { buildCancellationMessage } = load();
+    const m = buildCancellationMessage({ eligible: true, rule: 'withdrawal_72h', amount: 100, currency: 'CDF', deadline: '2026-11-20T10:00:00Z' });
+    expect(m).toContain('Vous êtes dans le délai de rétractation de 72 heures après votre paiement.');
+    expect(m).toContain("Annulation avec crédit possible jusqu'au ");
+    expect(m).not.toContain('{deadline}');
+  });
+
+  it('buildCancellationMessage : aucun crédit, ignore tout montant ou échéance', () => {
+    const { buildCancellationMessage } = load();
+    expect(buildCancellationMessage({ eligible: false, rule: 'none', amount: 0, currency: 'CDF', deadline: null })).toBe(
+      'Moins de 24 heures avant la consultation et hors délai de rétractation : aucun crédit ne sera accordé.',
+    );
+  });
+
+  it('buildCancellationMessage : aperçu indisponible = message prudent sans montant', () => {
+    const m = load().buildCancellationMessage(null);
+    expect(m).toBe("Le crédit éventuel sera calculé par le serveur au moment de l'annulation.");
+  });
 });

@@ -656,8 +656,6 @@ export const ln: Record<string, string> = {
   "Remboursement : médecin absent": "Kozongisama : monganga azali te",
   "Annuler la consultation": "Longola consultation",
   "Garder": "Bomba yango",
-  "Vous serez crédité de {amount} sur votre Portefeuille.": "Okozwa {amount} na portefeuille na yo.",
-  "Aucun crédit (annulation moins de 24 h avant).": "Mbongo ekozonga te (kolongola na eleko ya ngonga 24 te).",
   "Le crédit éventuel sera calculé par le serveur au moment de l'annulation.": "Soki mbongo ekozonga, serveur ekotala yango ntango ya kolongola.",
   "Consultation annulée": "Consultation elongolami",
   "Annulation impossible": "Kolongola ekoki te",
@@ -665,4 +663,8 @@ export const ln: Record<string, string> = {
   "L'annulation a échoué. Réessaie plus tard.": "Kolongola esimbi te. Meka lisusu na nsima.",
   "Cette consultation ne peut plus être annulée (déjà annulée ou commencée). Actualise la liste.": "Consultation oyo ekoki lisusu kolongolama te (elongolami to ebandi). Sika liste.",
   "Crédit d'annulation": "Mbongo ya kolongola",
+  "Si vous annulez maintenant, vous serez crédité de {amount} dans votre portefeuille (avoir réutilisable pour une prochaine consultation).": "Soki olongoli sikoyo, okozwa {amount} na portefeuille na yo (mbongo oyo okoki kosalela mpo na consultation oyo ekoya).",
+  "Vous êtes dans le délai de rétractation de 72 heures après votre paiement.": "Ozali na kati ya ntango ya kozongela makanisi ya ngonga 72 nsima ya kofuta na yo.",
+  "Annulation avec crédit possible jusqu'au {deadline}": "Kolongola elongo na mbongo ekoki tii {deadline}",
+  "Moins de 24 heures avant la consultation et hors délai de rétractation : aucun crédit ne sera accordé.": "Na eleko ya ngonga 24 te liboso ya consultation mpe libanda ya ntango ya kozongela makanisi : mbongo ekozonga te.",
 };

@@ -656,8 +656,6 @@ export const en: Record<string, string> = {
   "Remboursement : médecin absent": "Refund: provider absent",
   "Annuler la consultation": "Cancel the consultation",
   "Garder": "Keep it",
-  "Vous serez crédité de {amount} sur votre Portefeuille.": "You will be credited {amount} to your Wallet.",
-  "Aucun crédit (annulation moins de 24 h avant).": "No credit (cancellation less than 24 h before).",
   "Le crédit éventuel sera calculé par le serveur au moment de l'annulation.": "Any credit will be calculated by the server when you cancel.",
   "Consultation annulée": "Consultation cancelled",
   "Annulation impossible": "Cancellation failed",
@@ -665,4 +663,8 @@ export const en: Record<string, string> = {
   "L'annulation a échoué. Réessaie plus tard.": "Cancellation failed. Please try again later.",
   "Cette consultation ne peut plus être annulée (déjà annulée ou commencée). Actualise la liste.": "This consultation can no longer be cancelled (already cancelled or started). Refresh the list.",
   "Crédit d'annulation": "Cancellation credit",
+  "Si vous annulez maintenant, vous serez crédité de {amount} dans votre portefeuille (avoir réutilisable pour une prochaine consultation).": "If you cancel now, you will be credited {amount} in your wallet (credit reusable for a future consultation).",
+  "Vous êtes dans le délai de rétractation de 72 heures après votre paiement.": "You are within the 72-hour withdrawal period after your payment.",
+  "Annulation avec crédit possible jusqu'au {deadline}": "Cancellation with credit possible until {deadline}",
+  "Moins de 24 heures avant la consultation et hors délai de rétractation : aucun crédit ne sera accordé.": "Less than 24 hours before the consultation and outside the withdrawal period: no credit will be granted.",
 };

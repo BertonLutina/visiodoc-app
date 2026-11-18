@@ -656,8 +656,6 @@ export const sw: Record<string, string> = {
   "Remboursement : médecin absent": "Kurudishiwa: daktari hakufika",
   "Annuler la consultation": "Ghairi mashauriano",
   "Garder": "Yabakize",
-  "Vous serez crédité de {amount} sur votre Portefeuille.": "Utawekewa {amount} kwenye pochi yako.",
-  "Aucun crédit (annulation moins de 24 h avant).": "Hakuna mkopo (kughairi chini ya saa 24 kabla).",
   "Le crédit éventuel sera calculé par le serveur au moment de l'annulation.": "Mkopo wowote utahesabiwa na seva wakati wa kughairi.",
   "Consultation annulée": "Mashauriano yameghairiwa",
   "Annulation impossible": "Kughairi hakukuwezekana",
@@ -665,4 +663,8 @@ export const sw: Record<string, string> = {
   "L'annulation a échoué. Réessaie plus tard.": "Kughairi kumeshindwa. Jaribu tena baadaye.",
   "Cette consultation ne peut plus être annulée (déjà annulée ou commencée). Actualise la liste.": "Mashauriano haya hayawezi kughairiwa tena (yameshaghairiwa au yameanza). Onyesha upya orodha.",
   "Crédit d'annulation": "Mkopo wa kughairi",
+  "Si vous annulez maintenant, vous serez crédité de {amount} dans votre portefeuille (avoir réutilisable pour une prochaine consultation).": "Ukighairi sasa, utawekewa {amount} kwenye pochi yako (mkopo unaoweza kutumika kwa mashauriano yajayo).",
+  "Vous êtes dans le délai de rétractation de 72 heures après votre paiement.": "Uko ndani ya muda wa kujiondoa wa saa 72 baada ya malipo yako.",
+  "Annulation avec crédit possible jusqu'au {deadline}": "Kughairi kwa mkopo kunawezekana hadi {deadline}",
+  "Moins de 24 heures avant la consultation et hors délai de rétractation : aucun crédit ne sera accordé.": "Chini ya saa 24 kabla ya mashauriano na nje ya muda wa kujiondoa: hakuna mkopo utakaotolewa.",
 };
