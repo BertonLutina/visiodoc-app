@@ -65,3 +65,15 @@ describe('toE164 literal cases (final review)', () => {
   });
 });
 
+
+describe('toE164 with a world dialling code (Belgium, Portugal, France)', () => {
+  it('converts a Belgian national number with +32', () => {
+    expect(toE164('0475 12 34 56', '+32')).toBe('+32475123456');
+    expect(toE164('475123456', '+32')).toBe('+32475123456');
+  });
+  it('does not double-prefix a Belgian number typed with its code', () => {
+    expect(toE164('32475123456', '+32')).toBe('+32475123456');
+    expect(toE164('+32475123456', '+243')).toBe('+32475123456');
+    expect(toE164('0032475123456', '+243')).toBe('+32475123456');
+  });
+});
