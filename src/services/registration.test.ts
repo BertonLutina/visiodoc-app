@@ -243,8 +243,9 @@ const patientInput = {
   phone: '+243899999999',
   countryCode: 'CD' as string | undefined,
   dateOfBirth: '1990-06-15',
-  city: undefined as string | undefined,
+  city: 'Kinshasa' as string | undefined,
   commune: undefined as string | undefined,
+  postNom: undefined as string | undefined,
 };
 
 const okResponse = {
@@ -279,6 +280,7 @@ describe('registerPatientAccount', () => {
         lastName: 'Kalala',
         gender: 'female',
         dateOfBirth: '1990-06-15',
+        city: 'Kinshasa',
         phone: '+243899999999',
         language: 'fr',
         countryId: CD_UUID,
@@ -286,16 +288,35 @@ describe('registerPatientAccount', () => {
     });
   });
 
-  it('sends city and commune (trimmed) only when filled in', async () => {
+  it('sends city and commune (trimmed), the commune only when filled in', async () => {
     await registerPatientAccount({ ...patientInput, city: '  Matadi ', commune: ' Nzanza' });
     const body = mockInvoke.mock.calls[0][1].body;
     expect(body.city).toBe('Matadi');
     expect(body.commune).toBe('Nzanza');
     mockInvoke.mockClear();
-    await registerPatientAccount({ ...patientInput, city: '  ', commune: '' });
-    const bare = mockInvoke.mock.calls[0][1].body;
-    expect(Object.keys(bare)).not.toContain('city');
-    expect(Object.keys(bare)).not.toContain('commune');
+    await registerPatientAccount({ ...patientInput, commune: '' });
+    expect(Object.keys(mockInvoke.mock.calls[0][1].body)).not.toContain('commune');
+  });
+
+  it('refuses an empty city before any network call', async () => {
+    for (const city of ['', '   ', undefined]) {
+      await expect(registerPatientAccount({ ...patientInput, city })).rejects.toThrow('La ville est obligatoire.');
+    }
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('applies the names rule and never sends postNom (TODO(contrat register-patient postNom))', async () => {
+    await expect(registerPatientAccount({ ...patientInput, lastName: ' ' })).rejects.toThrow(
+      'Le nom est obligatoire, ainsi que le prénom ou le post-nom.',
+    );
+    // Prénom vide + post-nom rempli : bloqué avec un message clair, pas de 400 serveur.
+    await expect(registerPatientAccount({ ...patientInput, firstName: '', postNom: 'Mbala' })).rejects.toThrow(
+      "Le prénom est encore requis pour l'inscription par e-mail.",
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+    await registerPatientAccount({ ...patientInput, postNom: 'Mbala' });
+    expect(Object.keys(mockInvoke.mock.calls[0][1].body)).not.toContain('postNom');
+    expect(Object.keys(mockInvoke.mock.calls[0][1].body)).not.toContain('post_nom');
   });
 
   it('refuses a city or commune over 100 characters before any network call', async () => {

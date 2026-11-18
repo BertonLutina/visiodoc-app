@@ -1,5 +1,6 @@
 import { currentLangCode, translate } from '@/i18n/core';
-import { COUNTRIES } from '@/config/countries';
+import { COUNTRIES, countryUsesPostnom } from '@/config/countries';
+import { identityNamesIssue } from '@/utils/identityNames';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { toE164 } from '@/utils/phone';
 import { supabase } from '@/lib/supabase';
@@ -220,6 +221,8 @@ export interface RegisterPatientAccountInput {
   password: string;
   firstName: string;
   lastName: string;
+  /** Post-nom (pays congolais, `users.post_nom`). Pas encore transmis au serveur, voir `emailSignupPostNomIssue`. */
+  postNom?: string;
   /** Volontairement large : validé à l'exécution (male / female uniquement). */
   gender?: string | null;
   phone?: string;
@@ -227,9 +230,21 @@ export interface RegisterPatientAccountInput {
   countryCode?: string;
   /** `AAAA-MM-JJ`, obligatoire, 18 ans révolus (contrôlé avant l'appel). */
   dateOfBirth: string;
-  /** Facultatives, 100 caractères au plus. */
+  /** Ville obligatoire (100 caractères au plus) ; commune facultative. */
   city?: string;
   commune?: string;
+}
+
+/**
+ * TODO(contrat register-patient postNom) : `register-patient` exige AUJOURD'HUI `firstName` non vide et
+ * n'accepte pas `postNom` (demande d'évolution en cours côté backend). Tant que le contrat n'a pas changé :
+ * un prénom vide avec un post-nom rempli est bloqué ici avec un message clair (plutôt qu'un 400), et `postNom`
+ * n'est jamais envoyé. Quand le serveur acceptera `postNom` : supprimer cette fonction et ajouter
+ * `...(postNom ? { postNom } : {})` au corps dans `registerPatientAccount`.
+ */
+export function emailSignupPostNomIssue(input: { firstName?: string; postNom?: string }): string | null {
+  if (!input.firstName?.trim()) return translate("Le prénom est encore requis pour l'inscription par e-mail.");
+  return null;
 }
 
 /**
@@ -237,7 +252,8 @@ export interface RegisterPatientAccountInput {
  * Succès : le compte existe mais n'est PAS connecté, l'e-mail de confirmation est parti.
  *
  * - `gender` et `dateOfBirth` (18 ans révolus) : vérifiés AVANT tout appel réseau.
- * - `city` / `commune` : facultatives, omises si vides.
+ * - `city` obligatoire (refus avant l'appel si vide) ; `commune` facultative, omise si vide.
+ * - noms : `identityNamesIssue` (post-nom pour CD) ; `postNom` jamais envoyé, voir `emailSignupPostNomIssue`.
  * - `countryId` : UUID du pays choisi si l'app le connaît (`COUNTRIES[code].id`), sinon omis
  *   (le serveur choisit la RDC). Jamais de repli silencieux ni de premier pays d'une liste.
  */
@@ -247,10 +263,15 @@ export async function registerPatientAccount(
   if (!isGender(input.gender)) {
     throw new Error(translate('Choisis ton genre : Masculin ou Féminin.'));
   }
+  const namesIssue = identityNamesIssue(input, countryUsesPostnom(input.countryCode));
+  if (namesIssue) throw new Error(namesIssue);
+  const emailIssue = emailSignupPostNomIssue(input);
+  if (emailIssue) throw new Error(emailIssue);
   const dobIssue = birthDateIssue(input.dateOfBirth);
   if (dobIssue) throw new Error(birthDateMessage(dobIssue));
   const city = normalizePlace(input.city);
   if (city === null) throw new Error(translate('La ville ne doit pas dépasser 100 caractères.'));
+  if (!city) throw new Error(translate('La ville est obligatoire.'));
   const commune = normalizePlace(input.commune);
   if (commune === null) throw new Error(translate('La commune ne doit pas dépasser 100 caractères.'));
   if (!supabase) throw new Error(translate('Backend non configuré.'));

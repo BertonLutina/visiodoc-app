@@ -64,7 +64,24 @@ describe('phoneIdentityIssue (MOB-1211-1 §2)', () => {
 
   it('requires the gender, once, and the names', () => {
     expect(phoneIdentityIssue({ ...input, gender: null })).toBe('Choisis ton genre : Masculin ou Féminin.');
-    expect(phoneIdentityIssue({ ...input, lastName: ' ' })).toBe('Le nom et le prénom sont obligatoires.');
+    expect(phoneIdentityIssue({ ...input, lastName: ' ' })).toBe(
+      'Le nom est obligatoire, ainsi que le prénom ou le post-nom.',
+    );
+  });
+
+  it('accepts a post-nom instead of a first name, but never without the last name', () => {
+    expect(phoneIdentityIssue({ ...input, firstName: '', postNom: 'Mbala' })).toBeNull();
+    expect(phoneIdentityIssue({ ...input, firstName: 'Fatou', postNom: 'Mbala' })).toBeNull();
+    expect(phoneIdentityIssue({ ...input, firstName: '', postNom: '' })).toBe(
+      'Le nom est obligatoire, ainsi que le prénom ou le post-nom.',
+    );
+    expect(phoneIdentityIssue({ ...input, lastName: '', postNom: 'Mbala' })).not.toBeNull();
+  });
+
+  it('requires the city (commune stays optional)', () => {
+    expect(phoneIdentityIssue({ ...input, city: '  ' })).toBe('La ville est obligatoire.');
+    expect(phoneIdentityIssue({ ...input, city: undefined })).toBe('La ville est obligatoire.');
+    expect(phoneIdentityIssue({ ...input, commune: '' })).toBeNull();
   });
 });
 
@@ -79,6 +96,19 @@ describe('completePhoneIdentity', () => {
       { user_id: 'user-1', date_of_birth: '1990-06-15', gender: 'female', city: 'Matadi', commune: null, country: 'RDC' },
       { onConflict: 'user_id' },
     );
+  });
+
+  it('writes post_nom in the own users row (null when empty)', async () => {
+    await completePhoneIdentity('user-1', { ...input, firstName: '', postNom: ' Mbala ' });
+    expect(mockUpdate.mock.calls[0][0]).toMatchObject({ first_name: '', last_name: 'Kalala', post_nom: 'Mbala' });
+    mockUpdate.mockClear();
+    await completePhoneIdentity('user-1', { ...input, postNom: '  ' });
+    expect(mockUpdate.mock.calls[0][0].post_nom).toBeNull();
+  });
+
+  it('refuses an empty city before any network call', async () => {
+    await expect(completePhoneIdentity('user-1', { ...input, city: '' })).rejects.toThrow('La ville est obligatoire.');
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 
   it('refuses a minor before any network call', async () => {
