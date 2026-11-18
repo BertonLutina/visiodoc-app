@@ -46,6 +46,7 @@ function AppShell() {
       <Stack.Screen name="provider/fee" />
       <Stack.Screen name="provider/specializations" />
       <Stack.Screen name="provider/subscription" />
+      <Stack.Screen name="provider/wallet-recharge" />
       <Stack.Screen name="call/[room]" options={{ presentation: 'fullScreenModal' }} />
     </Stack>
   );
