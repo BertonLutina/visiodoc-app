@@ -11,7 +11,7 @@ import { DateField } from '@/components/DateField';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
 import { toE164 } from '@/utils/phone';
-import { birthDateIssue, birthDateMessage, latestBirthDate, MAX_PLACE_LENGTH, parseIsoDate } from '@/utils/birthDate';
+import { birthDateIssue, birthDateMessage, MAX_PLACE_LENGTH } from '@/utils/birthDate';
 import { needsPhoneIdentity } from '@/services/patientIdentity';
 import type { Gender } from '@/services/registration';
 import { authErrorMessage, providerRefusal, providerRefusalMessage } from '@/utils/authError';
@@ -25,12 +25,6 @@ import {
 import { fetchOtpDeliveryInfo, otpIntroText, otpSentText, sendCodeLabel, type OtpDeliveryInfo } from '@/services/otpDelivery';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
-
-/** Borne haute du sélecteur : aujourd'hui moins 18 ans. */
-const maxBirthDate = (): Date => {
-  const d = parseIsoDate(latestBirthDate());
-  return d ? new Date(d.y, d.m - 1, d.d) : new Date();
-};
 
 export default function PhoneLogin() {
   const t = useT();
@@ -319,7 +313,8 @@ export default function PhoneLogin() {
               value={dateOfBirth}
               onChange={setDateOfBirth}
               placeholder={t('Choisir une date')}
-              maximumDate={maxBirthDate()}
+              maximumDate={new Date()}
+              startOnYearSelection
             />
             <Field
               label={t('Ville (facultatif)')}

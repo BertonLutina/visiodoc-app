@@ -320,11 +320,18 @@ describe('registerPatientAccount', () => {
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
-  it('maps a server 400 "Required" to the date-of-birth message', async () => {
+  it('maps a server 400 "Required" to a generic missing-field message', async () => {
     mockInvoke.mockResolvedValue({ data: null, error: httpError(400, { error: 'Required' }) });
     const err: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
     expect(err.kind).toBe('validation');
-    expect(registerPatientErrorMessage(err)).toBe('La date de naissance est obligatoire.');
+    expect(registerPatientErrorMessage(err)).toBe('Un champ obligatoire est manquant. Vérifie le formulaire.');
+  });
+
+  it('refuses a missing phone number before any network call (the server requires it)', async () => {
+    await expect(registerPatientAccount({ ...patientInput, phone: '' })).rejects.toThrow(
+      'Le numéro de téléphone est obligatoire.',
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it('keeps the server age refusal text', async () => {
@@ -380,11 +387,12 @@ describe('registerPatientAccount', () => {
     expect(mockInvoke.mock.calls[0][1].body.phone).toBe('+22790123456');
   });
 
-  it('omits phone when it is empty, and sends male as is', async () => {
-    await registerPatientAccount({ ...patientInput, phone: '  ', gender: 'male' });
-    const body = mockInvoke.mock.calls[0][1].body;
-    expect(Object.keys(body)).not.toContain('phone');
-    expect(body.gender).toBe('male');
+  it('refuses a blank phone (required by register-patient), and sends male as is', async () => {
+    await expect(registerPatientAccount({ ...patientInput, phone: '  ', gender: 'male' })).rejects.toThrow(
+      'Le numéro de téléphone est obligatoire.',
+    );
+    await registerPatientAccount({ ...patientInput, gender: 'male' });
+    expect(mockInvoke.mock.calls[0][1].body.gender).toBe('male');
   });
 
   it("omits language when the app is not in French (the guide only documents 'fr')", async () => {

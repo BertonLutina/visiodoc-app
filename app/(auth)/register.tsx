@@ -11,15 +11,9 @@ import { DateField } from '@/components/DateField';
 import { ResendConfirmation } from '@/components/ResendConfirmation';
 import { passwordIssue } from '@/services/passwordPolicy';
 import { registerPatientErrorMessage, type Gender } from '@/services/registration';
-import { birthDateIssue, birthDateMessage, latestBirthDate, MAX_PLACE_LENGTH, parseIsoDate } from '@/utils/birthDate';
+import { birthDateIssue, birthDateMessage, MAX_PLACE_LENGTH } from '@/utils/birthDate';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
-
-/** Borne haute du sélecteur : aujourd'hui moins 18 ans. */
-const maxBirthDate = (): Date => {
-  const d = parseIsoDate(latestBirthDate());
-  return d ? new Date(d.y, d.m - 1, d.d) : new Date();
-};
 
 export default function RegisterPatient() {
   const t = useT();
@@ -133,7 +127,8 @@ export default function RegisterPatient() {
           value={dateOfBirth}
           onChange={setDateOfBirth}
           placeholder={t('Choisir une date')}
-          maximumDate={maxBirthDate()}
+          maximumDate={new Date()}
+          startOnYearSelection
         />
         <PasswordField label={t('Mot de passe')} value={form.password} onChangeText={set('password')} />
         <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />

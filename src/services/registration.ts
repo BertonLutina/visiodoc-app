@@ -184,9 +184,12 @@ async function toRegisterError(error: any): Promise<RegisterPatientError> {
   const kind = kindForStatus(status);
   const retryAfter = kind === 'rate_limited' ? parseRetryAfter(response?.headers?.get?.('Retry-After')) : undefined;
   if (status === 400) {
-    // MOB-1211-1 : 400 « Required » = date de naissance absente ; refus d'âge = texte français du serveur.
+    // 400 « Required » : un champ obligatoire manque (le serveur ne dit pas lequel). Refus d'âge = texte du serveur.
     if (body?.error === 'Required') {
-      return new RegisterPatientError(kind, edgeFunctionError({ error: translate('La date de naissance est obligatoire.') }));
+      return new RegisterPatientError(
+        kind,
+        edgeFunctionError({ error: translate('Un champ obligatoire est manquant. Vérifie le formulaire.') }),
+      );
     }
     if (body?.error === UNDERAGE_SERVER_MESSAGE) {
       return new RegisterPatientError(kind, edgeFunctionError({ error: translate(UNDERAGE_SERVER_MESSAGE) }));
@@ -253,6 +256,8 @@ export async function registerPatientAccount(
   if (!supabase) throw new Error(translate('Backend non configuré.'));
 
   const phone = toE164(input.phone, dialCodeFor(input.countryCode));
+  // `register-patient` exige le téléphone (phoneE164Schema) : sans lui, le serveur répond 400 « Required ».
+  if (!phone) throw new Error(translate('Le numéro de téléphone est obligatoire.'));
   const countryId = input.countryCode ? COUNTRIES[input.countryCode]?.id : undefined;
   const language = serverLanguage();
   const body = {
