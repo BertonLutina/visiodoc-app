@@ -2,7 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronDown, Search, X, Check } from 'lucide-react-native';
-import { AFRICAN_COUNTRIES, getAfricanCountry, type AfricanCountry } from '@/config/africanCountries';
+import { type AfricanCountry } from '@/config/africanCountries';
+import { useActiveCountries } from '@/hooks/useActiveCountries';
 import { colors } from '@/theme/colors';
 import { useT } from '@/i18n';
 
@@ -17,18 +18,19 @@ export function CountryPicker({ label, value, onSelect }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const t = useT();
-  const selected = getAfricanCountry(value) ?? AFRICAN_COUNTRIES[0];
+  const countries = useActiveCountries();
+  const selected = countries.find((c) => c.code === value) ?? countries[0];
 
   const list = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return AFRICAN_COUNTRIES;
-    return AFRICAN_COUNTRIES.filter(
+    if (!q) return countries;
+    return countries.filter(
       (c) =>
         c.name.toLowerCase().includes(q) ||
         c.dialCode.includes(q) ||
         c.code.toLowerCase().includes(q),
     );
-  }, [query]);
+  }, [query, countries]);
 
   const choose = (c: AfricanCountry) => {
     onSelect(c);
