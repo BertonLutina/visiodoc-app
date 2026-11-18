@@ -58,6 +58,8 @@ const countryIdForCode = (code?: string): string | undefined =>
 interface RegisterPatientInput {
   firstName: string;
   lastName: string;
+  /** Post-nom (pays congolais) ; pas encore transmis au serveur (voir `emailSignupPostNomIssue`). */
+  postNom?: string;
   email: string;
   phone?: string;
   password: string;

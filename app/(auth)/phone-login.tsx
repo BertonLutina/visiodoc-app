@@ -12,7 +12,9 @@ import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
 import { toE164 } from '@/utils/phone';
 import { birthDateIssue, birthDateMessage, MAX_PLACE_LENGTH } from '@/utils/birthDate';
-import { needsPhoneIdentity } from '@/services/patientIdentity';
+import { needsPhoneIdentity, PHONE_IDENTITY_COUNTRY_CODE } from '@/services/patientIdentity';
+import { countryUsesPostnom } from '@/config/countries';
+import { identityNamesComplete } from '@/utils/identityNames';
 import type { Gender } from '@/services/registration';
 import { authErrorMessage, providerRefusal, providerRefusalMessage } from '@/utils/authError';
 import { providerHomeHref } from '@/services/accessPolicy';
@@ -42,6 +44,8 @@ export default function PhoneLogin() {
   const [afterIdentity, setAfterIdentity] = useState<'credentials' | 'home'>('home');
   const [identityFirstName, setIdentityFirstName] = useState('');
   const [identityLastName, setIdentityLastName] = useState('');
+  const [identityPostNom, setIdentityPostNom] = useState('');
+  const identityUsesPostnom = countryUsesPostnom(PHONE_IDENTITY_COUNTRY_CODE);
   // Le genre n'est demandé qu'ici : il est repris dans le profil, jamais redemandé.
   const [gender, setGender] = useState<Gender | null>(null);
   const [dateOfBirth, setDateOfBirth] = useState('');
@@ -153,6 +157,7 @@ export default function PhoneLogin() {
       await completePatientIdentity(identityUserId, {
         firstName: identityFirstName,
         lastName: identityLastName,
+        postNom: identityPostNom,
         gender,
         dateOfBirth,
         city,
@@ -307,6 +312,9 @@ export default function PhoneLogin() {
           <>
             <Field label={t('Prénom')} placeholder="Marie" value={identityFirstName} onChangeText={setIdentityFirstName} />
             <Field label={t('Nom')} placeholder="Konaté" value={identityLastName} onChangeText={setIdentityLastName} />
+            {identityUsesPostnom ? (
+              <Field label={t('Post-nom')} placeholder="Mbala" value={identityPostNom} onChangeText={setIdentityPostNom} />
+            ) : null}
             <GenderField value={gender} onChange={setGender} />
             <DateField
               label={t('Date de naissance')}
@@ -317,7 +325,7 @@ export default function PhoneLogin() {
               startOnYearSelection
             />
             <Field
-              label={t('Ville (facultatif)')}
+              label={t('Ville')}
               placeholder="Kinshasa"
               maxLength={MAX_PLACE_LENGTH}
               value={city}
@@ -339,7 +347,15 @@ export default function PhoneLogin() {
               label={t('Enregistrer et continuer')}
               variant={variant}
               loading={saving}
-              disabled={!identityFirstName.trim() || !identityLastName.trim() || !gender || !dateOfBirth}
+              disabled={
+                !identityNamesComplete(
+                  { firstName: identityFirstName, lastName: identityLastName, postNom: identityPostNom },
+                  identityUsesPostnom,
+                ) ||
+                !city.trim() ||
+                !gender ||
+                !dateOfBirth
+              }
               onPress={onSaveIdentity}
             />
           </>

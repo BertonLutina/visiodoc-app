@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { CountryPicker } from '@/components/CountryPicker';
 import { getAfricanCountry } from '@/config/africanCountries';
+import { countryUsesPostnom } from '@/config/countries';
+import { identityNamesComplete } from '@/utils/identityNames';
 import { PasswordField } from '@/components/PasswordField';
 import { GenderField } from '@/components/GenderField';
 import { DateField } from '@/components/DateField';
@@ -21,6 +23,7 @@ export default function RegisterPatient() {
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
+    postNom: '',
     email: '',
     phone: '',
     password: '',
@@ -34,6 +37,7 @@ export default function RegisterPatient() {
   // Renseigné après un 200 `requiresEmailConfirmation` : on affiche « Vérifie ta boîte e-mail ».
   const [sent, setSent] = useState<{ email: string; at: number } | null>(null);
   const country = getAfricanCountry(countryCode);
+  const usesPostnom = countryUsesPostnom(countryCode);
 
   const set = (k: keyof typeof form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -50,6 +54,7 @@ export default function RegisterPatient() {
       const result = await registerPatient({
         firstName: form.firstName,
         lastName: form.lastName,
+        postNom: usesPostnom ? form.postNom : undefined,
         email: form.email,
         phone: form.phone,
         password: form.password,
@@ -106,6 +111,9 @@ export default function RegisterPatient() {
 
         <Field label={t('Prénom')} placeholder="Marie" value={form.firstName} onChangeText={set('firstName')} />
         <Field label={t('Nom')} placeholder="Konaté" value={form.lastName} onChangeText={set('lastName')} />
+        {usesPostnom ? (
+          <Field label={t('Post-nom')} placeholder="Mbala" value={form.postNom} onChangeText={set('postNom')} />
+        ) : null}
         <Field
           label={t('Email')}
           placeholder="marie.konate@gmail.com"
@@ -133,7 +141,7 @@ export default function RegisterPatient() {
         <PasswordField label={t('Mot de passe')} value={form.password} onChangeText={set('password')} />
         <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
         <Field
-          label={t('Ville (facultatif)')}
+          label={t('Ville')}
           placeholder="Kinshasa"
           maxLength={MAX_PLACE_LENGTH}
           value={form.city}
@@ -156,7 +164,13 @@ export default function RegisterPatient() {
         <Button
           label={t('Créer mon compte')}
           loading={loading}
-          disabled={passwordIssue(form.password) !== null || !gender || !dateOfBirth}
+          disabled={
+            passwordIssue(form.password) !== null ||
+            !identityNamesComplete({ ...form, postNom: usesPostnom ? form.postNom : '' }, usesPostnom) ||
+            !form.city.trim() ||
+            !gender ||
+            !dateOfBirth
+          }
           onPress={onSubmit}
           className="mt-2"
         />
