@@ -47,6 +47,8 @@ export interface Doctor {
   initials: string;
   /** Photo de profil publique (users.avatar_url). */
   avatarUrl?: string;
+  /** `public_provider_listing.accepts_children` : `true` seulement si le prestataire accepte les enfants. */
+  acceptsChildren?: boolean;
 }
 
 export interface TimeSlot {
@@ -58,6 +60,10 @@ export interface TimeSlot {
 export interface Consultation {
   id: string;
   doctor: Pick<Doctor, 'id' | 'firstName' | 'lastName' | 'specialty' | 'initials' | 'avatarUrl'>;
+  /** Enfant concerné (`consultations.child_id`) ; absent = consultation pour le parent. */
+  childId?: string;
+  /** Prénom de l'enfant, pour « Pour : Léa ». */
+  childFirstName?: string;
   date: string; // ISO ou libellé court
   dateLabel: string; // ex: "Jeu 20 juin · 14h30"
   type: ConsultationType;

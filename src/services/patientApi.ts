@@ -9,6 +9,7 @@ import type {
   WalletTransaction,
 } from '@/types';
 import { isMedicalRecordKind } from './medicalRecordTaxonomy';
+import { childErrorCode, childErrorText } from './childrenApi';
 import { videoRoomId } from './videoToken';
 import { fromDbConsultationType, normalizeConsultationStatus, toDbConsultationType } from '@/utils/format';
 import { appLocale, translate } from '@/i18n/core';
@@ -54,14 +55,18 @@ const specLabel = (s: unknown): string => {
 const CATALOG_VIEW = 'public_provider_listing';
 
 const LIST_COLUMNS =
-  'id, first_name, last_name, avatar_url, specialty_labels, consultation_fee, currency_code, city, rating';
+  'id, first_name, last_name, avatar_url, specialty_labels, consultation_fee, currency_code, city, rating, accepts_children';
 
 // Colonnes réellement exposées par la vue, utiles à la fiche médecin.
 const DETAIL_COLUMNS =
-  'id, first_name, last_name, avatar_url, bio, years_of_experience, qualifications, languages, country_id, city, rating, total_consultations, availability_status, specialty_id, specialty_labels, consultation_fee, currency_code';
+  'id, first_name, last_name, avatar_url, bio, years_of_experience, qualifications, languages, country_id, city, rating, total_consultations, availability_status, specialty_id, specialty_labels, consultation_fee, currency_code, accepts_children';
 
 /** Qui lit le catalogue : `signedIn` choisit le client de session (tarif visible) plutôt que l'anonyme. */
-export type CatalogOptions = { signedIn?: boolean };
+export type CatalogOptions = {
+  signedIn?: boolean;
+  /** Filtre « Consultations pour enfants » : seulement les prestataires qui les acceptent. */
+  acceptsChildren?: boolean;
+};
 
 const catalogClient = (signedIn?: boolean) => (signedIn ? supabase! : supabasePublic ?? supabase!);
 
@@ -79,7 +84,7 @@ const toFee = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-function mapDoctor(row: any): Doctor {
+export function mapDoctor(row: any): Doctor {
   const specialty = specLabel(row.specialty_labels) || 'Médecin';
   return {
     id: row.id,
@@ -101,15 +106,16 @@ function mapDoctor(row: any): Doctor {
           : 'Sur RDV',
     initials: initials(row.first_name, row.last_name),
     avatarUrl: row.avatar_url ?? undefined,
+    // `public_provider_listing.accepts_children` vaut `false` quand vide : seul `true` autorise un enfant.
+    acceptsChildren: row.accepts_children === true,
   };
 }
 
 export async function getDoctors(options: CatalogOptions = {}): Promise<Doctor[]> {
   if (useMock()) return mock.doctors;
-  const { data, error } = await catalogClient(options.signedIn)
-    .from(CATALOG_VIEW)
-    .select(LIST_COLUMNS)
-    .order('rating', { ascending: false });
+  let query = catalogClient(options.signedIn).from(CATALOG_VIEW).select(LIST_COLUMNS);
+  if (options.acceptsChildren) query = query.eq('accepts_children', true);
+  const { data, error } = await query.order('rating', { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapDoctor);
 }
@@ -144,6 +150,9 @@ export function mapConsultation(row: any): Consultation {
       initials: initials(d.first_name, d.last_name),
       avatarUrl: d.avatar_url ?? undefined,
     },
+    // « Pour : Léa » : prénom seulement (relation `child:patient_children!child_id`), vide pour « pour moi ».
+    childId: row.child_id ?? undefined,
+    childFirstName: oneEmbed<any>(row.child)?.first_name || undefined,
     date: row.scheduled_at,
     dateLabel: new Date(row.scheduled_at).toLocaleString(appLocale(), {
       weekday: 'short',
@@ -173,7 +182,8 @@ async function fetchConsultations(patientId: string, statuses: string[]): Promis
     .select(
       `*, doctor:provider_identity!doctor_id (
          id, first_name, last_name, avatar_url, specialization
-       )`,
+       ),
+       child:patient_children!child_id ( first_name )`,
     )
     .eq('patient_id', patientId)
     .in('status', statuses)
@@ -190,7 +200,8 @@ export async function getConsultationById(id: string): Promise<Consultation | nu
     .select(
       `*, doctor:provider_identity!doctor_id (
          id, first_name, last_name, avatar_url, specialization
-       )`,
+       ),
+       child:patient_children!child_id ( first_name )`,
     )
     .eq('id', id)
     .maybeSingle();
@@ -251,6 +262,11 @@ export interface BookConsultationInput {
    * valeur fixe : la contrainte anti-chevauchement côté DB se base sur cette colonne, donc
    * une valeur fausse réserve la mauvaise plage horaire. */
   duration: number;
+  /**
+   * Enfant pour qui l'on réserve. Envoyé UNIQUEMENT pour un enfant ; pour « pour moi » le champ est absent de la
+   * requête (identique à une réservation ordinaire). Le serveur vérifie l'enfant, son âge et `accepts_children`.
+   */
+  childId?: string | null;
 }
 
 /**
@@ -276,10 +292,14 @@ export async function bookConsultation(input: BookConsultationInput): Promise<{ 
       payment_status: 'pending',
       payment_amount: input.fee,
       currency: input.currencyCode,
+      ...(input.childId ? { child_id: input.childId } : {}),
     })
     .select('id')
     .single();
   if (error) {
+    // Refus serveur propres aux enfants : message traduit, jamais le texte brut.
+    const childCode = input.childId ? childErrorCode(error) : null;
+    if (childCode) throw new Error(childErrorText(childCode));
     if (error.code === '23P01') throw new SlotUnavailableError('overlap');
     if (error.code === '23505' && error.message?.includes('one_booking_per_provider_per_day')) {
       throw new SlotUnavailableError('daily-limit');
