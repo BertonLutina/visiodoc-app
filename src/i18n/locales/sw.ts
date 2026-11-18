@@ -678,4 +678,5 @@ export const sw: Record<string, string> = {
   "Photo en attente de validation": "Picha inasubiri uthibitisho",
   "Photo refusée": "Picha imekataliwa",
   "Motif : {note}": "Sababu: {note}",
+  "Choisissez d'abord une ville.": "Chagua jiji kwanza.",
 };

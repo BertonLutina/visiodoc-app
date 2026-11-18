@@ -5,13 +5,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft, Smartphone } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { CountryPicker } from '@/components/CountryPicker';
+import { CityCommuneFields } from '@/components/CityCommuneFields';
+import { recordPlaceIfNew } from '@/services/geo';
 import { PasswordField } from '@/components/PasswordField';
 import { GenderField } from '@/components/GenderField';
 import { DateField } from '@/components/DateField';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
 import { toE164 } from '@/utils/phone';
-import { birthDateIssue, birthDateMessage, MAX_PLACE_LENGTH } from '@/utils/birthDate';
+import { birthDateIssue, birthDateMessage } from '@/utils/birthDate';
 import { needsPhoneIdentity, PHONE_IDENTITY_COUNTRY_CODE } from '@/services/patientIdentity';
 import { countryUsesPostnom } from '@/config/countries';
 import { identityNamesComplete } from '@/utils/identityNames';
@@ -163,6 +165,7 @@ export default function PhoneLogin() {
         city,
         commune,
       });
+      void recordPlaceIfNew(city, commune, countryCode); // saisie libre inconnue, au mieux
       if (afterIdentity === 'credentials') setStep('credentials');
       else router.replace('/(patient)');
     } catch (e: any) {
@@ -324,19 +327,12 @@ export default function PhoneLogin() {
               maximumDate={new Date()}
               startOnYearSelection
             />
-            <Field
-              label={t('Ville')}
-              placeholder="Kinshasa"
-              maxLength={MAX_PLACE_LENGTH}
-              value={city}
-              onChangeText={setCity}
-            />
-            <Field
-              label={t('Commune (facultatif)')}
-              placeholder="Gombe"
-              maxLength={MAX_PLACE_LENGTH}
-              value={commune}
-              onChangeText={setCommune}
+            <CityCommuneFields
+              city={city}
+              commune={commune}
+              countryCode={countryCode}
+              onCityChange={setCity}
+              onCommuneChange={setCommune}
             />
             {errorMsg ? (
               <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">

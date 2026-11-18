@@ -678,4 +678,5 @@ export const en: Record<string, string> = {
   "Photo en attente de validation": "Photo awaiting validation",
   "Photo refusée": "Photo rejected",
   "Motif : {note}": "Reason: {note}",
+  "Choisissez d'abord une ville.": "Choose a city first.",
 };

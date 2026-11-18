@@ -4,6 +4,7 @@ import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { CountryPicker } from '@/components/CountryPicker';
+import { CityCommuneFields } from '@/components/CityCommuneFields';
 import { getAfricanCountry } from '@/config/africanCountries';
 import { countryUsesPostnom } from '@/config/countries';
 import { identityNamesComplete } from '@/utils/identityNames';
@@ -13,7 +14,7 @@ import { DateField } from '@/components/DateField';
 import { ResendConfirmation } from '@/components/ResendConfirmation';
 import { passwordIssue } from '@/services/passwordPolicy';
 import { registerPatientErrorMessage, type Gender } from '@/services/registration';
-import { birthDateIssue, birthDateMessage, MAX_PLACE_LENGTH } from '@/utils/birthDate';
+import { birthDateIssue, birthDateMessage } from '@/utils/birthDate';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -140,19 +141,12 @@ export default function RegisterPatient() {
         />
         <PasswordField label={t('Mot de passe')} value={form.password} onChangeText={set('password')} />
         <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
-        <Field
-          label={t('Ville')}
-          placeholder="Kinshasa"
-          maxLength={MAX_PLACE_LENGTH}
-          value={form.city}
-          onChangeText={set('city')}
-        />
-        <Field
-          label={t('Commune (facultatif)')}
-          placeholder="Gombe"
-          maxLength={MAX_PLACE_LENGTH}
-          value={form.commune}
-          onChangeText={set('commune')}
+        <CityCommuneFields
+          city={form.city}
+          commune={form.commune}
+          countryCode={countryCode}
+          onCityChange={set('city')}
+          onCommuneChange={set('commune')}
         />
 
         {errorMsg ? (

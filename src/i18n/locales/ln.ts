@@ -678,4 +678,5 @@ export const ln: Record<string, string> = {
   "Photo en attente de validation": "Elili ezali kozela kondimama",
   "Photo refusée": "Elili ekangami",
   "Motif : {note}": "Ntina: {note}",
+  "Choisissez d'abord une ville.": "Pona engumba liboso.",
 };
