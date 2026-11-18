@@ -154,6 +154,13 @@ export class RegisterPatientError extends Error {
 /** Refus d'âge renvoyé par `register-patient` (mineur ou plus de 125 ans). */
 export const UNDERAGE_SERVER_MESSAGE = 'Vous devez avoir au moins 18 ans révolus pour vous inscrire.';
 
+/** 400 du serveur : champ obligatoire manquant (ville, entre autres). */
+export const REQUIRED_FIELD_SERVER_MESSAGE = 'Champ obligatoire.';
+/** 400 du serveur : pays à post-nom, ni prénom ni post-nom. */
+export const FIRST_OR_POSTNOM_SERVER_MESSAGE = 'Le prénom ou le post-nom est obligatoire.';
+/** 400 du serveur (et erreur base `COUNTRY_NOT_OPEN`) : pays non ouvert aux inscriptions. */
+export const COUNTRY_NOT_OPEN_MESSAGE = "Visiodoc n'est pas encore disponible dans ce pays.";
+
 const kindForStatus = (status: number | undefined): RegisterPatientErrorKind => {
   if (status === 400 || status === 422) return 'validation';
   if (status === 409) return 'conflict';
@@ -192,6 +199,19 @@ async function toRegisterError(error: any): Promise<RegisterPatientError> {
         edgeFunctionError({ error: translate('Un champ obligatoire est manquant. Vérifie le formulaire.') }),
       );
     }
+    // Contrats figés (MOB-1811-1/3/5) : textes serveur connus, toujours affichés traduits.
+    if (body?.error === REQUIRED_FIELD_SERVER_MESSAGE) {
+      return new RegisterPatientError(
+        kind,
+        edgeFunctionError({ error: translate('Un champ obligatoire est manquant. Vérifie le formulaire.') }),
+      );
+    }
+    if (body?.error === FIRST_OR_POSTNOM_SERVER_MESSAGE) {
+      return new RegisterPatientError(kind, edgeFunctionError({ error: translate(FIRST_OR_POSTNOM_SERVER_MESSAGE) }));
+    }
+    if (body?.error === COUNTRY_NOT_OPEN_MESSAGE) {
+      return new RegisterPatientError(kind, edgeFunctionError({ error: translate(COUNTRY_NOT_OPEN_MESSAGE) }));
+    }
     if (body?.error === UNDERAGE_SERVER_MESSAGE) {
       return new RegisterPatientError(kind, edgeFunctionError({ error: translate(UNDERAGE_SERVER_MESSAGE) }));
     }
@@ -221,7 +241,7 @@ export interface RegisterPatientAccountInput {
   password: string;
   firstName: string;
   lastName: string;
-  /** Post-nom (pays congolais, `users.post_nom`). Pas encore transmis au serveur, voir `emailSignupPostNomIssue`. */
+  /** Post-nom (pays congolais, `users.post_nom`). Facultatif (100 caractères au plus), pris en compte par le serveur seulement si `countries.uses_postnom`. */
   postNom?: string;
   /** Volontairement large : validé à l'exécution (male / female uniquement). */
   gender?: string | null;
@@ -236,24 +256,13 @@ export interface RegisterPatientAccountInput {
 }
 
 /**
- * TODO(contrat register-patient postNom) : `register-patient` exige AUJOURD'HUI `firstName` non vide et
- * n'accepte pas `postNom` (demande d'évolution en cours côté backend). Tant que le contrat n'a pas changé :
- * un prénom vide avec un post-nom rempli est bloqué ici avec un message clair (plutôt qu'un 400), et `postNom`
- * n'est jamais envoyé. Quand le serveur acceptera `postNom` : supprimer cette fonction et ajouter
- * `...(postNom ? { postNom } : {})` au corps dans `registerPatientAccount`.
- */
-export function emailSignupPostNomIssue(input: { firstName?: string; postNom?: string }): string | null {
-  if (!input.firstName?.trim()) return translate("Le prénom est encore requis pour l'inscription par e-mail.");
-  return null;
-}
-
-/**
  * `POST /functions/v1/register-patient` (jeton anonyme géré par `functions.invoke`).
  * Succès : le compte existe mais n'est PAS connecté, l'e-mail de confirmation est parti.
  *
  * - `gender` et `dateOfBirth` (18 ans révolus) : vérifiés AVANT tout appel réseau.
  * - `city` obligatoire (refus avant l'appel si vide) ; `commune` facultative, omise si vide.
- * - noms : `identityNamesIssue` (post-nom pour CD) ; `postNom` jamais envoyé, voir `emailSignupPostNomIssue`.
+ * - noms : `identityNamesIssue` (post-nom pour CD) ; `firstName` peut être vide si `postNom` est rempli ; `postNom`
+ *   est rogné et omis s'il est vide.
  * - `countryId` : UUID du pays choisi si l'app le connaît (`COUNTRIES[code].id`), sinon omis
  *   (le serveur choisit la RDC). Jamais de repli silencieux ni de premier pays d'une liste.
  */
@@ -265,8 +274,6 @@ export async function registerPatientAccount(
   }
   const namesIssue = identityNamesIssue(input, countryUsesPostnom(input.countryCode));
   if (namesIssue) throw new Error(namesIssue);
-  const emailIssue = emailSignupPostNomIssue(input);
-  if (emailIssue) throw new Error(emailIssue);
   const dobIssue = birthDateIssue(input.dateOfBirth);
   if (dobIssue) throw new Error(birthDateMessage(dobIssue));
   const city = normalizePlace(input.city);
@@ -281,11 +288,13 @@ export async function registerPatientAccount(
   if (!phone) throw new Error(translate('Le numéro de téléphone est obligatoire.'));
   const countryId = input.countryCode ? COUNTRIES[input.countryCode]?.id : undefined;
   const language = serverLanguage();
+  const postNom = input.postNom?.trim();
   const body = {
     email: input.email.trim().toLowerCase(),
     password: input.password,
     firstName: input.firstName,
     lastName: input.lastName,
+    ...(postNom ? { postNom } : {}),
     gender: input.gender,
     dateOfBirth: input.dateOfBirth.trim(),
     ...(city ? { city } : {}),

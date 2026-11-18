@@ -305,18 +305,33 @@ describe('registerPatientAccount', () => {
     expect(mockInvoke).not.toHaveBeenCalled();
   });
 
-  it('applies the names rule and never sends postNom (TODO(contrat register-patient postNom))', async () => {
+  it('applies the names rule and sends a trimmed postNom (empty firstName accepted for DRC)', async () => {
     await expect(registerPatientAccount({ ...patientInput, lastName: ' ' })).rejects.toThrow(
       'Le nom est obligatoire, ainsi que le prénom ou le post-nom.',
     );
-    // Prénom vide + post-nom rempli : bloqué avec un message clair, pas de 400 serveur.
-    await expect(registerPatientAccount({ ...patientInput, firstName: '', postNom: 'Mbala' })).rejects.toThrow(
-      "Le prénom est encore requis pour l'inscription par e-mail.",
+    await expect(registerPatientAccount({ ...patientInput, firstName: '', postNom: '  ' })).rejects.toThrow(
+      'Le nom est obligatoire, ainsi que le prénom ou le post-nom.',
     );
     expect(mockInvoke).not.toHaveBeenCalled();
-    await registerPatientAccount({ ...patientInput, postNom: 'Mbala' });
+    await registerPatientAccount({ ...patientInput, postNom: ' Mbala ' });
+    expect(mockInvoke.mock.calls[0][1].body.postNom).toBe('Mbala');
+    mockInvoke.mockClear();
+    await registerPatientAccount({ ...patientInput, firstName: '', postNom: 'Mbala' });
+    expect(mockInvoke.mock.calls[0][1].body).toMatchObject({ firstName: '', postNom: 'Mbala' });
+    mockInvoke.mockClear();
+    await registerPatientAccount({ ...patientInput, postNom: '   ' });
     expect(Object.keys(mockInvoke.mock.calls[0][1].body)).not.toContain('postNom');
-    expect(Object.keys(mockInvoke.mock.calls[0][1].body)).not.toContain('post_nom');
+  });
+
+  it.each([
+    ['Champ obligatoire.', 'Un champ obligatoire est manquant. Vérifie le formulaire.'],
+    ['Le prénom ou le post-nom est obligatoire.', 'Le prénom ou le post-nom est obligatoire.'],
+    ["Visiodoc n'est pas encore disponible dans ce pays.", "Visiodoc n'est pas encore disponible dans ce pays."],
+  ])('maps the server 400 "%s" to a translated message', async (serverText, expected) => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(400, { error: serverText }) });
+    const err: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
+    expect(err.kind).toBe('validation');
+    expect(registerPatientErrorMessage(err)).toBe(expected);
   });
 
   it('refuses a city or commune over 100 characters before any network call', async () => {
