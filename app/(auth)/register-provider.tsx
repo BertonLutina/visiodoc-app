@@ -15,6 +15,7 @@ import { GenderField } from '@/components/GenderField';
 import type { Gender } from '@/services/registration';
 import { passwordIssue } from '@/services/passwordPolicy';
 import { authErrorMessage } from '@/utils/authError';
+import { LegalNotice } from '@/components/LegalConsent';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -138,6 +139,7 @@ export default function RegisterProvider() {
               onPress={onSubmit}
               className="mt-2"
             />
+            <LegalNotice className="mt-3" />
             <Text className="text-center font-sans text-xs text-muted mt-3">
               {t("⏳ Validation par l'administrateur requise")}
             </Text>

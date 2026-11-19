@@ -5,6 +5,12 @@ import { getAfricanCountry } from '@/config/africanCountries';
 import { toE164 } from '@/utils/phone';
 import { supabase } from '@/lib/supabase';
 import { specKey } from '@/services/specializationCatalog';
+import {
+  buildLegalAcceptance,
+  healthConsentIssue,
+  legalServerErrorMessage,
+  type LegalAcceptancePayload,
+} from '@/services/legal';
 import { edgeFunctionError, pwnedPasswordMessage, authErrorMessage, readHttpError } from '@/utils/authError';
 import { passwordIssue, passwordIssueMessage } from '@/services/passwordPolicy';
 import { birthDateIssue, birthDateMessage, normalizePlace } from '@/utils/birthDate';
@@ -51,6 +57,8 @@ export interface RegisterPrestaBody {
   countryId: string | undefined;
   city: string;
   licenseNumber: string;
+  /** Preuve d'acceptation des CGU pro et de la confidentialité (MOB-1811-6). */
+  legalAcceptance: LegalAcceptancePayload;
 }
 
 /** Indicatif téléphonique du pays choisi (ex. '+243'), `undefined` si le code est inconnu. */
@@ -77,6 +85,7 @@ export function buildRegisterPrestaBody(input: RegisterPrestaInput): RegisterPre
     countryId: input.countryId,
     city: input.city.trim(),
     licenseNumber: input.licenseNumber,
+    legalAcceptance: buildLegalAcceptance('provider'),
   };
 }
 
@@ -224,6 +233,9 @@ async function toRegisterError(error: any): Promise<RegisterPatientError> {
     if (body?.error === UNDERAGE_SERVER_MESSAGE) {
       return new RegisterPatientError(kind, edgeFunctionError({ error: translate(UNDERAGE_SERVER_MESSAGE) }));
     }
+    // MOB-1811-6 : les trois refus d'acceptation des textes juridiques, traduits.
+    const legalMessage = legalServerErrorMessage(body?.error);
+    if (legalMessage) return new RegisterPatientError(kind, edgeFunctionError({ error: legalMessage }));
   }
   return new RegisterPatientError(kind, edgeFunctionError(body, error?.message), retryAfter);
 }
@@ -262,6 +274,8 @@ export interface RegisterPatientAccountInput {
   /** Ville obligatoire (100 caractères au plus) ; commune facultative. */
   city?: string;
   commune?: string;
+  /** Case « données de santé » cochée (obligatoire pour un patient, contrôlée avant l'appel). */
+  healthConsent?: boolean;
 }
 
 /**
@@ -281,6 +295,8 @@ export async function registerPatientAccount(
   if (!isGender(input.gender)) {
     throw new Error(translate('Choisis ton genre : Masculin ou Féminin.'));
   }
+  const consentIssue = healthConsentIssue(input.healthConsent);
+  if (consentIssue) throw new Error(consentIssue);
   const namesIssue = identityNamesIssue(input, countryUsesPostnom(input.countryCode));
   if (namesIssue) throw new Error(namesIssue);
   const dobIssue = birthDateIssue(input.dateOfBirth);
@@ -311,6 +327,7 @@ export async function registerPatientAccount(
     ...(phone ? { phone } : {}),
     ...(language ? { language } : {}),
     ...(countryId ? { countryId } : {}),
+    legalAcceptance: buildLegalAcceptance('patient', true),
   };
 
   const { data, error } = await supabase.functions.invoke('register-patient', { body });

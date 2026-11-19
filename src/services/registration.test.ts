@@ -88,6 +88,7 @@ describe('buildRegisterPrestaBody', () => {
       countryId: '8a1b2c3d-0000-4000-8000-00000000cd01',
       city: 'Kinshasa',
       licenseNumber: 'CNOM/2026/8841',
+      legalAcceptance: { cguVersion: 'CGU-PRO-v2', privacyVersion: 'CONFID-v2', platform: 'mobile' },
     });
   });
 
@@ -246,6 +247,7 @@ const patientInput = {
   city: 'Kinshasa' as string | undefined,
   commune: undefined as string | undefined,
   postNom: undefined as string | undefined,
+  healthConsent: true,
 };
 
 const okResponse = {
@@ -284,8 +286,35 @@ describe('registerPatientAccount', () => {
         phone: '+243899999999',
         language: 'fr',
         countryId: CD_UUID,
+        legalAcceptance: {
+          cguVersion: 'CGU-PATIENT-v2',
+          privacyVersion: 'CONFID-v2',
+          healthConsent: true,
+          healthConsentVersion: 'CONSENT-SANTE-v1',
+          platform: 'mobile',
+        },
       },
     });
+  });
+
+  it('refuses without the health consent, before any network call', async () => {
+    await expect(registerPatientAccount({ ...patientInput, healthConsent: false })).rejects.toThrow(
+      'Le consentement au traitement des données de santé est obligatoire pour créer un compte patient.',
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Vous devez accepter les conditions d'utilisation.", 'You must accept the terms of use.'],
+    [
+      'Vous devez donner votre consentement au traitement de vos données de santé.',
+      'You must give your consent to the processing of your health data.',
+    ],
+    ["Les informations d'acceptation des conditions sont invalides.", 'The terms acceptance information is invalid.'],
+  ])('translates the legal 400 %s', async (serverText, english) => {
+    setCurrentLangCode('en');
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(400, { error: serverText }) });
+    await expect(registerPatientAccount(patientInput)).rejects.toThrow(english);
   });
 
   it('sends city and commune (trimmed), the commune only when filled in', async () => {
