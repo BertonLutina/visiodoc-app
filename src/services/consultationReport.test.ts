@@ -1,5 +1,6 @@
 /** Chaîne PostgREST simulée : chaque appel est enregistré, la chaîne se résout avec la prochaine réponse. */
 const mockCalls: { table: string; ops: [string, any[]][] }[] = [];
+const mockInvoke = jest.fn();
 let mockResponses: { data: any; error: any }[] = [];
 
 jest.mock('@/lib/supabase', () => {
@@ -17,7 +18,10 @@ jest.mock('@/lib/supabase', () => {
       Promise.resolve(mockResponses.shift() ?? { data: null, error: null }).then(resolve, reject);
     return chain;
   };
-  return { supabaseConfigured: true, supabase: { from: (t: string) => make(t) } };
+  return {
+    supabaseConfigured: true,
+    supabase: { from: (t: string) => make(t), functions: { invoke: (...a: any[]) => mockInvoke(...a) } },
+  };
 });
 
 import {
@@ -27,6 +31,8 @@ import {
   getProviderCallContext,
   logVideoSessionEnd,
   logVideoSessionStart,
+  markPatientAbsent,
+  notifyConsultationStarted,
   saveConsultationReport,
 } from './consultationReport';
 
@@ -176,5 +182,26 @@ describe('video_sessions et contexte prestataire', () => {
     await logVideoSessionEnd('s1', 61.4);
     expect(opsOf(1, 'update')[0][0]).toMatchObject({ duration_seconds: 61 });
     expect(opsOf(1, 'eq')).toEqual([['id', 's1']]);
+  });
+});
+
+describe('patient absent et notification', () => {
+  it("status no_show filtré sur le prestataire ; refus du serveur traduit", async () => {
+    mockResponses = [{ data: [{ id: 'c1' }], error: null }];
+    await markPatientAbsent('c1', 'd1');
+    expect(opsOf(0, 'update')[0][0]).toEqual({ status: 'no_show' });
+    expect(opsOf(0, 'eq')).toEqual([['id', 'c1'], ['doctor_id', 'd1']]);
+    mockResponses = [{ data: null, error: { code: 'P0001', message: "no_show impossible avant 15 minutes d'attente (disponible à X)" } }];
+    await expect(markPatientAbsent('c1', 'd1')).rejects.toMatchObject({ kind: 'no_show_too_early' });
+    mockResponses = [{ data: null, error: { code: 'XX', message: 'autre' } }];
+    await expect(markPatientAbsent('c1', 'd1')).rejects.toMatchObject({ kind: 'unavailable' });
+  });
+
+  it('notify-consultation-started avec { consultationId }, ne lève jamais', async () => {
+    mockInvoke.mockResolvedValueOnce({ data: {}, error: null });
+    await notifyConsultationStarted('c1');
+    expect(mockInvoke).toHaveBeenCalledWith('notify-consultation-started', { body: { consultationId: 'c1' } });
+    mockInvoke.mockRejectedValueOnce(new Error('x'));
+    await expect(notifyConsultationStarted('c1')).resolves.toBeUndefined();
   });
 });

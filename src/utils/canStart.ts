@@ -6,3 +6,11 @@
 export function canStartConsultation(rawStatus: string | undefined): boolean {
   return rawStatus === undefined || rawStatus === 'scheduled' || rawStatus === 'in_progress';
 }
+
+/**
+ * Rapport (notes, diagnostic, prescription) : seulement quand le patient s'est connecté, soit `in_progress`
+ * ou `completed`. Jamais `scheduled`, `no_show`, `cancelled` ni `pending_payment`.
+ */
+export function canWriteReport(rawStatus: string | undefined | null): boolean {
+  return rawStatus === 'in_progress' || rawStatus === 'completed';
+}

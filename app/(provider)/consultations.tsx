@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { typeLabel } from '@/utils/format';
-import { canStartConsultation } from '@/utils/canStart';
+import { canStartConsultation, canWriteReport } from '@/utils/canStart';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getProviderConsultations, getTodayConsultations, startConsultationBestEffort } from '@/services/providerApi';
@@ -20,8 +20,8 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
   // `pending_payment` : réservée par le patient mais pas payée → ni confirmée, ni démarrable.
   const unpaid = c.rawStatus === 'pending_payment';
   const showStart = canStart && canStartConsultation(c.rawStatus);
-  // Rapport (notes, diagnostic, prescription) : consultation planifiée, en cours ou terminée, pas les impayées, annulées ni absents.
-  const canWrite = ['scheduled', 'in_progress', 'completed'].includes(c.rawStatus ?? '');
+  // Rapport : seulement quand le patient s'est connecté (en cours ou terminée).
+  const canWrite = canWriteReport(c.rawStatus);
   return (
     <Card className="mb-3">
       <View className="flex-row items-center">

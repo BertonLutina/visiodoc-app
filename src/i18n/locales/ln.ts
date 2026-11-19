@@ -665,4 +665,11 @@ export const ln: Record<string, string> = {
   "Astuce : utilise le micro du clavier pour dicter": "Toli: salela micro ya clavier mpo na koloba mpe kokoma",
   "Ce rapport a été modifié ailleurs, recharge avant d'enregistrer": "Rapport oyo ebongwanaki esika mosusu, bandela yango lisusu liboso ya kobomba",
   "Impossible de terminer : l'appel de cette consultation n'a jamais été lancé.": "Ekoki kosuka te: appel ya konsultasyon oyo ebandaki ata mokolo moko te.",
+  "Fin de l'appel": "Suka ya appel",
+  "Que veux-tu faire de cette consultation ?": "Olingi kosala nini na konsultasyon oyo?",
+  "Le patient est absent": "Mobeli azali te",
+  "Patient absent": "Mobeli azali te",
+  "Impossible de déclarer le patient absent. Réessaie.": "Ekoki te kolakisa ete mobeli azali te. Meka lisusu.",
+  "Tu pourras déclarer le patient absent 15 minutes après le lancement de l'appel, et pas avant l'heure du rendez-vous.": "Okoki kolakisa ete mobeli azali te nsima ya miniti 15 uta appel ebandaki, kasi te liboso ya ngonga ya rendez-vous.",
+  "Le rapport n'est disponible que si le patient s'est connecté (consultation en cours ou terminée).": "Rapport ezali kaka soki mobeli akotaki (konsultasyon ezali kokende to esukoli).",
 };

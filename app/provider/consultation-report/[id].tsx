@@ -7,6 +7,7 @@ import { Button, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
+import { canWriteReport } from '@/utils/canStart';
 import {
   ConsultationReportError,
   endConsultation,
@@ -64,6 +65,8 @@ export default function ConsultationReportScreen() {
     if (consultationId && uid) load();
     else setLoading(false);
   }, [consultationId, uid, load]);
+
+  const editable = report ? canWriteReport(report.status) : false;
 
   const dirty =
     fields.notes !== saved.current.notes ||
@@ -135,7 +138,7 @@ export default function ConsultationReportScreen() {
         onChangeText={(v) => setFields((p) => ({ ...p, [field]: v }))}
         multiline
         textAlignVertical="top"
-        editable={busy === null}
+        editable={busy === null && editable}
         className={inputClass}
         style={{ minHeight: field === 'notes' ? 140 : 100 }}
         placeholderTextColor={colors.muted}
@@ -196,7 +199,13 @@ export default function ConsultationReportScreen() {
             {renderField(t('Diagnostic'), 'diagnosis')}
             {renderField(t('Prescription (texte libre)'), 'prescription')}
 
-            <Text className="font-sans text-xs text-muted mb-4">{t('Astuce : utilise le micro du clavier pour dicter')}</Text>
+            {editable ? <Text className="font-sans text-xs text-muted mb-4">{t('Astuce : utilise le micro du clavier pour dicter')}</Text> : null}
+
+            {!editable ? (
+              <Text className="font-sans text-ink mb-3">
+                {t("Le rapport n'est disponible que si le patient s'est connecté (consultation en cours ou terminée).")}
+              </Text>
+            ) : null}
 
             {message ? (
               <Text className={`font-sans mb-3 ${message.tone === 'error' ? 'text-red-600' : 'text-ink'}`} accessibilityLiveRegion="polite">
@@ -204,7 +213,7 @@ export default function ConsultationReportScreen() {
               </Text>
             ) : null}
 
-            {conflict ? (
+            {!editable ? null : conflict ? (
               <Button label={t('Recharger')} variant="outline" onPress={load} className="mb-3" />
             ) : (
               <Button label={t('Enregistrer')} variant="accent" onPress={onSave} loading={busy === 'save'} disabled={busy !== null || !dirty} className="mb-3" />

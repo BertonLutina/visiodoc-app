@@ -665,4 +665,11 @@ export const sw: Record<string, string> = {
   "Astuce : utilise le micro du clavier pour dicter": "Kidokezo: tumia kipaza sauti cha kibodi kuongea na kuandika",
   "Ce rapport a été modifié ailleurs, recharge avant d'enregistrer": "Ripoti hii ilibadilishwa mahali pengine, ipakie upya kabla ya kuhifadhi",
   "Impossible de terminer : l'appel de cette consultation n'a jamais été lancé.": "Haiwezi kumaliza: simu ya mashauriano haya haikuanzishwa kamwe.",
+  "Fin de l'appel": "Mwisho wa simu",
+  "Que veux-tu faire de cette consultation ?": "Unataka kufanya nini na mashauriano haya?",
+  "Le patient est absent": "Mgonjwa hayupo",
+  "Patient absent": "Mgonjwa hayupo",
+  "Impossible de déclarer le patient absent. Réessaie.": "Imeshindikana kumweka mgonjwa kuwa hayupo. Jaribu tena.",
+  "Tu pourras déclarer le patient absent 15 minutes après le lancement de l'appel, et pas avant l'heure du rendez-vous.": "Unaweza kumweka mgonjwa kuwa hayupo dakika 15 baada ya simu kuanzishwa, na si kabla ya muda wa miadi.",
+  "Le rapport n'est disponible que si le patient s'est connecté (consultation en cours ou terminée).": "Ripoti inapatikana tu ikiwa mgonjwa alijiunga (mashauriano yanaendelea au yamemalizika).",
 };

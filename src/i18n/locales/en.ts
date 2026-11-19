@@ -665,4 +665,11 @@ export const en: Record<string, string> = {
   "Astuce : utilise le micro du clavier pour dicter": "Tip: use your keyboard's microphone to dictate",
   "Ce rapport a été modifié ailleurs, recharge avant d'enregistrer": "This report was modified elsewhere, reload before saving",
   "Impossible de terminer : l'appel de cette consultation n'a jamais été lancé.": "Cannot end: the call of this consultation was never started.",
+  "Fin de l'appel": "End of the call",
+  "Que veux-tu faire de cette consultation ?": "What do you want to do with this consultation?",
+  "Le patient est absent": "The patient is absent",
+  "Patient absent": "Patient absent",
+  "Impossible de déclarer le patient absent. Réessaie.": "Could not mark the patient as absent. Try again.",
+  "Tu pourras déclarer le patient absent 15 minutes après le lancement de l'appel, et pas avant l'heure du rendez-vous.": "You can mark the patient as absent 15 minutes after the call was started, and not before the appointment time.",
+  "Le rapport n'est disponible que si le patient s'est connecté (consultation en cours ou terminée).": "The report is only available if the patient connected (consultation in progress or completed).",
 };

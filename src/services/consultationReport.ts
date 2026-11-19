@@ -10,7 +10,7 @@ import { calculateAge } from './providerApi';
  * Les contenus (données de santé) ne sont jamais journalisés.
  * ---------------------------------------------------------------------------------------------- */
 
-export type ReportErrorKind = 'conflict' | 'not_found' | 'never_started' | 'unavailable';
+export type ReportErrorKind = 'conflict' | 'not_found' | 'never_started' | 'no_show_too_early' | 'unavailable';
 
 /** Erreur dont le message est déjà traduit et affichable tel quel. */
 export class ConsultationReportError extends Error {
@@ -30,6 +30,13 @@ const err = {
     new ConsultationReportError(
       'never_started',
       translate("Impossible de terminer : l'appel de cette consultation n'a jamais été lancé."),
+    ),
+  noShowTooEarly: () =>
+    new ConsultationReportError(
+      'no_show_too_early',
+      translate(
+        "Tu pourras déclarer le patient absent 15 minutes après le lancement de l'appel, et pas avant l'heure du rendez-vous.",
+      ),
     ),
   unavailable: () =>
     new ConsultationReportError(
@@ -167,6 +174,38 @@ export async function endConsultation(consultationId: string, doctorId: string):
   if (error) throw mapEndError(error);
   if (!data || data.length === 0) throw err.notFound();
   return { updatedAt: (data[0] as any).updated_at ?? null };
+}
+
+/**
+ * Le serveur n'enregistre pas la présence du patient : c'est le prestataire qui déclare l'absence (comme le web,
+ * `status = 'no_show'`). Refusé par la base avant 15 min d'attente depuis le lancement de l'appel ou avant l'heure.
+ */
+export async function markPatientAbsent(consultationId: string, doctorId: string): Promise<void> {
+  if (!supabaseConfigured || !supabase) throw err.unavailable();
+  const { data, error } = await supabase
+    .from('consultations')
+    .update({ status: 'no_show' })
+    .eq('id', consultationId)
+    .eq('doctor_id', doctorId)
+    .select('id');
+  if (error) {
+    if (typeof error.message === 'string' && error.message.includes('no_show impossible avant')) throw err.noShowTooEarly();
+    throw err.unavailable();
+  }
+  if (!data || data.length === 0) throw err.notFound();
+}
+
+/**
+ * Prévient le patient (notification in-app + WhatsApp) que le prestataire a démarré l'appel
+ * (Edge Function `notify-consultation-started`, corps `{ consultationId }`). Best effort : ne lève jamais.
+ */
+export async function notifyConsultationStarted(consultationId: string): Promise<void> {
+  if (!supabaseConfigured || !supabase) return;
+  try {
+    await supabase.functions.invoke('notify-consultation-started', { body: { consultationId } });
+  } catch {
+    /* ne bloque jamais l'appel */
+  }
 }
 
 /* ---------- Trace des appels vidéo (table video_sessions, RLS : initiated_by = auth.uid()) ---------- */

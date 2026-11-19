@@ -11,6 +11,8 @@ import { getCallSession } from '@/services/patientApi';
 import {
   endConsultation,
   getProviderCallContext,
+  markPatientAbsent,
+  notifyConsultationStarted,
   logVideoSessionEnd,
   logVideoSessionStart,
 } from '@/services/consultationReport';
@@ -109,7 +111,8 @@ export default function VideoCall() {
     return () => clearTimeout(timer);
   }, [opensAt, retry]);
 
-  // Trace de l'appel (table video_sessions, comme le web), prestataire seulement, best effort.
+  // Trace de l'appel (table video_sessions, comme le web) et notification du patient, prestataire seulement,
+  // best effort, une seule fois par ouverture de la salle.
   const videoSessionId = useRef<Promise<string | null> | null>(null);
   const callStartedAt = useRef<number | null>(null);
   const readyRoomName = phase.kind === 'ready' ? phase.roomName : null;
@@ -121,48 +124,82 @@ export default function VideoCall() {
       roomName: readyRoomName,
       initiatedBy: providerId,
     });
+    notifyConsultationStarted(providerCtx.consultationId);
   }, [providerCtx, readyRoomName, providerId]);
 
-  const leave = () => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/');
-  };
-
-  const openReport = (consultationId: string) => router.replace(`/provider/consultation-report/${consultationId}`);
-
-  const close = () => {
-    const joined = phase.kind === 'ready';
-    if (!providerCtx || !joined) {
-      leave();
-      return;
-    }
-    // Prestataire qui quitte un appel en cours : on clôt la trace, puis il choisit de terminer ou de revenir plus tard.
+  /** Clôt la trace vidéo (une fois) au moment où le prestataire quitte vraiment l'appel. */
+  const endTrace = () => {
     const pending = videoSessionId.current;
     const startedAt = callStartedAt.current;
     videoSessionId.current = null;
     if (pending && startedAt) {
       pending.then((sid) => (sid ? logVideoSessionEnd(sid, (Date.now() - startedAt) / 1000) : undefined)).catch(() => {});
     }
+  };
+
+  const leave = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  };
+
+  /** Ferme l'appel PUIS ouvre le rapport (l'écran d'appel est remplacé par le rapport). */
+  const leaveToReport = (consultationId: string) => {
+    endTrace();
+    router.replace(`/provider/consultation-report/${consultationId}`);
+  };
+
+  const askOutcome = (consultationId: string) => {
     Alert.alert(
-      t("Terminer la consultation ?"),
-      t('Tu pourras écrire le rapport (notes, diagnostic, prescription) maintenant ou plus tard.'),
+      t("Fin de l'appel"),
+      t('Que veux-tu faire de cette consultation ?'),
       [
-        { text: t('Revenir plus tard'), style: 'cancel', onPress: leave },
         {
           text: t('Terminer la consultation'),
           onPress: async () => {
             try {
-              await endConsultation(providerCtx.consultationId, providerId);
+              await endConsultation(consultationId, providerId);
             } catch (e) {
               // Refus (ex. appel jamais démarré) : message clair, le rapport reste accessible.
               Alert.alert(t('Consultation non terminée'), (e as Error)?.message ?? '');
             }
-            openReport(providerCtx.consultationId);
+            leaveToReport(consultationId);
           },
         },
+        {
+          text: t('Le patient est absent'),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await markPatientAbsent(consultationId, providerId);
+            } catch (e) {
+              // Refus (trop tôt) ou panne : l'appel reste ouvert, on repropose le choix après le message.
+              const kind = (e as { kind?: string })?.kind;
+              const msg =
+                kind === 'no_show_too_early'
+                  ? (e as Error).message
+                  : t('Impossible de déclarer le patient absent. Réessaie.');
+              Alert.alert(t('Patient absent'), msg, [{ text: 'OK', onPress: () => askOutcome(consultationId) }], {
+                cancelable: false,
+              });
+              return;
+            }
+            // Patient absent : on ferme l'appel sans rapport.
+            endTrace();
+            leave();
+          },
+        },
+        { text: t('Revenir plus tard'), onPress: () => leaveToReport(consultationId) },
       ],
       { cancelable: false },
     );
+  };
+
+  const close = () => {
+    if (!providerCtx || phase.kind !== 'ready') {
+      leave();
+      return;
+    }
+    askOutcome(providerCtx.consultationId);
   };
 
   const canRetry =
