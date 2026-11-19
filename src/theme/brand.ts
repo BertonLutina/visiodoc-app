@@ -1,10 +1,14 @@
 // Identité visuelle VisioDoc (source : jarvis/context/visiodoc/brand/, d'après visiodoc.jpeg du designer).
 export const BRAND_COLORS = {
-  gradientStart: '#0E8470',
-  gradientMid: '#1AA68A',
-  gradientEnd: '#3BB896',
-  /** Couleur dominante du dégradé (fond de l'icône adaptative Android et du splash). */
-  dominant: '#1AA68A',
+  gradientStart: '#0D6957',
+  gradientMid: '#128D74',
+  gradientEnd: '#20B091',
+  /** Halo lumineux en bas à droite du fond. */
+  glow: '#82D6C2',
+  glowMid: '#46BCA0',
+  glowEnd: '#1CA78A',
+  /** Couleur dominante du fond (fond de l'icône adaptative Android et du splash). */
+  dominant: '#128D74',
   glyph: '#F4FAF8',
   camera: '#2C9E88',
   glyphOnLight: '#0F8A74',
