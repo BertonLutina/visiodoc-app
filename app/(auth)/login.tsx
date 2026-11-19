@@ -2,9 +2,10 @@ import React from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stethoscope, Mail, Smartphone, Lock, ChevronRight } from 'lucide-react-native';
+import { Mail, Smartphone, Lock, ChevronRight } from 'lucide-react-native';
 import { ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
+import { BrandLogo } from '@/components/BrandLogo';
 import { useT } from '@/i18n';
 
 type Method = {
@@ -45,8 +46,9 @@ export default function LoginPatient() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 56 }}>
         <View className="items-center mb-10">
-          <Stethoscope color={colors.primary} size={56} strokeWidth={1.75} />
-          <Text className="font-serif-bold text-2xl text-primary mt-3 mb-5">visiodoc</Text>
+          <View className="mb-5">
+            <BrandLogo size={56} withWordmark />
+          </View>
           <ScreenTitle center>{t('Content de vous revoir')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
             {t('Choisissez votre méthode de connexion')}

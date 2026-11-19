@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Fingerprint, ScanFace } from 'lucide-react-native';
 import { Button } from '@/components/ui';
 import { colors } from '@/theme/colors';
+import { BrandLogo } from '@/components/BrandLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { authErrorMessage } from '@/utils/authError';
 import { useT } from '@/i18n';
@@ -37,7 +38,7 @@ export function BiometricLock() {
   return (
     <SafeAreaView className="flex-1 bg-bg px-6">
       <View className="flex-1 items-center justify-center">
-        <Text className="font-serif-bold text-3xl text-primary mb-10">visiodoc</Text>
+        <View className="mb-10"><BrandLogo size={48} withWordmark /></View>
         <View className="w-20 h-20 rounded-3xl bg-primary-50 items-center justify-center mb-6">
           <Icon color={colors.primary} size={40} />
         </View>

@@ -6,6 +6,7 @@ import { Stethoscope, FolderHeart, Wallet, Brain, ArrowRight, User, X, ChevronRi
 import { Eyebrow } from '@/components/ui';
 import { DoctorCard } from '@/components/DoctorCard';
 import { colors } from '@/theme/colors';
+import { BrandLogo } from '@/components/BrandLogo';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { SignInForPricing } from '@/components/SignInForPricing';
@@ -36,7 +37,7 @@ export default function PublicHome() {
   if (initializing) {
     return (
       <SafeAreaView className="flex-1 bg-bg items-center justify-center">
-        <Text className="font-serif-bold text-3xl text-primary mb-4">visiodoc</Text>
+        <View className="mb-4"><BrandLogo size={48} withWordmark /></View>
         <ActivityIndicator color={colors.primary} />
       </SafeAreaView>
     );
@@ -52,7 +53,7 @@ export default function PublicHome() {
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Header */}
         <View className="flex-row items-center justify-between px-5 pt-3 pb-5">
-          <Text className="font-serif-bold text-2xl text-primary">visiodoc</Text>
+          <BrandLogo size={32} withWordmark />
           <Pressable onPress={() => setRoleModalVisible(true)}>
             <Text className="font-sans-bold text-primary">{t('Connexion')}</Text>
           </Pressable>
