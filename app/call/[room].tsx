@@ -6,6 +6,7 @@ import { WebView } from 'react-native-webview';
 import { ChevronLeft, PhoneOff } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { useAsync } from '@/hooks/useAsync';
+import { useAuth } from '@/contexts/AuthContext';
 import { getCallSession } from '@/services/patientApi';
 import { requestCallPermissions } from '@/services/callPermissions';
 import {
@@ -38,6 +39,9 @@ export default function VideoCall() {
   const { room } = useLocalSearchParams<{ room: string }>();
   const routeRoomId = typeof room === 'string' ? room : '';
   const { data: session, loading: sessionLoading } = useAsync(() => getCallSession(routeRoomId), [routeRoomId]);
+  const { user } = useAuth();
+  // Nom affiché dans la salle : celui du compte connecté (Jitsi ne le redemande pas).
+  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ');
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
@@ -75,7 +79,7 @@ export default function VideoCall() {
         setPhase({ kind: 'permission', blocked: permission === 'blocked' });
         return;
       }
-      setPhase({ kind: 'ready', url: buildRoomWebViewUrl(result.session), serverUrl: result.session.serverUrl });
+      setPhase({ kind: 'ready', url: buildRoomWebViewUrl(result.session, displayName), serverUrl: result.session.serverUrl });
     })();
     return () => {
       active = false;

@@ -199,10 +199,23 @@ describe('buildRoomUrl', () => {
 describe('buildRoomWebViewUrl', () => {
   it('is the contract URL plus a client-side fragment that skips the "open in the app" page', () => {
     const url = buildRoomWebViewUrl(OK_PAYLOAD.data);
-    expect(url).toBe(`${buildRoomUrl(OK_PAYLOAD.data)}#config.disableDeepLinking=true`);
+    expect(url).toBe(
+      `${buildRoomUrl(OK_PAYLOAD.data)}#config.disableDeepLinking=true&config.prejoinConfig.enabled=false&config.prejoinPageEnabled=false`,
+    );
     // le fragment n'est jamais envoyé au serveur : la requête reste `${serverUrl}/${roomName}?jwt=${jwt}`
     expect(url.split('#')[0]).toBe(buildRoomUrl(OK_PAYLOAD.data));
     expect(url).not.toMatch(/record/i);
+  });
+});
+
+describe('buildRoomWebViewUrl with a display name', () => {
+  it('passes the known name (JSON then URI encoded) so Jitsi does not ask for it', () => {
+    const url = buildRoomWebViewUrl(OK_PAYLOAD.data, ' Chris Mongongu ');
+    expect(url.endsWith('&userInfo.displayName=%22Chris%20Mongongu%22')).toBe(true);
+    expect(url.split('#')[0]).toBe(buildRoomUrl(OK_PAYLOAD.data));
+  });
+  it('omits the name when empty', () => {
+    expect(buildRoomWebViewUrl(OK_PAYLOAD.data, '  ')).not.toMatch(/displayName/);
   });
 });
 
