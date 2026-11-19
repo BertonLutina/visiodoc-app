@@ -2,9 +2,10 @@ import React from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Link, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stethoscope, Mail, Smartphone, Lock, ChevronRight } from 'lucide-react-native';
+import { Mail, Smartphone, Lock, ChevronRight } from 'lucide-react-native';
 import { ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
+import { BrandGlyph } from '@/components/BrandGlyph';
 import { useT } from '@/i18n';
 
 type Method = {
@@ -26,9 +27,9 @@ export default function LoginProvider() {
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 56 }}>
         <View className="items-center mb-10">
           <View className="w-14 h-14 rounded-3xl bg-accent items-center justify-center mb-4">
-            <Stethoscope color={colors.white} size={28} />
+            <BrandGlyph size={36} color={colors.white} cameraColor={colors.accent} />
           </View>
-          <ScreenTitle center>{t('Connexion médecin')}</ScreenTitle>
+          <ScreenTitle center>{t('Connexion prestataire')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
             {t('Portail prestataire — choisissez votre méthode')}
           </Text>
@@ -54,7 +55,7 @@ export default function LoginProvider() {
         <View className="flex-row justify-center mt-6">
           <Text className="font-sans text-muted">{t('Pas encore inscrit ?')} </Text>
           <Link href="/(auth)/register-provider" className="font-sans-bold text-accent">
-            {t('Créer un compte médecin')}
+            {t('Créer un compte prestataire')}
           </Link>
         </View>
 

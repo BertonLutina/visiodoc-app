@@ -2,19 +2,19 @@ import React, { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stethoscope } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { Autocomplete } from '@/components/Autocomplete';
 import { CountryPicker } from '@/components/CountryPicker';
 import { SPECIALIZATIONS } from '@/config/specializations';
 import { getAfricanCountry } from '@/config/africanCountries';
-import { colors } from '@/theme/colors';
 import { PasswordField } from '@/components/PasswordField';
 import { GenderField } from '@/components/GenderField';
 import type { Gender } from '@/services/registration';
 import { passwordIssue } from '@/services/passwordPolicy';
 import { authErrorMessage } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
+import { colors } from '@/theme/colors';
+import { BrandGlyph } from '@/components/BrandGlyph';
 import { useT } from '@/i18n';
 
 export default function RegisterProvider() {
@@ -67,9 +67,9 @@ export default function RegisterProvider() {
       >
         <View className="items-center mb-7 mt-2">
           <View className="w-14 h-14 rounded-3xl bg-accent items-center justify-center mb-4">
-            <Stethoscope color={colors.white} size={28} />
+            <BrandGlyph size={36} color={colors.white} cameraColor={colors.accent} />
           </View>
-          <ScreenTitle center>{t('Inscription médecin')}</ScreenTitle>
+          <ScreenTitle center>{t('Inscription prestataire')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2">{t('Prestataire de santé')}</Text>
         </View>
 

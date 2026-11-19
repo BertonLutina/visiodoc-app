@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronLeft } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
-import { BrandLogo } from '@/components/BrandLogo';
+import { BrandGlyph } from '@/components/BrandGlyph';
+import { BRAND_COLORS, BRAND_WORDMARK_FONT } from '@/theme/brand';
 import { authErrorMessage, isEmailNotConfirmed, providerRefusal, providerRefusalMessage } from '@/utils/authError';
 import { providerHomeHref } from '@/services/accessPolicy';
 import { ResendConfirmation } from '@/components/ResendConfirmation';
@@ -100,9 +101,10 @@ export default function PasswordLoginProvider() {
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 16 }} keyboardShouldPersistTaps="handled">
         <View className="items-center mb-7">
           <View style={{ marginBottom: 8 }}>
-            <BrandLogo size={56} withWordmark />
+            <BrandGlyph size={64} color={colors.accent} cameraColor={colors.bg} />
           </View>
-          <ScreenTitle center className="mt-4">{t('Connexion médecin')}</ScreenTitle>
+          <Text style={{ fontFamily: BRAND_WORDMARK_FONT, fontSize: 22, color: BRAND_COLORS.wordmarkOnLight }}>VisioDoc</Text>
+          <ScreenTitle center className="mt-4">{t('Connexion prestataire')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">{t('Portail prestataire')}</Text>
         </View>
 
@@ -147,7 +149,7 @@ export default function PasswordLoginProvider() {
           onPress={onSubmit}
         />
         <Button
-          label={t('Créer un compte médecin')}
+          label={t('Créer un compte prestataire')}
           variant="outline"
           className="mt-3"
           onPress={() => router.push('/(auth)/register-provider')}

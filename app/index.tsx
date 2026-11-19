@@ -164,7 +164,7 @@ export default function PublicHome() {
                 <Stethoscope color={colors.accent} size={22} />
               </View>
               <View className="flex-1">
-                <Text className="font-sans-bold text-ink text-base">{t('Médecin / Prestataire')}</Text>
+                <Text className="font-sans-bold text-ink text-base">{t('Prestataire')}</Text>
                 <Text className="font-sans text-sm text-muted mt-0.5">{t('Espace professionnel')}</Text>
               </View>
               <ChevronRight color={colors.muted} size={20} />

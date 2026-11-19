@@ -19,25 +19,26 @@ export function wordmarkColor(variant: BrandLogoVariant): string {
 
 /** Icône fidèle à visiodoc-icon.svg (viewBox 1024, reconstruction du logo du designer), avec le mot optionnel. */
 export function BrandLogo({ size = 40, variant = 'light', withWordmark = false }: Props) {
+  const C = BRAND_COLORS;
   const dark = variant === 'dark';
-  const glyph = dark ? BRAND_COLORS.glyphOnLight : BRAND_COLORS.glyph;
-  const cameraFill = dark ? BRAND_COLORS.tileLight : BRAND_COLORS.camera;
+  const glyph = dark ? C.glyphOnLight : C.glyph;
+  const cameraFill = dark ? C.tileLight : C.camera;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }} accessible accessibilityRole="image" accessibilityLabel="VisioDoc">
       <Svg width={size} height={size} viewBox="0 0 1024 1024">
         <Defs>
           <LinearGradient id="vdbg" x1="0.15" y1="0" x2="0.6" y2="1">
-            <Stop offset="0" stopColor={BRAND_COLORS.gradientStart} />
-            <Stop offset="0.45" stopColor={BRAND_COLORS.gradientMid} />
-            <Stop offset="1" stopColor={BRAND_COLORS.gradientEnd} />
+            <Stop offset="0" stopColor={C.gradientStart} />
+            <Stop offset="0.45" stopColor={C.gradientMid} />
+            <Stop offset="1" stopColor={C.gradientEnd} />
           </LinearGradient>
           <RadialGradient id="vdglow" cx="0.74" cy="0.93" r="0.62">
-            <Stop offset="0" stopColor={BRAND_COLORS.glow} stopOpacity={1} />
-            <Stop offset="0.55" stopColor={BRAND_COLORS.glowMid} stopOpacity={0.5} />
-            <Stop offset="1" stopColor={BRAND_COLORS.glowEnd} stopOpacity={0} />
+            <Stop offset="0" stopColor={C.glow} stopOpacity={1} />
+            <Stop offset="0.55" stopColor={C.glowMid} stopOpacity={0.5} />
+            <Stop offset="1" stopColor={C.glowEnd} stopOpacity={0} />
           </RadialGradient>
         </Defs>
-        <Rect width={1024} height={1024} rx={230} fill={dark ? BRAND_COLORS.tileLight : 'url(#vdbg)'} />
+        <Rect width={1024} height={1024} rx={230} fill={dark ? C.tileLight : 'url(#vdbg)'} />
         {dark ? null : <Rect width={1024} height={1024} rx={230} fill="url(#vdglow)" />}
         <G fill="none" stroke={glyph} strokeLinecap="round" strokeLinejoin="round">
           <Path d="M365 198 C300 205 262 225 258 290 C255 380 290 450 335 500 C365 530 400 545 426 545" strokeWidth={36} />
