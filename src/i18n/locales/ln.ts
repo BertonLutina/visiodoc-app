@@ -63,6 +63,7 @@ export const ln: Record<string, string> = {
   "Bienvenue": "Boyei malamu",
   "Bon retour": "Boyei lisusu malamu",
   "Bonjour {name}": "Mbote {name}",
+  "Bonjour, {name}": "Mbote, {name}",
   "Bonjour,": "Mbote,",
   "Cardio": "Cardio",
   "Cardiologie": "Cardiologie",

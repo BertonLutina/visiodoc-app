@@ -63,6 +63,7 @@ export const sw: Record<string, string> = {
   "Bienvenue": "Karibu",
   "Bon retour": "Karibu tena",
   "Bonjour {name}": "Habari {name}",
+  "Bonjour, {name}": "Habari, {name}",
   "Bonjour,": "Habari,",
   "Cardio": "Moyo",
   "Cardiologie": "Magonjwa ya moyo",

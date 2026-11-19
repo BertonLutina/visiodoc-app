@@ -6,6 +6,7 @@ import { Stethoscope, FolderHeart, Wallet, Calendar, Video, CalendarPlus } from 
 import { Avatar, Badge, Card, Eyebrow } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { greetingName } from '@/utils/identityNames';
 import { useAsync } from '@/hooks/useAsync';
 import { useAvatarUri } from '@/hooks/useAvatarUri';
 import { getUpcomingConsultations, getPastConsultations } from '@/services/patientApi';
@@ -41,7 +42,7 @@ export default function PatientDashboard() {
   // Une consultation `pending_payment` n'est pas confirmée : elle ne peut pas être « la prochaine » à rejoindre.
   const next = upList.find((c) => !c.awaitingPayment);
 
-  const fullName = user ? `${user.firstName} ${user.lastName}`.trim() : t('Bienvenue');
+  const greeting = user ? greetingName(user) : '';
   const initials =
     `${(user?.firstName ?? '').charAt(0)}${(user?.lastName ?? '').charAt(0)}`.toUpperCase() || 'VD';
 
@@ -56,8 +57,9 @@ export default function PatientDashboard() {
         {/* Greeting */}
         <View className="flex-row items-center justify-between px-5 pt-3 pb-5">
           <View className="flex-1 pr-3">
-            <Text className="font-sans-medium text-sm text-muted">{t('Bonjour,')}</Text>
-            <Text className="font-serif-bold text-2xl text-ink mt-0.5">{fullName}</Text>
+            <Text className="font-serif-bold text-2xl text-ink">
+              {greeting ? t('Bonjour, {name}', { name: greeting }) : t('Bienvenue')}
+            </Text>
           </View>
           <Avatar initials={initials} uri={avatarUri} />
         </View>

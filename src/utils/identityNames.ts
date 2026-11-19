@@ -26,3 +26,11 @@ export function identityNamesIssue(names: IdentityNames, usesPostnom: boolean): 
     ? translate('Le nom est obligatoire, ainsi que le prénom ou le post-nom.')
     : translate('Le nom et le prénom sont obligatoires.');
 }
+
+/**
+ * Nom de l'accueil « Bonjour, … » : le prénom ; à défaut le post-nom (la règle des noms garantit l'un des deux
+ * pour un pays à post-nom) ; à défaut le nom de famille. Chaîne vide si rien n'est renseigné.
+ */
+export function greetingName(names: IdentityNames): string {
+  return names.firstName?.trim() || names.postNom?.trim() || names.lastName?.trim() || '';
+}

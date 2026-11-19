@@ -186,6 +186,7 @@ function mapUserRow(row: any, role: MobileRole): User {
     email: row.email,
     firstName: row.first_name ?? '',
     lastName: row.last_name ?? '',
+    postNom: row.post_nom ?? undefined,
     role,
     phone: row.phone ?? undefined,
     avatarUrl: row.avatar_url ?? undefined,
@@ -659,7 +660,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const completePatientIdentity = async (userId: string, input: PhoneIdentityInput) => {
     await completePhoneIdentity(userId, input);
     setUser((u) =>
-      u && u.id === userId ? { ...u, firstName: input.firstName.trim(), lastName: input.lastName.trim() } : u,
+      u && u.id === userId ? { ...u, firstName: input.firstName.trim(), lastName: input.lastName.trim(), postNom: input.postNom?.trim() || undefined } : u,
     );
   };
 

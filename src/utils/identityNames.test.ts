@@ -1,4 +1,4 @@
-import { identityNamesComplete, identityNamesIssue } from './identityNames';
+import { greetingName, identityNamesComplete, identityNamesIssue } from './identityNames';
 import { setCurrentLangCode } from '@/i18n/core';
 
 beforeEach(() => setCurrentLangCode('fr'));
@@ -29,5 +29,18 @@ describe('identityNamesIssue', () => {
     expect(identityNamesIssue({ lastName: 'K' }, false)).toBe('Le nom et le prénom sont obligatoires.');
     setCurrentLangCode('en');
     expect(identityNamesIssue({ lastName: 'K' }, true)).toBe('Last name is required, along with first name or post-nom.');
+  });
+});
+
+describe('greetingName', () => {
+  it('prefers the first name', () => {
+    expect(greetingName({ firstName: ' Jean ', postNom: 'Mbala', lastName: 'Kabila' })).toBe('Jean');
+  });
+  it('falls back to the post-nom when there is no first name', () => {
+    expect(greetingName({ firstName: '  ', postNom: 'Mbala', lastName: 'Kabila' })).toBe('Mbala');
+  });
+  it('falls back to the last name, then to empty', () => {
+    expect(greetingName({ lastName: 'Kabila' })).toBe('Kabila');
+    expect(greetingName({})).toBe('');
   });
 });

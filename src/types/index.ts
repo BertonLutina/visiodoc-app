@@ -17,6 +17,8 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
+  /** Post-nom (`users.post_nom`), pays congolais. */
+  postNom?: string;
   role: UserRole;
   phone?: string;
   /** Photo PUBLIQUE approuvée d'un prestataire (users.avatar_url) ; jamais écrite par le client. */

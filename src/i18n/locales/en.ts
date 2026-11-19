@@ -63,6 +63,7 @@ export const en: Record<string, string> = {
   "Bienvenue": "Welcome",
   "Bon retour": "Welcome back",
   "Bonjour {name}": "Hello {name}",
+  "Bonjour, {name}": "Hello, {name}",
   "Bonjour,": "Hello,",
   "Cardio": "Cardio",
   "Cardiologie": "Cardiology",
