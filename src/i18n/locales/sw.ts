@@ -243,6 +243,7 @@ export const sw: Record<string, string> = {
   "Un champ obligatoire est manquant. Vérifie le formulaire.": "Sehemu inayohitajika haipo. Kagua fomu.",
   "Le prénom ou le post-nom est obligatoire.": "Jina la kwanza au jina la baada ni lazima.",
   "Visiodoc n'est pas encore disponible dans ce pays.": "Visiodoc bado haipatikani katika nchi hii.",
+  "Ce numéro de téléphone est déjà utilisé par un autre compte.": "Nambari hii ya simu tayari inatumiwa na akaunti nyingine.",
   "Choisis ton genre : Masculin ou Féminin.": "Chagua jinsia yako: Mwanaume au Mwanamke.",
   "Le mot de passe doit contenir au moins 10 caractères.": "Nenosiri lazima liwe na angalau herufi 10.",
   "Le mot de passe doit contenir au moins une lettre et un chiffre.": "Nenosiri lazima liwe na angalau herufi moja na tarakimu moja.",

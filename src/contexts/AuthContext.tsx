@@ -6,6 +6,7 @@ import type { User } from '@/types';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 import {
   edgeFunctionError,
+  mapDuplicateContactError,
   providerRefusalError,
   providerRefusalMessage,
   roleNotAllowedError,
@@ -759,7 +760,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (partial.preferredLanguage !== undefined) patch.preferred_language = partial.preferredLanguage || null;
         if (Object.keys(patch).length) {
           const { error } = await supabase.from('users').update(patch).eq('id', user.id);
-          if (error) throw mapCountryNotOpenError(error);
+          if (error) throw mapDuplicateContactError(mapCountryNotOpenError(error));
         }
       }
       setUser((u) => (u ? { ...u, ...partial } : u));

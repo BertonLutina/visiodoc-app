@@ -484,6 +484,18 @@ describe('registerPatientAccount', () => {
     expect(registerPatientErrorMessage(err)).toBe(GUIDE_CONFLICT);
   });
 
+  it('409 phone already used → conflict with the translated phone message', async () => {
+    const PHONE = 'Ce numéro de téléphone est déjà utilisé par un autre compte.';
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(409, { error: PHONE }) });
+    const err: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
+    expect(err.kind).toBe('conflict');
+    expect(registerPatientErrorMessage(err)).toBe(PHONE);
+    setCurrentLangCode('en');
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(409, { error: PHONE }) });
+    const errEn: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
+    expect(registerPatientErrorMessage(errEn)).toBe('This phone number is already used by another account.');
+  });
+
   it('429 with Retry-After: 42 → rate_limited error and a message with 42 seconds', async () => {
     mockInvoke.mockResolvedValue({
       data: null,

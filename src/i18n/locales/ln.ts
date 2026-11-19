@@ -243,6 +243,7 @@ export const ln: Record<string, string> = {
   "Un champ obligatoire est manquant. Vérifie le formulaire.": "Esika moko ya ntina ezangi. Tala lisusu formulaire.",
   "Le prénom ou le post-nom est obligatoire.": "Kombo ya liboso to kombo ya nsima esengeli.",
   "Visiodoc n'est pas encore disponible dans ce pays.": "Visiodoc ezali naino te na ekolo oyo.",
+  "Ce numéro de téléphone est déjà utilisé par un autre compte.": "Nimero ya telefone oyo esili kosalelama na compte mosusu.",
   "Choisis ton genre : Masculin ou Féminin.": "Pona bosolo na yo: Mobali to Mwasi.",
   "Le mot de passe doit contenir au moins 10 caractères.": "Mot de passe esengeli kozala na bokoma 10 ata.",
   "Le mot de passe doit contenir au moins une lettre et un chiffre.": "Mot de passe esengeli kozala na ata elembo moko ya alfabe mpe motango moko.",

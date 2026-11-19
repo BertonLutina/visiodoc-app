@@ -77,6 +77,22 @@ export function pwnedPasswordMessage(error: unknown): string | null {
   return pwned ? translate('Ce mot de passe a déjà fuité sur Internet, choisis-en un autre.') : null;
 }
 
+/** 409 des inscriptions (`register-patient`, `register-presta`) : téléphone unique sur toute la plateforme. */
+export const PHONE_TAKEN_MESSAGE = 'Ce numéro de téléphone est déjà utilisé par un autre compte.';
+
+/**
+ * Violation d'unicité Postgres (23505) sur `users.phone` ou `users.email` (mise à jour de profil) → erreur
+ * au message traduit ; toute autre erreur est rendue telle quelle.
+ */
+export function mapDuplicateContactError<E>(error: E): E | Error {
+  const e = error as { code?: string; message?: string; details?: string; hint?: string } | null | undefined;
+  if (e?.code !== '23505') return error;
+  const text = `${e.message ?? ''} ${e.details ?? ''} ${e.hint ?? ''}`.toLowerCase();
+  if (text.includes('phone')) return new Error(translate(PHONE_TAKEN_MESSAGE));
+  if (text.includes('email')) return new Error(translate('Un compte existe déjà avec cet email.'));
+  return error;
+}
+
 /**
  * Erreur levée pour une réponse d'Edge Function en échec. Conserve `error_code` et `reasons` du
  * corps (sinon `new Error(body.error)` les perdrait et `pwnedPasswordMessage` ne reconnaîtrait pas
@@ -88,6 +104,7 @@ export function edgeFunctionError(
 ): Error & { error_code?: string; reasons?: string[] } {
   // Jamais de message vide : corps sans `error` texte → message de repli, sinon message générique.
   const message =
+    (body?.error === PHONE_TAKEN_MESSAGE && translate(PHONE_TAKEN_MESSAGE)) ||
     (typeof body?.error === 'string' && body.error) ||
     fallbackMessage ||
     translate('Une erreur est survenue. Réessaie.');

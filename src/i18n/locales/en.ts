@@ -243,6 +243,7 @@ export const en: Record<string, string> = {
   "Un champ obligatoire est manquant. Vérifie le formulaire.": "A required field is missing. Please check the form.",
   "Le prénom ou le post-nom est obligatoire.": "The first name or the post-name is required.",
   "Visiodoc n'est pas encore disponible dans ce pays.": "Visiodoc is not available in this country yet.",
+  "Ce numéro de téléphone est déjà utilisé par un autre compte.": "This phone number is already used by another account.",
   "Choisis ton genre : Masculin ou Féminin.": "Choose your gender: Male or Female.",
   "Le mot de passe doit contenir au moins 10 caractères.": "The password must contain at least 10 characters.",
   "Le mot de passe doit contenir au moins une lettre et un chiffre.": "The password must contain at least one letter and one digit.",
