@@ -97,8 +97,13 @@ export default function Inbox() {
         >
           <ChevronLeft size={26} color={colors.ink} />
         </Pressable>
-        <Text className="flex-1 font-serif-bold text-2xl text-ink">{t('Notifications')}</Text>
-        {unread > 0 && (
+        <Text className="flex-1 font-serif-bold text-2xl text-ink" numberOfLines={1}>
+          {t('Notifications')}
+        </Text>
+      </View>
+      {/* « Tout marquer comme lu » sous le titre, pour que « Notifications » tienne sur une ligne (retour de Chris, 19/11). */}
+      {unread > 0 && (
+        <View className="flex-row justify-end px-3 -mt-2 mb-1">
           <Pressable
             onPress={onMarkAll}
             accessibilityRole="button"
@@ -109,8 +114,8 @@ export default function Inbox() {
               {t('Tout marquer comme lu')}
             </Text>
           </Pressable>
-        )}
-      </View>
+        </View>
+      )}
 
       {loading ? (
         <View className="flex-1 items-center justify-center">
