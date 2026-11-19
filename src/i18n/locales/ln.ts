@@ -718,4 +718,12 @@ export const ln: Record<string, string> = {
   "Déclaration relative aux enfants": "Maloba na ntina ya bana",
   "Document en cours de finalisation. La version en vigueur reste consultable sur le site.": "Mokanda ezali kosilisama. Version oyo ezali kosalema ekoki kotangama naino na site.",
   "Consulter la version du site": "Tanga version ya site",
+  "Le délai de 15 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.": "Ntango ya miniti 15 ya kobanda libiangi eleki : consultation elongolami (monganga azalaki te) mpe mobange azongisami mbongo na portefeuille na ye.",
+  "Médecin absent : remboursé en avoir": "Monganga azalaki te : azongisami na portefeuille",
+  "Démarrage possible à l'heure prévue, dans {time}": "Okoki kobanda na ngonga oyo etiamaki, na {time}",
+  "Lancez l'appel dans les {time} qui restent, sinon la consultation sera annulée (médecin absent).": "Banda libiangi na kati ya {time} etikali, soki te consultation ekolongolama (monganga azali te).",
+  "Délai de 15 minutes dépassé : la consultation va être annulée (médecin absent) et le patient remboursé en avoir.": "Ntango ya miniti 15 eleki : consultation ekolongolama (monganga azali te) mpe mobange akozongisama mbongo na portefeuille na ye.",
+  "Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 15 minutes qui suivent": "Okoki kobanda libiangi kaka uta ngonga oyo etiamaki mpe na kati ya miniti 15 oyo elandi",
+  "Consultation à {time} : lancez l'appel dans les 15 minutes qui suivent l'heure prévue, sinon elle sera annulée (médecin absent) et le patient remboursé en avoir.": "Consultation na {time} : banda libiangi na kati ya miniti 15 nsima ya ngonga oyo etiamaki, soki te ekolongolama (monganga azali te) mpe mobange akozongisama mbongo na portefeuille na ye.",
+  "Remboursement : médecin absent": "Kozongisama : monganga azali te",
 };

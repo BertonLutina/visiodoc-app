@@ -65,6 +65,19 @@ export function normalizeConsultationStatus(status: string): ConsultationStatus 
   }
 }
 
+/** `consultations.cancel_reason` posé par le serveur quand le médecin n'a pas lancé l'appel dans les 15 minutes. */
+export const PROVIDER_ABSENT_REASON = 'provider_absent';
+
+/** Consultation annulée pour médecin absent ([MOB-1611-1]) : `cancelled` + `cancel_reason = 'provider_absent'`. */
+export function isProviderAbsent(status: string | null | undefined, cancelReason: string | null | undefined): boolean {
+  return status === 'cancelled' && cancelReason === PROVIDER_ABSENT_REASON;
+}
+
+/** Libellé du guide pour une annulation pour médecin absent (le patient retrouve la totalité en avoir). */
+export function providerAbsentLabel(): string {
+  return translate('Médecin absent : remboursé en avoir');
+}
+
 /** Valeurs autorisées par le CHECK `consultations.consultation_type`. */
 export type DbConsultationType = 'video' | 'audio' | 'chat';
 

@@ -80,6 +80,8 @@ export interface Consultation {
   /** `status = 'pending_payment'` : réservée mais pas encore payée, ni confirmée. */
   awaitingPayment?: boolean;
   status: ConsultationStatus;
+  /** `consultations.cancel_reason` (ex: `provider_absent` : médecin absent, remboursé en avoir). */
+  cancelReason?: string;
   roomId?: string;
 }
 

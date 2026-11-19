@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import { appEnv } from '@/config/appEnv';
 import { configurationProblem } from '@/config/configurationProblem';
+import { syncServerClock } from '@/utils/serverClock';
 import { secureSessionStorage } from './secureSessionStorage';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -33,6 +34,19 @@ export const supabase = supabaseConfigured
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: false,
+      },
+      global: {
+        // Mesure le décalage entre l'horloge de l'appareil et celle du serveur (en-tête `Date`) pour la fenêtre
+        // de démarrage des consultations ([MOB-1611-1]). N'altère ni la requête ni la réponse.
+        fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+          const response = await fetch(input, init);
+          try {
+            syncServerClock(response.headers.get('date'));
+          } catch {
+            /* mesure facultative */
+          }
+          return response;
+        },
       },
     })
   : null;

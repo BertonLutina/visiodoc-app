@@ -718,4 +718,12 @@ export const en: Record<string, string> = {
   "Déclaration relative aux enfants": "Statement on children",
   "Document en cours de finalisation. La version en vigueur reste consultable sur le site.": "Document being finalised. The current version remains available on the website.",
   "Consulter la version du site": "View the website version",
+  "Le délai de 15 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.": "The 15-minute window to start the call has passed: the consultation is cancelled (provider absent) and the patient is refunded as wallet credit.",
+  "Médecin absent : remboursé en avoir": "Provider absent: refunded as wallet credit",
+  "Démarrage possible à l'heure prévue, dans {time}": "You can start at the scheduled time, in {time}",
+  "Lancez l'appel dans les {time} qui restent, sinon la consultation sera annulée (médecin absent).": "Start the call within the {time} remaining, otherwise the consultation will be cancelled (provider absent).",
+  "Délai de 15 minutes dépassé : la consultation va être annulée (médecin absent) et le patient remboursé en avoir.": "The 15-minute window has passed: the consultation will be cancelled (provider absent) and the patient refunded as wallet credit.",
+  "Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 15 minutes qui suivent": "You can only start the call from the scheduled time and during the 15 minutes that follow",
+  "Consultation à {time} : lancez l'appel dans les 15 minutes qui suivent l'heure prévue, sinon elle sera annulée (médecin absent) et le patient remboursé en avoir.": "Consultation at {time}: start the call within 15 minutes of the scheduled time, otherwise it will be cancelled (provider absent) and the patient refunded as wallet credit.",
+  "Remboursement : médecin absent": "Refund: provider absent",
 };

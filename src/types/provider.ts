@@ -66,6 +66,8 @@ export interface ProviderConsultation {
   status: ConsultationStatus;
   /** Statut brut de la table `consultations` (ex: `no_show`, absent du vocabulaire affiché). */
   rawStatus?: string;
+  /** `consultations.cancel_reason` (ex: `provider_absent` : médecin absent, patient remboursé en avoir). */
+  cancelReason?: string;
   /** ISO de `scheduled_at`, pour les comptes à rebours. */
   scheduledAt?: string;
   roomId?: string;

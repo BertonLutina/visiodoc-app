@@ -22,11 +22,12 @@ import {
   getReviewSummary,
   getTodayConsultations,
   getValidationStatus,
-  startConsultationBestEffort,
 } from '@/services/providerApi';
+import { launchProviderCall, useStartWindow } from '@/hooks/useStartWindow';
+import { canStartNow, startReminderBanner, startWindowMessage } from '@/utils/startWindow';
 import { buildAlerts, countdownLabel } from '@/services/dashboardMetrics';
 import { currentProvider } from '@/data/mockProvider';
-import { formatAmountInCurrency, typeLabel } from '@/utils/format';
+import { formatAmountInCurrency, isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
 import { translate } from '@/i18n';
 import type { ProviderConsultation } from '@/types/provider';
 import { useLanguage, useT } from '@/i18n';
@@ -52,7 +53,11 @@ function statusBadge(c: ProviderConsultation) {
     case 'in_progress':
       return <Badge label={translate('En cours')} tone="green" />;
     case 'cancelled':
-      return <Badge label={translate('Annulée')} tone="red" />;
+      return isProviderAbsent(c.rawStatus, c.cancelReason) ? (
+        <Badge label={providerAbsentLabel()} tone="red" />
+      ) : (
+        <Badge label={translate('Annulée')} tone="red" />
+      );
     case 'no_show':
       return <Badge label={translate('Absent')} tone="red" />;
     case 'pending_payment':
@@ -120,6 +125,10 @@ export default function ProviderDashboard() {
 
   const alerts = ov ? buildAlerts({ validationStatus, overview: ov }) : [];
   const next = ov?.next ?? null;
+  const nextWin = useStartWindow(next?.scheduledAt, next?.rawStatus);
+  const nextStartable = canStartNow(nextWin);
+  const nextWinMessage = startWindowMessage(nextWin);
+  const nextBanner = startReminderBanner(nextWin, next?.scheduledAt);
   const maxRevenue = Math.max(1, ...(ov?.revenueSeries.map((m) => m.amount) ?? [1]));
   const subtitle = !ov
     ? ''
@@ -132,9 +141,7 @@ export default function ProviderDashboard() {
   const onStart = async (c: ProviderConsultation) => {
     setStarting(true);
     try {
-      // Statut cosmétique : un échec ne bloque jamais l'entrée dans l'appel (`get-video-token` fait foi).
-      await startConsultationBestEffort(c.id);
-      router.push(`/call/${c.roomId ?? c.id}`);
+      await launchProviderCall(c);
     } finally {
       setStarting(false);
     }
@@ -202,6 +209,18 @@ export default function ProviderDashboard() {
         {next && (
           <View className="px-5 mb-5">
             <SectionTitle>{t('Prochaine consultation')}</SectionTitle>
+            {!!nextBanner && (
+              <View
+                accessibilityRole="alert"
+                className="rounded-2xl px-4 py-3 mb-2 flex-row items-center"
+                style={{ backgroundColor: ALERT_STYLE.danger.bg }}
+              >
+                <AlertTriangle size={18} color={ALERT_STYLE.danger.fg} />
+                <Text className="flex-1 font-sans-semibold text-sm ml-3" style={{ color: ALERT_STYLE.danger.fg }}>
+                  {nextBanner}
+                </Text>
+              </View>
+            )}
             <Card>
               <View className="flex-row items-center">
                 <Avatar initials={next.patient.initials} size={46} tone="light" />
@@ -222,12 +241,18 @@ export default function ProviderDashboard() {
               </Text>
               <Pressable
                 onPress={() => onStart(next)}
-                disabled={starting}
-                className="bg-accent rounded-2xl py-3.5 items-center mt-3"
+                disabled={starting || !nextStartable}
+                accessibilityState={{ disabled: starting || !nextStartable }}
+                className={`rounded-2xl py-3.5 items-center mt-3 ${nextStartable ? 'bg-accent' : 'bg-line'}`}
                 style={{ opacity: starting ? 0.6 : 1 }}
               >
-                <Text className="text-white font-sans-bold">{t('Démarrer la consultation')}</Text>
+                <Text className={`font-sans-bold ${nextStartable ? 'text-white' : 'text-muted'}`}>{t('Démarrer la consultation')}</Text>
               </Pressable>
+              {!!nextWinMessage && (
+                <Text className={`font-sans-semibold text-xs mt-2 ${nextWin.phase === 'before' ? 'text-muted' : 'text-danger'}`}>
+                  {nextWinMessage}
+                </Text>
+              )}
             </Card>
           </View>
         )}

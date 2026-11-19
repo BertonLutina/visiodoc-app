@@ -102,6 +102,16 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
     expect(load().mapConsultation({ ...base, consultation_type: 'audio' }).type).toBe('phone');
   });
 
+  it('expose cancel_reason (médecin absent) et laisse undefined sans motif', () => {
+    const base = { id: 'c1', doctor_id: 'd1', scheduled_at: '2099-01-01T09:00:00Z', status: 'cancelled' };
+    expect(load().mapConsultation({ ...base, cancel_reason: 'provider_absent' })).toMatchObject({
+      status: 'cancelled',
+      cancelReason: 'provider_absent',
+    });
+    expect(load().mapConsultation({ ...base, cancel_reason: null }).cancelReason).toBeUndefined();
+    expect(load().mapConsultation(base).cancelReason).toBeUndefined();
+  });
+
   it('maps an empty video_room_id to undefined (it would break the call route), keeps a real one', () => {
     const base = { id: 'c1', doctor_id: 'd1', scheduled_at: '2099-01-01T09:00:00Z', status: 'scheduled' };
     expect(load().mapConsultation({ ...base, video_room_id: '' }).roomId).toBeUndefined();
@@ -506,6 +516,63 @@ describe('getWallet', () => {
   });
 });
 
+describe('mapWalletCreditRow (avoir noshow_credit)', () => {
+  it('affiche « Remboursement : médecin absent » comme un crédit, en unité principale', () => {
+    const tx = require('./patientApi').mapWalletCreditRow({ id: 'w1', amount: '15000.00', created_at: '2026-11-17T10:12:00.000Z' });
+    expect(tx).toMatchObject({ id: 'wallet-w1', label: 'Remboursement : médecin absent', amount: 15000 });
+    expect(tx.method).toBeUndefined();
+  });
+});
+
+describe('getWallet avec avoirs noshow_credit', () => {
+  const fromMock = jest.fn();
+  let walletResult: { data: unknown; error: unknown } | undefined;
+  beforeEach(() => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    fromMock.mockImplementation((table: string) => ({
+      select: () => {
+        const q: any = {};
+        q.eq = () => q;
+        q.order = () => q;
+        q.limit = () =>
+          Promise.resolve(
+            table === 'patient_wallet_transactions'
+              ? walletResult
+              : {
+                  data: [{ id: 'pay', amount: 1_000_000, status: 'SUCCESS', created_at: '2026-11-10T10:00:00.000Z' }],
+                  error: null,
+                },
+          );
+        return q;
+      },
+    }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+  });
+  afterEach(() => jest.dontMock('@/lib/supabase'));
+
+  it('fusionne les avoirs noshow_credit (seulement) dans l’historique, du plus récent au plus ancien', async () => {
+    walletResult = {
+      data: [
+        { id: 'c1', transaction_type: 'noshow_credit', amount: 10000, created_at: '2026-11-16T10:00:00.000Z' },
+        { id: 'b1', transaction_type: 'booking_debit', amount: -5000, created_at: '2026-11-16T11:00:00.000Z' },
+      ],
+      error: null,
+    };
+    const wallet = await require('./patientApi').getWallet('pat-1');
+    expect(fromMock).toHaveBeenCalledWith('patient_wallet_transactions');
+    expect(wallet.transactions.map((t: { id: string }) => t.id)).toEqual(['wallet-c1', 'pay']);
+    expect(wallet.transactions[0]).toMatchObject({ label: 'Remboursement : médecin absent', amount: 10000 });
+    expect(wallet.balance).toBe(10000); // total payé inchangé : 1 000 000 / 100
+  });
+
+  it('une erreur sur les avoirs (RLS) n’empêche pas d’afficher les paiements', async () => {
+    walletResult = { data: null, error: { code: '42501', message: 'denied' } };
+    const wallet = await require('./patientApi').getWallet('pat-1');
+    expect(wallet.transactions.map((t: { id: string }) => t.id)).toEqual(['pay']);
+  });
+});
+
 describe('getWallet embed fallback (PGRST200: relationship not found)', () => {
   const fromMock = jest.fn();
   const selects: string[] = [];
@@ -516,8 +583,12 @@ describe('getWallet embed fallback (PGRST200: relationship not found)', () => {
     jest.clearAllMocks();
     selects.length = 0;
     results.length = 0;
-    fromMock.mockImplementation(() => ({
+    fromMock.mockImplementation((table: string) => ({
       select: (sel: string) => {
+        if (table === 'patient_wallet_transactions') {
+          const w: any = { eq: () => w, order: () => w, limit: () => Promise.resolve({ data: [], error: null }) };
+          return w;
+        }
         selects.push(sel);
         const q: any = {};
         q.eq = () => q;

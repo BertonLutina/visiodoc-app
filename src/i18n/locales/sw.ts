@@ -718,4 +718,12 @@ export const sw: Record<string, string> = {
   "Déclaration relative aux enfants": "Tamko kuhusu watoto",
   "Document en cours de finalisation. La version en vigueur reste consultable sur le site.": "Hati inakamilishwa. Toleo linalotumika bado unaweza kulisoma kwenye tovuti.",
   "Consulter la version du site": "Soma toleo la tovuti",
+  "Le délai de 15 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.": "Muda wa dakika 15 wa kuanza simu umepita: ushauri umeghairiwa (daktari hakufika) na mgonjwa amerudishiwa pesa kwenye pochi yake.",
+  "Médecin absent : remboursé en avoir": "Daktari hakufika: umerudishiwa kwenye pochi",
+  "Démarrage possible à l'heure prévue, dans {time}": "Unaweza kuanza saa iliyopangwa, baada ya {time}",
+  "Lancez l'appel dans les {time} qui restent, sinon la consultation sera annulée (médecin absent).": "Anzisha simu ndani ya {time} iliyobaki, vinginevyo ushauri utaghairiwa (daktari hakufika).",
+  "Délai de 15 minutes dépassé : la consultation va être annulée (médecin absent) et le patient remboursé en avoir.": "Muda wa dakika 15 umepita: ushauri utaghairiwa (daktari hakufika) na mgonjwa atarudishiwa pesa kwenye pochi yake.",
+  "Vous ne pouvez lancer l'appel qu'à partir de l'heure prévue et pendant les 15 minutes qui suivent": "Unaweza kuanzisha simu tu kuanzia saa iliyopangwa na ndani ya dakika 15 zinazofuata",
+  "Consultation à {time} : lancez l'appel dans les 15 minutes qui suivent l'heure prévue, sinon elle sera annulée (médecin absent) et le patient remboursé en avoir.": "Mashauriano saa {time}: anzisha simu ndani ya dakika 15 baada ya muda uliopangwa, vinginevyo yatafutwa (daktari hakufika) na mgonjwa atarudishiwa kwenye pochi.",
+  "Remboursement : médecin absent": "Kurudishiwa: daktari hakufika",
 };

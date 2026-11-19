@@ -7,10 +7,12 @@ import { reportSessionExpiry } from './sessionExpiry';
  * Visio : contrat `get-video-token` (guide, étape 6 et [MOB-0612-3]).
  *   POST /functions/v1/get-video-token  { roomId }   Authorization: Bearer <session>  (functions.invoke)
  *   200 { success: true, data: { provider, mode, serverUrl, roomName, jwt } }
- *   403 { success: false, code: 'room_not_open_yet' | 'room_closed' | 'consultation_cancelled', opensAt, error }
+ *   403 { success: false, code: 'room_not_open_yet' | 'room_closed' | 'consultation_cancelled' | 'provider_start_window_over',
+ *       opensAt, error }
  *   403 { success: false, error: 'Accès à cette salle refusé' }     401 { success: false, error: 'Non authentifié' }
  * L'identité (nom, e-mail pseudonyme, rôle modérateur / participant) est construite PAR LE SERVEUR : le corps ne
- * contient QUE `roomId`. La fenêtre (ouverture 15 min avant, fermeture 30 min après la fin) est appliquée côté
+ * contient QUE `roomId`. La fenêtre (ouverture à l'heure prévue EXACTE, médecin : 15 min pour lancer l'appel sinon
+ * `provider_start_window_over` ([MOB-1611-1]), fermeture 30 min après la fin) est appliquée côté
  * serveur : le client n'en déduit aucun refus, il relaie les codes 403.
  * ---------------------------------------------------------------------------------------------- */
 
@@ -24,7 +26,13 @@ export function videoJoinBody(roomId: string): { roomId: string } {
   return { roomId };
 }
 
-export type VideoFailureKind = 'too_early' | 'closed' | 'cancelled' | 'denied' | 'unauthenticated';
+export type VideoFailureKind =
+  | 'too_early'
+  | 'closed'
+  | 'cancelled'
+  | 'start_window_over'
+  | 'denied'
+  | 'unauthenticated';
 
 export type VideoFailure = {
   kind: VideoFailureKind;
@@ -67,6 +75,14 @@ export function videoFailure(
       return { kind: 'closed', message: translate('La salle de cette consultation est fermée'), opensAt: null };
     case 'consultation_cancelled':
       return { kind: 'cancelled', message: translate('Cette consultation est annulée ou manquée'), opensAt: null };
+    case 'provider_start_window_over':
+      return {
+        kind: 'start_window_over',
+        message: translate(
+          "Le délai de 15 minutes pour lancer l'appel est dépassé : la consultation est annulée (médecin absent) et le patient est remboursé en avoir.",
+        ),
+        opensAt: null,
+      };
     default:
       return { kind: 'denied', message: translate('Accès à cette salle refusé'), opensAt: null };
   }
