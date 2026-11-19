@@ -776,7 +776,6 @@ export const sw: Record<string, string> = {
   "Un enfant est rattaché à un seul compte. L'autre parent doit créer sa propre fiche : l'historique de chaque fiche reste séparé.": "Mtoto anaunganishwa na akaunti moja tu. Mzazi mwingine lazima aunde faili lake: historia ya kila faili hubaki tofauti.",
   "Prénom de l'enfant": "Jina la kwanza la mtoto",
   "Nom de l'enfant": "Jina la ukoo la mtoto",
-  "Date de naissance": "Tarehe ya kuzaliwa",
   "Poids (kg), facultatif": "Uzito (kg), hiari",
   "Taille (cm), facultatif": "Urefu (cm), hiari",
   "Je suis le parent ou le représentant légal de cet enfant": "Mimi ni mzazi au mwakilishi wa kisheria wa mtoto huyu",

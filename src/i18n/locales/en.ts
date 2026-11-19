@@ -776,7 +776,6 @@ export const en: Record<string, string> = {
   "Un enfant est rattaché à un seul compte. L'autre parent doit créer sa propre fiche : l'historique de chaque fiche reste séparé.": "A child is linked to a single account. The other parent must create their own record: the history of each record stays separate.",
   "Prénom de l'enfant": "Child's first name",
   "Nom de l'enfant": "Child's last name",
-  "Date de naissance": "Date of birth",
   "Poids (kg), facultatif": "Weight (kg), optional",
   "Taille (cm), facultatif": "Height (cm), optional",
   "Je suis le parent ou le représentant légal de cet enfant": "I am the parent or legal representative of this child",

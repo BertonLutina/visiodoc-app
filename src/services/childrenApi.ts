@@ -135,7 +135,7 @@ export function childErrorText(code: ChildErrorCode): string {
     case 'invalid_blood_type':
       return translate('Le groupe sanguin sélectionné est invalide.');
     case 'doctor_not_found':
-      return translate('Médecin introuvable.');
+      return translate('Prestataire introuvable.');
     case 'doctor_has_not_consulted_child':
       return translate("Ce médecin n'a aucune consultation confirmée pour cet enfant.");
     case 'invalid_expiry':

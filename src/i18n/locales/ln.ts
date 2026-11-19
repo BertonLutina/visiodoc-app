@@ -776,7 +776,6 @@ export const ln: Record<string, string> = {
   "Un enfant est rattaché à un seul compte. L'autre parent doit créer sa propre fiche : l'historique de chaque fiche reste séparé.": "Mwana akangami na compte moko kaka. Tata to mama mosusu asengeli kosala fisi na ye: lisolo ya moko na moko ekoki kosangana te.",
   "Prénom de l'enfant": "Kombo ya mwana",
   "Nom de l'enfant": "Kombo ya libota ya mwana",
-  "Date de naissance": "Mokolo ya mbotama",
   "Poids (kg), facultatif": "Kilo (kg), na bosenga te",
   "Taille (cm), facultatif": "Molai (cm), na bosenga te",
   "Je suis le parent ou le représentant légal de cet enfant": "Nazali tata, mama to molakisi ya mibeko ya mwana oyo",
