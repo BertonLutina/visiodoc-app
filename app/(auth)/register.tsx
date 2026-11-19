@@ -133,7 +133,7 @@ export default function RegisterPatient() {
           value={form.email}
           onChangeText={set('email')}
         />
-        <PhoneField label={t('Téléphone')} onChange={set('phone')} />
+        <PhoneField label={t('Téléphone (facultatif)')} onChange={set('phone')} />
         <GenderField value={gender} onChange={setGender} />
         <DateField
           label={t('Date de naissance')}

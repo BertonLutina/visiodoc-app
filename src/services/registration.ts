@@ -51,7 +51,8 @@ export interface RegisterPrestaBody {
   firstName: string;
   lastName: string;
   gender: Gender;
-  phone: string | undefined;
+  /** Omis du corps (clé absente) si le numéro est vide : facultatif depuis le 19/11. */
+  phone?: string;
   serviceTypeId: string | null;
   proposedSpecialtyLabel: string | null;
   countryId: string | undefined;
@@ -73,13 +74,14 @@ export function buildRegisterPrestaBody(input: RegisterPrestaInput): RegisterPre
   if (!isGender(input.gender)) {
     throw new Error(translate('Choisis ton genre : Masculin ou Féminin.'));
   }
+  const phone = toE164(input.phone, dialCodeFor(input.countryCode));
   return {
     email: input.email.trim().toLowerCase(),
     password: input.password,
     firstName: input.firstName,
     lastName: input.lastName,
     gender: input.gender,
-    phone: toE164(input.phone, dialCodeFor(input.countryCode)),
+    ...(phone ? { phone } : {}),
     serviceTypeId: input.serviceTypeId,
     proposedSpecialtyLabel: input.proposedSpecialtyLabel?.trim() || null,
     countryId: input.countryId,
@@ -309,8 +311,7 @@ export async function registerPatientAccount(
   if (!supabase) throw new Error(translate('Backend non configuré.'));
 
   const phone = toE164(input.phone, dialCodeFor(input.countryCode));
-  // `register-patient` exige le téléphone (phoneE164Schema) : sans lui, le serveur répond 400 « Required ».
-  if (!phone) throw new Error(translate('Le numéro de téléphone est obligatoire.'));
+  // Téléphone facultatif : vide => clé omise du corps (jamais de chaîne vide).
   const countryId = input.countryCode ? COUNTRIES[input.countryCode]?.id : undefined;
   const language = serverLanguage();
   const postNom = input.postNom?.trim();

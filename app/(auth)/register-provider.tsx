@@ -100,7 +100,7 @@ export default function RegisterProvider() {
               value={form.email}
               onChangeText={set('email')}
             />
-            <PhoneField label={t('Téléphone')} onChange={set('phone')} />
+            <PhoneField label={t('Téléphone (facultatif)')} onChange={set('phone')} />
             <CountryPicker label={t('Visiodoc du compte')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
             <CityCommuneFields
               cityOnly
