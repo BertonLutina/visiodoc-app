@@ -646,4 +646,9 @@ export const sw: Record<string, string> = {
   "Continuer": "Endelea",
   "Valider": "Thibitisha",
   "Effacer": "Futa",
+  "Tout marquer comme lu": "Weka zote kuwa zimesomwa",
+  "Aucune notification pour le moment": "Hakuna arifa kwa sasa",
+  "Tes rappels et alertes apparaîtront ici.": "Vikumbusho na tahadhari zako zitaonekana hapa.",
+  "Impossible de charger tes notifications.": "Imeshindikana kupakia arifa zako.",
+  "Tire vers le bas pour réessayer.": "Vuta chini ili ujaribu tena.",
 };

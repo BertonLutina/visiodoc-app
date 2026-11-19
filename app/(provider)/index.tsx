@@ -15,6 +15,7 @@ import {
 } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { Avatar, Badge, Card, SectionTitle, Stars } from '@/components/ui';
+import { NotificationBell } from '@/components/NotificationBell';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import {
@@ -155,7 +156,10 @@ export default function ProviderDashboard() {
             <Text className="font-serif-bold text-2xl text-ink mt-0.5">{displayName}</Text>
             {!!subtitle && <Text className="font-sans text-sm text-muted mt-1">{subtitle}</Text>}
           </View>
-          <Avatar initials={initials} tone="clay" uri={user?.avatarUrl} />
+          <View className="flex-row items-center">
+            <NotificationBell />
+            <Avatar initials={initials} tone="clay" uri={user?.avatarUrl} />
+          </View>
         </View>
 
         {overviewReq.loading && !ov && (

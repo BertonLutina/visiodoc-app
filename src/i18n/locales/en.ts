@@ -646,4 +646,9 @@ export const en: Record<string, string> = {
   "Continuer": "Continue",
   "Valider": "Confirm",
   "Effacer": "Clear",
+  "Tout marquer comme lu": "Mark all as read",
+  "Aucune notification pour le moment": "No notifications yet",
+  "Tes rappels et alertes apparaîtront ici.": "Your reminders and alerts will appear here.",
+  "Impossible de charger tes notifications.": "Unable to load your notifications.",
+  "Tire vers le bas pour réessayer.": "Pull down to try again.",
 };

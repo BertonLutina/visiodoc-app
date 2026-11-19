@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stethoscope, FolderHeart, Wallet, Calendar, Video, CalendarPlus } from 'lucide-react-native';
 import { Avatar, Badge, Card, Eyebrow } from '@/components/ui';
+import { NotificationBell } from '@/components/NotificationBell';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
@@ -57,7 +58,10 @@ export default function PatientDashboard() {
             <Text className="font-sans-medium text-sm text-muted">{t('Bonjour,')}</Text>
             <Text className="font-serif-bold text-2xl text-ink mt-0.5">{fullName}</Text>
           </View>
-          <Avatar initials={initials} uri={user?.avatarUrl} />
+          <View className="flex-row items-center">
+            <NotificationBell />
+            <Avatar initials={initials} uri={user?.avatarUrl} />
+          </View>
         </View>
 
         {/* Prochaine consultation */}

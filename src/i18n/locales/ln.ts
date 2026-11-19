@@ -646,4 +646,9 @@ export const ln: Record<string, string> = {
   "Continuer": "Kobanda",
   "Valider": "Kondima",
   "Effacer": "Kolongola",
+  "Tout marquer comme lu": "Kosala nyonso ete ebelelamaki",
+  "Aucune notification pour le moment": "Ezali na notification te mpo na ntango oyo",
+  "Tes rappels et alertes apparaîtront ici.": "Bikundoli mpe bansango na yo ekobima awa.",
+  "Impossible de charger tes notifications.": "Tokoki te kolongola notifications na yo.",
+  "Tire vers le bas pour réessayer.": "Kitisa na nse mpo na komeka lisusu.",
 };
