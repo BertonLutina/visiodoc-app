@@ -151,7 +151,7 @@ export default function ProviderDashboard() {
         {/* Greeting */}
         <View className="flex-row items-center justify-between px-5 pt-3 pb-4">
           <View className="flex-1 pr-3">
-            <Text className="font-sans-medium text-sm text-muted">{t('Bonjour,')}</Text>
+            <Text className="font-sans-medium text-sm text-muted">{t('Bonjour')}</Text>
             <Text className="font-serif-bold text-2xl text-ink mt-0.5">{displayName}</Text>
             {!!subtitle && <Text className="font-sans text-sm text-muted mt-1">{subtitle}</Text>}
           </View>
