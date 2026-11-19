@@ -8,7 +8,6 @@ import { CountryPicker } from '@/components/CountryPicker';
 import { PhoneField } from '@/components/PhoneField';
 import { CityCommuneFields } from '@/components/CityCommuneFields';
 import { SPECIALIZATIONS } from '@/config/specializations';
-import { getAfricanCountry } from '@/config/africanCountries';
 import { PasswordField } from '@/components/PasswordField';
 import { GenderField } from '@/components/GenderField';
 import type { Gender } from '@/services/registration';
