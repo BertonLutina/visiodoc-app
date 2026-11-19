@@ -53,6 +53,8 @@ export default function VideoCall() {
   // Côté prestataire seulement : la consultation de cette salle dont l'utilisateur est le prestataire (sinon null).
   const providerId = user?.id ?? '';
   const { data: providerCtx } = useAsync(() => getProviderCallContext(routeRoomId, providerId), [routeRoomId, providerId]);
+  // Nom affiché dans la salle : celui du compte connecté (Jitsi ne le redemande pas).
+  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ');
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
@@ -92,7 +94,7 @@ export default function VideoCall() {
       }
       setPhase({
         kind: 'ready',
-        url: buildRoomWebViewUrl(result.session),
+        url: buildRoomWebViewUrl(result.session, displayName),
         serverUrl: result.session.serverUrl,
         roomName: result.session.roomName,
       });

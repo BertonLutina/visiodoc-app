@@ -115,8 +115,16 @@ export function buildRoomUrl({ serverUrl, roomName, jwt }: VideoSession): string
  * Jitsi, jamais envoyé au serveur) pour ne pas afficher la page « ouvrir dans l'application » des navigateurs mobiles.
  * Non vérifié sur appareil.
  */
-export function buildRoomWebViewUrl(session: VideoSession): string {
-  return `${buildRoomUrl(session)}#config.disableDeepLinking=true`;
+export function buildRoomWebViewUrl(session: VideoSession, displayName?: string | null): string {
+  // Pas d'écran « saisis ton nom » de Jitsi : l'utilisateur est connu (retour de Chris, test du 19/11).
+  const parts = [
+    'config.disableDeepLinking=true',
+    'config.prejoinConfig.enabled=false',
+    'config.prejoinPageEnabled=false',
+  ];
+  const name = displayName?.trim();
+  if (name) parts.push(`userInfo.displayName=${encodeURIComponent(JSON.stringify(name))}`);
+  return `${buildRoomUrl(session)}#${parts.join('&')}`;
 }
 
 const httpsHost = (url: string): string | null => {
