@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Send, Clock, Smartphone, ArrowDownLeft, ArrowUpRight } from 'lucide-react-native';
 import { Card, SectionTitle } from '@/components/ui';
@@ -18,6 +19,19 @@ export default function WalletScreen() {
   const uid = user?.id ?? '';
   const { data: wallet, loading, error, refresh, refreshing } = useAsync(() => getWallet(uid), [uid]);
   const transactions = wallet?.transactions ?? [];
+
+  // Retour sur l'écran (ex. après une annulation crédité) : relit solde et transactions.
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      void refresh();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   const [pulling, setPulling] = useState(false);
   const onRefresh = async () => {
@@ -56,7 +70,7 @@ export default function WalletScreen() {
             className="absolute -right-8 -top-8 w-36 h-36 rounded-full"
             style={{ backgroundColor: '#15846A', opacity: 0.55 }}
           />
-          <Text className="text-white/80 text-xs font-sans-bold">{t('Total payé')}</Text>
+          <Text className="text-white/80 text-xs font-sans-bold">{t('Solde de ton avoir')}</Text>
           {loading ? (
             <ActivityIndicator color={colors.white} style={{ marginTop: 16, marginBottom: 8 }} />
           ) : (

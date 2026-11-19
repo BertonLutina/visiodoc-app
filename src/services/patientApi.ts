@@ -406,7 +406,7 @@ export async function getMedicalRecords(
 
 /* ---------- Portefeuille ----------
  * Pas de solde prépayé côté patient : l'argent passe par `payment_transactions_v2`
- * (montant en plus petite unité, ×100). `balance` est le total des paiements réussis. */
+ * (montant en plus petite unité, ×100). `balance` vient de `patient_wallets` (avoir : annulations, absences). */
 
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
   SUCCESS: 'Paiement réussi',
@@ -489,6 +489,27 @@ async function readNoshowCredits(patientId: string): Promise<{ ts: number; tx: W
   }
 }
 
+/** Devise de base du portefeuille (une ligne par patient ET par devise : UNIQUE (patient_id, currency)). */
+export const BASE_WALLET_CURRENCY = 'CDF';
+
+/** Solde de l'avoir (`patient_wallets.balance`, NUMERIC(18,2) en unité principale, pas ×100) : ligne CDF, sinon 0. */
+export function pickWalletBalance(rows: { balance?: number | string | null; currency?: string | null }[] | null | undefined): number {
+  const row = (rows ?? []).find((r) => (r.currency ?? BASE_WALLET_CURRENCY) === BASE_WALLET_CURRENCY);
+  const n = Number(row?.balance);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Solde réel de l'avoir. Source complémentaire : une erreur (RLS, réseau) donne 0 sans casser l'historique. */
+async function readWalletBalance(patientId: string): Promise<number> {
+  try {
+    const res: any = await supabase!.from('patient_wallets').select('balance, currency').eq('patient_id', patientId);
+    if (!res || res.error) return 0;
+    return pickWalletBalance(res.data);
+  } catch {
+    return 0;
+  }
+}
+
 const emptyWallet = (): Wallet => ({
   balance: 0,
   currency: '',
@@ -518,15 +539,13 @@ export async function getWallet(patientId: string): Promise<Wallet> {
   if (error) throw error;
   const rows = (data ?? []) as any[];
   const credits = await readNoshowCredits(patientId);
+  const balance = await readWalletBalance(patientId);
   const transactions =
     credits.length === 0
       ? rows.map(mapPaymentRow)
       : [...rows.map((row) => ({ ts: Date.parse(row.created_at ?? '') || 0, tx: mapPaymentRow(row) })), ...credits]
           .sort((a, b) => b.ts - a.ts)
           .map((e) => e.tx);
-  const balance = rows
-    .filter((row: { status?: string | null }) => row.status === 'SUCCESS')
-    .reduce((sum: number, row: { amount?: number | null }) => sum + (Number(row.amount) || 0) / 100, 0);
   return { ...emptyWallet(), balance, transactions };
 }
 

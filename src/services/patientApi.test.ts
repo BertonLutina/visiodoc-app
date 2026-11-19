@@ -547,7 +547,7 @@ describe('getWallet', () => {
     const wallet = await getWalletFresh('patient-real');
     expect(fromMock).toHaveBeenCalledWith('payment_transactions_v2');
     expect(eqMock).toHaveBeenCalledWith('patient_id', 'patient-real');
-    expect(wallet.balance).toBe(20000);
+    expect(wallet.balance).toBe(0); // pas de ligne patient_wallets dans ce mock
     expect(wallet.transactions).toHaveLength(2);
     expect(wallet.transactions[0].amount).toBe(-20000);
     expect(wallet.aiCreditsLeft).toBe(0);
@@ -616,7 +616,6 @@ describe('getWallet avec avoirs noshow_credit', () => {
     expect(wallet.transactions.map((t: { id: string }) => t.id)).toEqual(['wallet-c1', 'wallet-a1', 'pay']);
     expect(wallet.transactions[1]).toMatchObject({ label: "Crédit d'annulation", amount: 7000 });
     expect(wallet.transactions[0]).toMatchObject({ label: 'Remboursement : médecin absent', amount: 10000 });
-    expect(wallet.balance).toBe(10000); // total payé inchangé : 1 000 000 / 100
   });
 
   it('une erreur sur les avoirs (RLS) n’empêche pas d’afficher les paiements', async () => {
@@ -638,6 +637,10 @@ describe('getWallet embed fallback (PGRST200: relationship not found)', () => {
     results.length = 0;
     fromMock.mockImplementation((table: string) => ({
       select: (sel: string) => {
+        if (table === 'patient_wallets') {
+          const w: any = { eq: () => Promise.resolve({ data: [{ balance: '5000.00', currency: 'CDF' }], error: null }) };
+          return w;
+        }
         if (table === 'patient_wallet_transactions') {
           const w: any = { eq: () => w, in: () => w, order: () => w, limit: () => Promise.resolve({ data: [], error: null }) };
           return w;
@@ -665,7 +668,7 @@ describe('getWallet embed fallback (PGRST200: relationship not found)', () => {
     expect(selects).toHaveLength(2);
     expect(selects[0]).toContain('provider_identity');
     expect(selects[1]).not.toContain('provider_identity');
-    expect(wallet.balance).toBe(1000);
+    expect(wallet.balance).toBe(5000); // solde = patient_wallets.balance (CDF)
     expect(wallet.transactions).toHaveLength(1);
     expect(wallet.transactions[0].method).toBeUndefined();
   });
@@ -1052,5 +1055,18 @@ describe('patient service source guard', () => {
     for (const embed of embeds) {
       expect(embed).not.toMatch(/\b(email|phone)\b/);
     }
+  });
+});
+
+describe('pickWalletBalance (patient_wallets)', () => {
+  const { pickWalletBalance } = require('./patientApi');
+  it('lit la colonne balance de la ligne CDF, en unité principale (NUMERIC renvoyé en chaîne)', () => {
+    expect(pickWalletBalance([{ balance: '5000.00', currency: 'CDF' }])).toBe(5000);
+    expect(pickWalletBalance([{ balance: 12, currency: 'USD' }, { balance: 5000, currency: 'CDF' }])).toBe(5000);
+  });
+  it('0 sans ligne ou sans CDF', () => {
+    expect(pickWalletBalance([])).toBe(0);
+    expect(pickWalletBalance(null)).toBe(0);
+    expect(pickWalletBalance([{ balance: 12, currency: 'USD' }])).toBe(0);
   });
 });
