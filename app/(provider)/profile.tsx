@@ -77,7 +77,7 @@ export default function ProviderProfile() {
           <AvatarPicker initials={initials} size={76} tone="clay" />
           <Text className="font-serif-bold text-2xl text-ink mt-3">{displayName}</Text>
           <Text className="font-sans text-sm text-muted mt-0.5">
-            {t('Médecin')}
+            {t('Prestataire')}
           </Text>
           {fullAccess ? (
             <View className="bg-accent-50 px-3 py-1.5 rounded-full mt-3">

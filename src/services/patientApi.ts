@@ -80,7 +80,7 @@ const toFee = (v: unknown): number | null => {
 };
 
 function mapDoctor(row: any): Doctor {
-  const specialty = specLabel(row.specialty_labels) || 'Médecin';
+  const specialty = specLabel(row.specialty_labels) || 'Prestataire';
   return {
     id: row.id,
     firstName: row.first_name ?? '',
@@ -230,7 +230,7 @@ export class BookingRejectedError extends Error {
   constructor(reason: 'payment_locked' | 'amount_out_of_range') {
     super(
       reason === 'amount_out_of_range'
-        ? translate('Le tarif de cette consultation a changé. Actualise la fiche du médecin puis réessaie.')
+        ? translate('Le tarif de cette consultation a changé. Actualise la fiche du prestataire puis réessaie.')
         : translate("Cette opération de paiement n'est pas autorisée depuis l'application. Réessaie depuis tes rendez-vous."),
     );
     this.name = 'BookingRejectedError';
@@ -262,7 +262,7 @@ export interface BookConsultationInput {
 export async function bookConsultation(input: BookConsultationInput): Promise<{ id: string }> {
   if (useMock()) return { id: 'mock-booking' };
   if (input.fee === null || !input.currencyCode) {
-    throw new Error(translate('Connectez-vous pour voir le tarif et les disponibilités'));
+    throw new Error(translate('Connecte-toi pour voir le tarif et les disponibilités'));
   }
   const { data, error } = await supabase!
     .from('consultations')

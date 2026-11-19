@@ -19,7 +19,7 @@ export function SignInForPricing({ signedIn, className = '' }: { signedIn: boole
         <Lock color={colors.clay} size={22} />
       </View>
       <Text className="font-sans-semibold text-ink text-center mb-4">
-        {t('Connectez-vous pour voir le tarif et les disponibilités')}
+        {t('Connecte-toi pour voir le tarif et les disponibilités')}
       </Text>
       {!signedIn && <Button label={t('Se connecter')} onPress={() => router.push('/(auth)/login')} />}
     </View>

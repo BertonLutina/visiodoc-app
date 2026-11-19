@@ -118,7 +118,7 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
 
   it('refuses to insert when the listing gave no tariff (visitor view: fee/currency null)', async () => {
     await expect(load().bookConsultation({ ...booking, fee: null, currencyCode: null })).rejects.toThrow(
-      'Connectez-vous pour voir le tarif et les disponibilités',
+      'Connecte-toi pour voir le tarif et les disponibilités',
     );
     expect(insertMock).not.toHaveBeenCalled();
   });
@@ -697,7 +697,7 @@ describe('public doctor catalog (public_provider_listing)', () => {
     });
     expect(doctors[1]).toMatchObject({
       id: 'd2',
-      specialty: 'Médecin',
+      specialty: 'Prestataire',
       city: '',
       fee: null,
       currencyCode: null,
@@ -714,8 +714,8 @@ describe('public doctor catalog (public_provider_listing)', () => {
     [{ en: 'General medicine' }, 'General medicine'],
     [{ fr: '', en: 'Pediatrics' }, 'Pediatrics'],
     [[{ fr: 'Pédiatrie' }, { fr: 'Nutrition' }], 'Pédiatrie · Nutrition'],
-    [{}, 'Médecin'],
-    [{ fr: 42 }, 'Médecin'],
+    [{}, 'Prestataire'],
+    [{ fr: 42 }, 'Prestataire'],
   ])('renders a locale-keyed specialty label %j as a plain string', async (labels, expected) => {
     sessionOrder.mockResolvedValue({ data: [{ ...rows[0], specialty_labels: labels }], error: null });
     const { getDoctors } = require('./patientApi');
