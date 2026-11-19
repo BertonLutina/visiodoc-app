@@ -674,4 +674,5 @@ export const sw: Record<string, string> = {
   "Le rapport n'est disponible que si le patient s'est connecté (consultation en cours ou terminée).": "Ripoti inapatikana tu ikiwa mgonjwa alijiunga (mashauriano yanaendelea au yamemalizika).",
   "Disponible dans {n} min": "Inapatikana baada ya dakika {n}",
   "Le patient a rejoint la consultation": "Mgonjwa amejiunga na mashauriano",
+  "Le patient a rejoint la consultation : tu ne peux pas le déclarer absent.": "Mgonjwa amejiunga na mashauriano: huwezi kumtangaza kuwa hayupo.",
 };

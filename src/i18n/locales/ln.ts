@@ -674,4 +674,5 @@ export const ln: Record<string, string> = {
   "Le rapport n'est disponible que si le patient s'est connecté (consultation en cours ou terminée).": "Rapport ezali kaka soki mobeli akotaki (konsultasyon ezali kokende to esukoli).",
   "Disponible dans {n} min": "Ekoki nsima ya miniti {n}",
   "Le patient a rejoint la consultation": "Mobeli akoti na konsultasyon",
+  "Le patient a rejoint la consultation : tu ne peux pas le déclarer absent.": "Mobeli akoti na konsultasyon : okoki te kolobela ye ete azali te.",
 };

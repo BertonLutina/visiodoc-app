@@ -206,6 +206,10 @@ describe('patient absent et notification', () => {
     expect(opsOf(0, 'eq')).toEqual([['id', 'c1'], ['doctor_id', 'd1']]);
     mockResponses = [{ data: null, error: { code: 'P0001', message: "no_show impossible avant 15 minutes d'attente (disponible à X)" } }];
     await expect(markPatientAbsent('c1', 'd1')).rejects.toMatchObject({ kind: 'no_show_too_early' });
+    mockResponses = [{ data: null, error: { code: '42501', message: 'le patient a rejoint la consultation, no_show impossible' } }];
+    await expect(markPatientAbsent('c1', 'd1')).rejects.toMatchObject({ kind: 'patient_joined' });
+    mockResponses = [{ data: null, error: { code: '42501', message: 'autre refus' } }];
+    await expect(markPatientAbsent('c1', 'd1')).rejects.toMatchObject({ kind: 'unavailable' });
     mockResponses = [{ data: null, error: { code: 'XX', message: 'autre' } }];
     await expect(markPatientAbsent('c1', 'd1')).rejects.toMatchObject({ kind: 'unavailable' });
   });

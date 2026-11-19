@@ -10,7 +10,7 @@ import { calculateAge } from './providerApi';
  * Les contenus (données de santé) ne sont jamais journalisés.
  * ---------------------------------------------------------------------------------------------- */
 
-export type ReportErrorKind = 'conflict' | 'not_found' | 'never_started' | 'no_show_too_early' | 'unavailable';
+export type ReportErrorKind = 'conflict' | 'not_found' | 'never_started' | 'no_show_too_early' | 'patient_joined' | 'unavailable';
 
 /** Erreur dont le message est déjà traduit et affichable tel quel. */
 export class ConsultationReportError extends Error {
@@ -37,6 +37,11 @@ const err = {
       translate(
         "Tu pourras déclarer le patient absent 15 minutes après le lancement de l'appel, et pas avant l'heure du rendez-vous.",
       ),
+    ),
+  patientJoined: () =>
+    new ConsultationReportError(
+      'patient_joined',
+      translate('Le patient a rejoint la consultation : tu ne peux pas le déclarer absent.'),
     ),
   unavailable: () =>
     new ConsultationReportError(
@@ -189,6 +194,7 @@ export async function markPatientAbsent(consultationId: string, doctorId: string
     .eq('doctor_id', doctorId)
     .select('id');
   if (error) {
+    if (typeof error.message === 'string' && error.message.toLowerCase().includes('le patient a rejoint')) throw err.patientJoined();
     if (typeof error.message === 'string' && error.message.includes('no_show impossible avant')) throw err.noShowTooEarly();
     throw err.unavailable();
   }

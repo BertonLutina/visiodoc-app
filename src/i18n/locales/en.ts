@@ -674,4 +674,5 @@ export const en: Record<string, string> = {
   "Le rapport n'est disponible que si le patient s'est connecté (consultation en cours ou terminée).": "The report is only available if the patient connected (consultation in progress or completed).",
   "Disponible dans {n} min": "Available in {n} min",
   "Le patient a rejoint la consultation": "The patient has joined the consultation",
+  "Le patient a rejoint la consultation : tu ne peux pas le déclarer absent.": "The patient has joined the consultation: you cannot mark them as absent.",
 };

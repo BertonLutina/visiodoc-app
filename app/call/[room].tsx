@@ -158,7 +158,7 @@ export default function VideoCall() {
     if (!outcomeOpen || !providerConsultationId) return;
     let cancelled = false;
     getPatientJoinedAt(providerConsultationId).then((v) => {
-      if (!cancelled) setPatientJoinedAt(v);
+      if (!cancelled && v) setPatientJoinedAt(v);
     });
     return () => {
       cancelled = true;
@@ -183,7 +183,8 @@ export default function VideoCall() {
       // Filet de sécurité (le bouton est normalement grisé) : l'appel reste ouvert, le choix est reproposé.
       const kind = (e as { kind?: string })?.kind;
       const msg =
-        kind === 'no_show_too_early' ? (e as Error).message : t('Impossible de déclarer le patient absent. Réessaie.');
+        kind === 'no_show_too_early' || kind === 'patient_joined' ? (e as Error).message : t('Impossible de déclarer le patient absent. Réessaie.');
+      if (kind === 'patient_joined') setPatientJoinedAt(new Date().toISOString()); // état « joined » forcé
       setOutcomeOpen(false);
       Alert.alert(t('Patient absent'), msg, [{ text: 'OK', onPress: () => setOutcomeOpen(true) }], { cancelable: false });
       return;
