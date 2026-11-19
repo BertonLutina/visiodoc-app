@@ -7,6 +7,8 @@ import { colors } from '@/theme/colors';
 import { formatMoney, isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
 import { getCountry, type CountryConfig } from '@/config/countries';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabaseConfigured } from '@/lib/supabase';
+import { MobileMoneyModal } from '@/components/MobileMoneyModal';
 import { useAsync } from '@/hooks/useAsync';
 import {
   getPastConsultations,
@@ -171,6 +173,7 @@ export default function Appointments() {
   const { user: payer } = useAuth();
   const payLock = useRef(createBusyLock()).current; // verrou synchrone : un double appui ne lance qu'un paiement
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [mmConsultation, setMmConsultation] = useState<Consultation | null>(null);
 
   const pay = async (c: Consultation, override: boolean) => {
     const check = paymentWidgetPreflight(c.currency);
@@ -221,6 +224,10 @@ export default function Appointments() {
   };
 
   const onPay = (c: Consultation) => {
+    if (supabaseConfigured && c.currency === 'CDF') {
+      setMmConsultation(c);
+      return;
+    }
     void payLock.run(async () => {
       setPayingId(c.id);
       try {
@@ -324,6 +331,31 @@ export default function Appointments() {
           </Text>
         )}
       </ScrollView>
+
+      <MobileMoneyModal
+        visible={mmConsultation !== null}
+        target={mmConsultation ? { kind: 'consultation', consultationId: mmConsultation.id } : null}
+        userPhone={payer?.phone}
+        amountLabel={mmConsultation ? formatMoney(mmConsultation.fee, country) : undefined}
+        onClose={() => setMmConsultation(null)}
+        onPaid={async () => {
+          setMmConsultation(null);
+          await Promise.all([up.refresh(), pastReq.refresh(), attempts.refresh()]);
+        }}
+        onSwitchToCard={() => {
+          const c = mmConsultation;
+          setMmConsultation(null);
+          if (!c) return;
+          void payLock.run(async () => {
+            setPayingId(c.id);
+            try {
+              await pay(c, false);
+            } finally {
+              setPayingId(null);
+            }
+          });
+        }}
+      />
     </SafeAreaView>
   );
 }

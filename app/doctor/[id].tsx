@@ -25,12 +25,15 @@ import {
 import { effectiveBookingFor, measurementsToRecord, resolveBookingTarget, type BookingFor } from '@/utils/bookingFor';
 import {
   bookAndPayConsultation,
+  bookConsultation,
   getConsultationById,
   getDoctor,
+  payExistingConsultation,
   shouldHideCommercialInfo,
   BookingRejectedError,
   SlotUnavailableError,
 } from '@/services/patientApi';
+import { MobileMoneyModal } from '@/components/MobileMoneyModal';
 import { PaymentConfirmationError } from '@/services/paymentAttempt';
 import { createOpenPaymentWidget, paymentWidgetPreflight } from '@/services/paymentWidget';
 import { createBusyLock } from '@/utils/busyLock';
@@ -72,6 +75,7 @@ export default function DoctorProfile() {
   const [time, setTime] = useState<string | null>(null);
   const [type, setType] = useState<ConsultationType>('video');
   const [booking, setBooking] = useState(false);
+  const [mmConsultationId, setMmConsultationId] = useState<string | null>(null);
 
   // « Pour moi » / « Pour mon enfant » : `child_id` n'est envoyé que pour un enfant.
   const [bookingForRaw, setBookingFor] = useState<BookingFor>('self');
@@ -133,6 +137,33 @@ export default function DoctorProfile() {
 
   const doBook = async () => {
     if (!doctor || !activeSlot || doctor.fee === null || !doctor.currencyCode || hideCommercial) return;
+    if (supabaseConfigured && doctor.currencyCode === 'CDF') {
+      setBooking(true);
+      try {
+        const created = await bookConsultation({
+          patientId: user?.id ?? 'patient-1',
+          doctorId: doctor.id,
+          scheduledAt: activeSlot.start.toISOString(),
+          duration: Math.round((activeSlot.end.getTime() - activeSlot.start.getTime()) / 60000),
+          type,
+          fee: doctor.fee,
+          currencyCode: doctor.currencyCode,
+        });
+        setMmConsultationId(created.id);
+      } catch (e: any) {
+        if (e instanceof SlotUnavailableError) {
+          Alert.alert(t('Créneau indisponible'), e.message);
+          setTime(null);
+          reloadDay();
+          reloadMonth();
+        } else {
+          Alert.alert(t('Erreur'), e?.message ?? t('Impossible de réserver ce créneau.'));
+        }
+      } finally {
+        setBooking(false);
+      }
+      return;
+    }
     // Widget non configuré OU devise inconnue : on ne crée pas de consultation impayable (avant l'insert).
     const target = resolveBookingTarget({ bookingFor, childId, providerAcceptsChildren: doctor.acceptsChildren });
     if (!target.ok) {
@@ -443,6 +474,63 @@ export default function DoctorProfile() {
           </>
         )}
       </ScrollView>
+
+      <MobileMoneyModal
+        visible={mmConsultationId !== null}
+        target={mmConsultationId ? { kind: 'consultation', consultationId: mmConsultationId } : null}
+        userPhone={user?.phone}
+        amountLabel={feeText ?? undefined}
+        onClose={() => setMmConsultationId(null)}
+        onPaid={async () => {
+          const idPaid = mmConsultationId;
+          setMmConsultationId(null);
+          if (idPaid) {
+            const reread = await getConsultationById(idPaid).catch(() => null);
+            if (reread && reread.awaitingPayment) {
+              Alert.alert(
+                t('Paiement en cours de confirmation'),
+                t("Ton paiement est en cours de confirmation. Vérifie tes rendez-vous dans quelques instants."),
+              );
+            }
+          }
+          router.replace('/(patient)/appointments');
+        }}
+        onSwitchToCard={() => {
+          const idPay = mmConsultationId;
+          setMmConsultationId(null);
+          if (!idPay || !doctor || doctor.fee === null || !doctor.currencyCode) return;
+          void bookLock.run(async () => {
+            const check = paymentWidgetPreflight(doctor.currencyCode!);
+            if (!check.ok) {
+              Alert.alert(t('Paiement indisponible.'), t("Le paiement n'est pas disponible pour le moment. Réessaie plus tard."));
+              return;
+            }
+            setBooking(true);
+            try {
+              const r = await payExistingConsultation(
+                idPay,
+                createOpenPaymentWidget({
+                  amount: doctor.fee!,
+                  currency: doctor.currencyCode!,
+                  customerId: user?.id ?? '',
+                  customerName: user ? `${user.firstName} ${user.lastName}` : '',
+                  customerEmail: user?.email ?? '',
+                  payItemName: t('Consultation'),
+                }),
+              );
+              if (r.status === 'confirmed') {
+                router.replace('/(patient)/appointments');
+              } else if (r.status === 'dismissed') {
+                showDismissedPaymentPrompt(idPay, r.reason, t);
+              }
+            } catch (e: any) {
+              Alert.alert(t('Erreur'), e?.message ?? t('Impossible de démarrer le paiement.'));
+            } finally {
+              setBooking(false);
+            }
+          });
+        }}
+      />
     </SafeAreaView>
   );
 }
