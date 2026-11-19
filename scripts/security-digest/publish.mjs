@@ -42,6 +42,9 @@ const bodyFr = result.has_new
   ? ["VisioDoc mobile.", "", result.summary_fr, "", ...(result.items || []).map((item) => `- ${item}`)].join("\n")
   : "RAS. Rien de nouveau depuis le run précédent sur cette branche.";
 
+let notionUrl = null;
+let issueUrl = null;
+
 // --- Notion : toujours une ligne, trace d'audit ---
 const notionToken = process.env.NOTION_API_TOKEN;
 const dataSourceId = process.env.NOTION_DATA_SOURCE_ID;
@@ -75,6 +78,9 @@ if (notionToken && dataSourceId) {
     console.error(`Publication Notion en echec (${notionRes.status}): ${(await notionRes.text()).slice(0, 500)}`);
   } else {
     console.log(`Publie sur Notion (${gravite}).`);
+    try {
+      notionUrl = (await notionRes.json()).url || null;
+    } catch {}
   }
 } else {
   console.error("NOTION_API_TOKEN ou NOTION_DATA_SOURCE_ID absent, publication Notion sautee.");
@@ -107,7 +113,42 @@ if (ghToken && repo) {
     console.error(`Creation issue GitHub en echec (${ghRes.status}): ${(await ghRes.text()).slice(0, 500)}`);
   } else {
     console.log("Issue GitHub creee.");
+    try {
+      issueUrl = (await ghRes.json()).html_url || null;
+    } catch {}
   }
 } else {
   console.error("GITHUB_TOKEN ou GITHUB_REPOSITORY absent, publication GitHub sautee.");
+}
+
+// --- Telegram : seulement si nouveaute reelle. Message volontairement court,
+// SANS detail de vulnerabilite (Telegram est un tiers) : gravite, nombre de
+// points et liens. TELEGRAM_DRY_RUN=1 affiche le message sans l'envoyer.
+const tgToken = process.env.TELEGRAM_BOT_TOKEN;
+const tgChat = process.env.TELEGRAM_CHAT_ID;
+const dryRun = process.env.TELEGRAM_DRY_RUN === "1";
+if ((tgToken && tgChat) || dryRun) {
+  const n = (result.items || []).length;
+  const lines = [
+    `Digest sécurité VisioDoc mobile (branche ${branch}) : gravité ${gravite}, ${n} nouveau${n > 1 ? "x" : ""} point${n > 1 ? "s" : ""}.`,
+  ];
+  if (issueUrl) lines.push(`Issue GitHub : ${issueUrl}`);
+  if (notionUrl) lines.push(`Notion : ${notionUrl}`);
+  const text = lines.join("\n");
+  if (dryRun) {
+    console.log("[dry-run Telegram] " + text);
+  } else {
+    try {
+      const tgRes = await fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ chat_id: tgChat, text, disable_web_page_preview: true }),
+      });
+      console.log(tgRes.ok ? "Notification Telegram envoyee." : `Telegram en echec (${tgRes.status}), ignore.`);
+    } catch (e) {
+      console.error("Telegram injoignable, ignore.");
+    }
+  }
+} else {
+  console.error("TELEGRAM_BOT_TOKEN ou TELEGRAM_CHAT_ID absent, notification Telegram sautee.");
 }

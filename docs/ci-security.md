@@ -19,7 +19,14 @@ Chris n'a que le droit WRITE : c'est Berton qui doit les ajouter dans *Settings 
 2. `NOTION_API_TOKEN` : jeton de l'intégration Notion autorisée sur la base « Sécurité, Digest Visiodoc ».
 3. `NOTION_DATA_SOURCE_ID` : identifiant de la source de données Notion de cette base.
 
-Sans ces secrets, le digest affiche un avertissement clair et se termine proprement (sans échec). Si le dépôt appartient à une organisation, `secrets-scan.yml` demande aussi un secret `GITLEAKS_LICENSE`.
+Deux secrets supplémentaires, pour la notification Telegram (envoyée seulement quand le digest trouve du nouveau, message court sans détail de vulnérabilité, avec le lien de l'issue) :
+
+4. `TELEGRAM_BOT_TOKEN` : jeton du bot Telegram.
+5. `TELEGRAM_CHAT_ID` : identifiant de la conversation destinataire.
+
+S'ils manquent, l'envoi Telegram est simplement sauté avec un message clair.
+
+Sans les trois premiers secrets, le digest affiche un avertissement clair et se termine proprement (sans échec). Si le dépôt appartient à une organisation, `secrets-scan.yml` demande aussi un secret `GITLEAKS_LICENSE`.
 
 ## Activation du cron
 
