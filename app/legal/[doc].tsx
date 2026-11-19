@@ -31,7 +31,7 @@ export default function LegalDocScreen() {
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48 }}>
         {document ? (
           <Text className="font-sans text-xs text-muted mb-4">
-            {document.version} · {document.date}
+            {document.date ? `${document.version} · ${document.date}` : document.version}
           </Text>
         ) : null}
         {body ? (

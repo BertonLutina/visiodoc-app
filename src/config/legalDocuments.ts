@@ -20,24 +20,23 @@ export interface LegalDocument {
   slug: LegalDocSlug;
   titre: string;
   version: string;
-  /** Date de la version (AAAA-MM-JJ). */
-  date: string;
+  /** Date d'entrée en vigueur (AAAA-MM-JJ), `null` tant que le texte n'est pas finalisé. */
+  date: string | null;
   statut: 'pending' | 'ready';
   contenu?: string;
   /** Page du site ouverte par le bouton de secours. */
   webPage: LegalPage;
 }
 
-const DATE_V2 = '2026-11-18';
 
 export const LEGAL_DOCUMENTS: LegalDocument[] = [
-  { slug: 'cgu-patient', titre: "Conditions d'utilisation patient", version: LEGAL_VERSIONS.cguPatient, date: DATE_V2, statut: 'pending', webPage: 'conditions' },
-  { slug: 'cgu-pro', titre: "Conditions d'utilisation prestataire", version: LEGAL_VERSIONS.cguPro, date: DATE_V2, statut: 'pending', webPage: 'conditions' },
-  { slug: 'confidentialite', titre: 'Confidentialité', version: LEGAL_VERSIONS.privacy, date: DATE_V2, statut: 'pending', webPage: 'confidentialite' },
-  { slug: 'cookies', titre: 'Cookies', version: 'COOKIES-v2', date: DATE_V2, statut: 'pending', webPage: 'mentions' },
-  { slug: 'mentions', titre: 'Mentions légales', version: 'MENTIONS-v2', date: DATE_V2, statut: 'pending', webPage: 'mentions' },
-  { slug: 'declaration-enfant', titre: 'Déclaration relative aux enfants', version: 'ENFANT-v2', date: DATE_V2, statut: 'pending', webPage: 'mentions' },
-  { slug: 'securite', titre: 'Sécurité', version: 'SECURITE-v2', date: DATE_V2, statut: 'pending', webPage: 'mentions' },
+  { slug: 'cgu-patient', titre: "Conditions d'utilisation patient", version: LEGAL_VERSIONS.cguPatient, date: null, statut: 'pending', webPage: 'conditions' },
+  { slug: 'cgu-pro', titre: "Conditions d'utilisation prestataire", version: LEGAL_VERSIONS.cguPro, date: null, statut: 'pending', webPage: 'conditions' },
+  { slug: 'confidentialite', titre: 'Confidentialité', version: LEGAL_VERSIONS.privacy, date: null, statut: 'pending', webPage: 'confidentialite' },
+  { slug: 'cookies', titre: 'Cookies', version: 'COOKIES-v2', date: null, statut: 'pending', webPage: 'mentions' },
+  { slug: 'mentions', titre: 'Mentions légales', version: 'MENTIONS-v2', date: null, statut: 'pending', webPage: 'mentions' },
+  { slug: 'declaration-enfant', titre: 'Déclaration relative aux enfants', version: 'DECL-ENFANT-v2', date: null, statut: 'pending', webPage: 'mentions' },
+  { slug: 'securite', titre: 'Sécurité', version: 'SECURITE-v2', date: null, statut: 'pending', webPage: 'mentions' },
 ];
 
 export function getLegalDocument(slug: string | undefined): LegalDocument | undefined {
