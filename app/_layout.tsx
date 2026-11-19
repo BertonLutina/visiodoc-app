@@ -23,6 +23,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/i18n';
 import { BiometricLock } from '@/components/BiometricLock';
 import { useBiometricOffer } from '@/hooks/useBiometricOffer';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { colors } from '@/theme/colors';
 import { supabaseConfigurationProblem } from '@/lib/supabase';
 
@@ -30,6 +31,7 @@ import { supabaseConfigurationProblem } from '@/lib/supabase';
 function AppShell() {
   const { locked } = useAuth();
   useBiometricOffer();
+  usePushNotifications();
 
   if (locked) return <BiometricLock />;
 

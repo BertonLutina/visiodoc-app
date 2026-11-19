@@ -41,6 +41,7 @@ import * as biometrics from '@/services/biometrics';
 import { logAuthEvent, type AuthEventMethod } from '@/services/auditLog';
 import { requestMagicLink, verifyMagicLinkToken } from '@/services/magicLink';
 import { translate } from '@/i18n/core';
+import { unregisterPush } from '@/services/pushNotifications';
 
 // Termine proprement une session OAuth ouverte dans le navigateur système.
 WebBrowser.maybeCompleteAuthSession();
@@ -830,6 +831,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPendingUser(null);
     setLocked(false);
     setJustSignedIn(false);
+    // Jeton push désenregistré AVANT la fermeture de session (la RPC exige l'utilisateur connecté).
+    // Best effort et borné à 1,5 s : la déconnexion ne doit jamais attendre le réseau.
+    await Promise.race([unregisterPush(), new Promise<void>((resolve) => setTimeout(resolve, 1500))]).catch(() => {});
     // `scope: 'local'` supprime la session persistée (trousseau) sans dépendre du
     // serveur. Volontairement NON awaité : le SDK Supabase peut rester bloqué en
     // attente de son verrou interne (lock d'auth) si un getSession()/refreshSession()
