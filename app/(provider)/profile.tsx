@@ -24,6 +24,7 @@ import { useAsync } from '@/hooks/useAsync';
 import { useFocusEffect } from 'expo-router';
 import { getMySpecializations } from '@/services/providerApi';
 import { joinSpecializations } from '@/services/specializations';
+import { PhoneInvite } from '@/components/PhoneInvite';
 import { useT } from '@/i18n';
 
 export default function ProviderProfile() {
@@ -85,6 +86,8 @@ export default function ProviderProfile() {
             </View>
           ) : null}
         </View>
+
+        <PhoneInvite />
 
         <View className="bg-surface rounded-3xl border border-line overflow-hidden">
           {rows.map((r, i) => (

@@ -24,7 +24,9 @@ export default function ProfileEdit() {
   const onSave = async () => {
     setErrorMsg(null);
     try {
-      await updateProfile({ firstName, lastName, phone, countryCode });
+      // Un champ vidé n'efface pas le numéro existant (suppression non proposée : un compte créé par téléphone
+      // n'aurait plus de moyen de connexion).
+      await updateProfile({ firstName, lastName, ...(phone ? { phone } : {}), countryCode });
       router.back();
     } catch (e: any) {
       setErrorMsg(authErrorMessage(e));
@@ -51,7 +53,7 @@ export default function ProfileEdit() {
         </View>
         <Field label={t('Prénom')} placeholder="Marie" value={firstName} onChangeText={setFirstName} />
         <Field label={t('Nom')} placeholder="Konaté" value={lastName} onChangeText={setLastName} />
-        <PhoneField label={t('Téléphone')} initialValue={user?.phone ?? ''} onChange={setPhone} />
+        <PhoneField label={t('Téléphone (facultatif)')} initialValue={user?.phone ?? ''} onChange={setPhone} />
         <CountryPicker label={t('Visiodoc du compte')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
 
         {user?.email ? (

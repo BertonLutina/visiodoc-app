@@ -75,6 +75,12 @@ const baseInput = {
 };
 
 describe('buildRegisterPrestaBody', () => {
+  it('omits the phone key when the number is empty, keeps it when filled', () => {
+    expect(buildRegisterPrestaBody({ ...baseInput, phone: '' })).not.toHaveProperty('phone');
+    expect(buildRegisterPrestaBody({ ...baseInput, phone: undefined })).not.toHaveProperty('phone');
+    expect(buildRegisterPrestaBody({ ...baseInput, phone: '0899999999', countryCode: 'CD' }).phone).toBe('+243899999999');
+  });
+
   it('produces exactly the body of the guide, with gender and serviceTypeId', () => {
     expect(buildRegisterPrestaBody(baseInput)).toEqual({
       email: 'docteur.test@exemple.com',
@@ -392,11 +398,23 @@ describe('registerPatientAccount', () => {
     expect(registerPatientErrorMessage(err)).toBe('Un champ obligatoire est manquant. Vérifie le formulaire.');
   });
 
-  it('refuses a missing phone number before any network call (the server requires it)', async () => {
-    await expect(registerPatientAccount({ ...patientInput, phone: '' })).rejects.toThrow(
-      'Le numéro de téléphone est obligatoire.',
-    );
-    expect(mockInvoke).not.toHaveBeenCalled();
+  it('omits the phone key from the body when the number is empty (optional phone)', async () => {
+    await registerPatientAccount({ ...patientInput, phone: '' });
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockInvoke.mock.calls[0][1].body).not.toHaveProperty('phone');
+  });
+
+  it('omits the phone key when the phone is undefined, blank or zeros only', async () => {
+    for (const phone of [undefined, '   ', '000']) {
+      mockInvoke.mockClear();
+      await registerPatientAccount({ ...patientInput, phone });
+      expect(mockInvoke.mock.calls[0][1].body).not.toHaveProperty('phone');
+    }
+  });
+
+  it('keeps sending the phone in E.164 when it is filled', async () => {
+    await registerPatientAccount({ ...patientInput, phone: '0899999999', countryCode: 'CD' });
+    expect(mockInvoke.mock.calls[0][1].body.phone).toBe('+243899999999');
   });
 
   it('keeps the server age refusal text', async () => {
@@ -459,10 +477,7 @@ describe('registerPatientAccount', () => {
     expect(mockInvoke.mock.calls[0][1].body.phone).toBe('+22790123456');
   });
 
-  it('refuses a blank phone (required by register-patient), and sends male as is', async () => {
-    await expect(registerPatientAccount({ ...patientInput, phone: '  ', gender: 'male' })).rejects.toThrow(
-      'Le numéro de téléphone est obligatoire.',
-    );
+  it('sends male as is', async () => {
     await registerPatientAccount({ ...patientInput, gender: 'male' });
     expect(mockInvoke.mock.calls[0][1].body.gender).toBe('male');
   });

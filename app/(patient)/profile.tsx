@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { BiometricToggleRow } from '@/components/BiometricToggleRow';
 import { PreferencesSection } from '@/components/PreferencesSection';
 import { LegalAccountSection } from '@/components/LegalAccountSection';
+import { PhoneInvite } from '@/components/PhoneInvite';
 import { useT } from '@/i18n';
 
 const initialsOf = (a?: string, b?: string) =>
@@ -65,6 +66,8 @@ export default function PatientProfile() {
             <Text className="font-sans text-xs text-muted mt-0.5">{user.email}</Text>
           ) : null}
         </View>
+
+        <PhoneInvite />
 
         {/* Actions */}
         <View className="bg-surface rounded-3xl border border-line overflow-hidden mb-4">
