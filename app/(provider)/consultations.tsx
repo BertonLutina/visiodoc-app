@@ -19,6 +19,9 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
   const t = useT();
   // `pending_payment` : réservée par le patient mais pas payée → ni confirmée, ni démarrable.
   const unpaid = c.rawStatus === 'pending_payment';
+  const showStart = canStart && canStartConsultation(c.rawStatus);
+  // Rapport (notes, diagnostic, prescription) : consultation planifiée, en cours ou terminée, pas les impayées, annulées ni absents.
+  const canWrite = ['scheduled', 'in_progress', 'completed'].includes(c.rawStatus ?? '');
   return (
     <Card className="mb-3">
       <View className="flex-row items-center">
@@ -44,21 +47,29 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
       <Text className="font-sans-semibold text-sm text-clay mt-3">
         {c.dateLabel} · {typeLabel(c.type)} · {c.durationMin} {t('min')}
       </Text>
-      {canStart && canStartConsultation(c.rawStatus) && (
+      {(showStart || canWrite) && (
         <View className="flex-row mt-3">
-          <Pressable
-            onPress={async () => {
-              // Statut cosmétique : un échec ne bloque jamais l'entrée dans l'appel (`get-video-token` fait foi).
-              await startConsultationBestEffort(c.id);
-              router.push(`/call/${c.roomId ?? c.id}`);
-            }}
-            className="flex-1 bg-accent rounded-2xl py-3.5 items-center mr-2"
-          >
-            <Text className="text-white font-sans-bold">{t('Démarrer')}</Text>
-          </Pressable>
-          <Pressable className="flex-1 border border-line rounded-2xl py-3.5 items-center bg-surface">
-            <Text className="text-ink font-sans-bold">{t('Notes')}</Text>
-          </Pressable>
+          {showStart && (
+            <Pressable
+              onPress={async () => {
+                // Statut cosmétique : un échec ne bloque jamais l'entrée dans l'appel (`get-video-token` fait foi).
+                await startConsultationBestEffort(c.id);
+                router.push(`/call/${c.roomId ?? c.id}`);
+              }}
+              className="flex-1 bg-accent rounded-2xl py-3.5 items-center mr-2"
+            >
+              <Text className="text-white font-sans-bold">{t('Démarrer')}</Text>
+            </Pressable>
+          )}
+          {canWrite && (
+            <Pressable
+              onPress={() => router.push(`/provider/consultation-report/${c.id}`)}
+              className="flex-1 border border-line rounded-2xl py-3.5 items-center bg-surface"
+              accessibilityRole="button"
+            >
+              <Text className="text-ink font-sans-bold">{t('Notes')}</Text>
+            </Pressable>
+          )}
         </View>
       )}
     </Card>

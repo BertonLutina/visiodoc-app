@@ -1,12 +1,19 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { ChevronLeft, PhoneOff } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { useAsync } from '@/hooks/useAsync';
+import { useAuth } from '@/contexts/AuthContext';
 import { getCallSession } from '@/services/patientApi';
+import {
+  endConsultation,
+  getProviderCallContext,
+  logVideoSessionEnd,
+  logVideoSessionStart,
+} from '@/services/consultationReport';
 import { requestCallPermissions } from '@/services/callPermissions';
 import {
   buildRoomWebViewUrl,
@@ -22,7 +29,7 @@ const MAX_AUTO_RETRY_MS = 6 * 60 * 60 * 1000;
 
 type Phase =
   | { kind: 'loading' }
-  | { kind: 'ready'; url: string; serverUrl: string }
+  | { kind: 'ready'; url: string; serverUrl: string; roomName: string }
   | { kind: 'failed'; failure: VideoFailure | VideoUnavailable }
   | { kind: 'permission'; blocked: boolean }
   | { kind: 'interrupted' };
@@ -38,6 +45,10 @@ export default function VideoCall() {
   const { room } = useLocalSearchParams<{ room: string }>();
   const routeRoomId = typeof room === 'string' ? room : '';
   const { data: session, loading: sessionLoading } = useAsync(() => getCallSession(routeRoomId), [routeRoomId]);
+  const { user } = useAuth();
+  // Côté prestataire seulement : la consultation de cette salle dont l'utilisateur est le prestataire (sinon null).
+  const providerId = user?.id ?? '';
+  const { data: providerCtx } = useAsync(() => getProviderCallContext(routeRoomId, providerId), [routeRoomId, providerId]);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
@@ -75,7 +86,12 @@ export default function VideoCall() {
         setPhase({ kind: 'permission', blocked: permission === 'blocked' });
         return;
       }
-      setPhase({ kind: 'ready', url: buildRoomWebViewUrl(result.session), serverUrl: result.session.serverUrl });
+      setPhase({
+        kind: 'ready',
+        url: buildRoomWebViewUrl(result.session),
+        serverUrl: result.session.serverUrl,
+        roomName: result.session.roomName,
+      });
     })();
     return () => {
       active = false;
@@ -93,9 +109,60 @@ export default function VideoCall() {
     return () => clearTimeout(timer);
   }, [opensAt, retry]);
 
-  const close = () => {
+  // Trace de l'appel (table video_sessions, comme le web), prestataire seulement, best effort.
+  const videoSessionId = useRef<Promise<string | null> | null>(null);
+  const callStartedAt = useRef<number | null>(null);
+  const readyRoomName = phase.kind === 'ready' ? phase.roomName : null;
+  useEffect(() => {
+    if (!providerCtx || !readyRoomName || !providerId || videoSessionId.current) return;
+    callStartedAt.current = Date.now();
+    videoSessionId.current = logVideoSessionStart({
+      consultationId: providerCtx.consultationId,
+      roomName: readyRoomName,
+      initiatedBy: providerId,
+    });
+  }, [providerCtx, readyRoomName, providerId]);
+
+  const leave = () => {
     if (router.canGoBack()) router.back();
     else router.replace('/');
+  };
+
+  const openReport = (consultationId: string) => router.replace(`/provider/consultation-report/${consultationId}`);
+
+  const close = () => {
+    const joined = phase.kind === 'ready';
+    if (!providerCtx || !joined) {
+      leave();
+      return;
+    }
+    // Prestataire qui quitte un appel en cours : on clôt la trace, puis il choisit de terminer ou de revenir plus tard.
+    const pending = videoSessionId.current;
+    const startedAt = callStartedAt.current;
+    videoSessionId.current = null;
+    if (pending && startedAt) {
+      pending.then((sid) => (sid ? logVideoSessionEnd(sid, (Date.now() - startedAt) / 1000) : undefined)).catch(() => {});
+    }
+    Alert.alert(
+      t("Terminer la consultation ?"),
+      t('Tu pourras écrire le rapport (notes, diagnostic, prescription) maintenant ou plus tard.'),
+      [
+        { text: t('Revenir plus tard'), style: 'cancel', onPress: leave },
+        {
+          text: t('Terminer la consultation'),
+          onPress: async () => {
+            try {
+              await endConsultation(providerCtx.consultationId, providerId);
+            } catch (e) {
+              // Refus (ex. appel jamais démarré) : message clair, le rapport reste accessible.
+              Alert.alert(t('Consultation non terminée'), (e as Error)?.message ?? '');
+            }
+            openReport(providerCtx.consultationId);
+          },
+        },
+      ],
+      { cancelable: false },
+    );
   };
 
   const canRetry =
