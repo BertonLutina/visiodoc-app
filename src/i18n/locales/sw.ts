@@ -675,4 +675,7 @@ export const sw: Record<string, string> = {
   "Disponible dans {n} min": "Inapatikana baada ya dakika {n}",
   "Le patient a rejoint la consultation": "Mgonjwa amejiunga na mashauriano",
   "Le patient a rejoint la consultation : tu ne peux pas le déclarer absent.": "Mgonjwa amejiunga na mashauriano: huwezi kumtangaza kuwa hayupo.",
+  "Consultation de {time}": "Mashauriano ya {time}",
+  "Disponible à {time}": "Inapatikana saa {time}",
+  "Tu confirmes la fin de la consultation ?": "Unathibitisha kumaliza mashauriano?",
 };

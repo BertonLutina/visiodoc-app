@@ -232,10 +232,10 @@ export default function VideoCall() {
       ) : null}
       <SafeAreaView className="flex-1" edges={['top', 'bottom']}>
         {/* En-tête */}
-        <View className="flex-row items-center justify-between px-5 pt-2 pb-2">
+        <View className="flex-row items-center justify-between px-3 py-1">
           <View className="flex-row items-center flex-1">
             <Pressable onPress={close} className="p-1 mr-1" accessibilityRole="button" accessibilityLabel={t('Quitter')}>
-              <ChevronLeft color={colors.white} size={26} />
+              <ChevronLeft color={colors.white} size={24} />
             </Pressable>
             <Text className="text-white font-sans-bold flex-1" numberOfLines={1}>
               {session?.doctorName ?? t('Consultation')}
@@ -244,11 +244,11 @@ export default function VideoCall() {
           {phase.kind === 'ready' ? (
             <Pressable
               onPress={close}
-              className="w-11 h-11 rounded-full bg-red-500 items-center justify-center"
+              className="w-9 h-9 rounded-full bg-red-500 items-center justify-center"
               accessibilityRole="button"
               accessibilityLabel={t('Quitter')}
             >
-              <PhoneOff color={colors.white} size={20} />
+              <PhoneOff color={colors.white} size={17} />
             </Pressable>
           ) : null}
         </View>

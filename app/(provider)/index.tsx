@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import {
   getDashboardOverview,
+  getProviderConsultations,
   getReviewSummary,
   getTodayConsultations,
   getValidationStatus,
@@ -28,6 +29,7 @@ import { buildAlerts, countdownLabel } from '@/services/dashboardMetrics';
 import { currentProvider } from '@/data/mockProvider';
 import { formatAmountInCurrency, typeLabel } from '@/utils/format';
 import { translate } from '@/i18n';
+import { clockTime, joinButtonState, pickNextConsultation } from '@/utils/nextConsultation';
 import type { ProviderConsultation } from '@/types/provider';
 import { useLanguage, useT } from '@/i18n';
 
@@ -95,6 +97,7 @@ export default function ProviderDashboard() {
   const uid = user?.id ?? currentProvider.id;
   const overviewReq = useAsync(() => getDashboardOverview(uid), [uid, lang]);
   const todayReq = useAsync(() => getTodayConsultations(uid), [uid, lang]);
+  const upcomingReq = useAsync(() => getProviderConsultations(uid, ['scheduled', 'in_progress']), [uid, lang]);
   const reviewsReq = useAsync(() => getReviewSummary(uid), [uid]);
   const statusReq = useAsync(() => getValidationStatus(uid), [uid]);
 
@@ -107,7 +110,7 @@ export default function ProviderDashboard() {
   const [starting, setStarting] = useState(false);
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([overviewReq.refresh(), todayReq.refresh(), reviewsReq.refresh(), statusReq.refresh()]);
+    await Promise.all([overviewReq.refresh(), todayReq.refresh(), upcomingReq.refresh(), reviewsReq.refresh(), statusReq.refresh()]);
     setRefreshing(false);
   };
 
@@ -119,7 +122,14 @@ export default function ProviderDashboard() {
     : currentProvider.initials;
 
   const alerts = ov ? buildAlerts({ validationStatus, overview: ov }) : [];
-  const next = ov?.next ?? null;
+  // Bloc « Prochaine consultation » : la consultation en cours, sinon la plus proche à venir. Bouton grisé jusqu'à l'ouverture.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const next = pickNextConsultation(upcomingReq.data ?? [], now);
+  const joinState = next ? joinButtonState(next, now) : null;
   const maxRevenue = Math.max(1, ...(ov?.revenueSeries.map((m) => m.amount) ?? [1]));
   const subtitle = !ov
     ? ''
@@ -221,12 +231,21 @@ export default function ProviderDashboard() {
                 {next.dateLabel} · {typeLabel(next.type)} · {next.durationMin} {t('min')}
               </Text>
               <Pressable
-                onPress={() => onStart(next)}
-                disabled={starting}
-                className="bg-accent rounded-2xl py-3.5 items-center mt-3"
+                onPress={() => joinState?.enabled && onStart(next)}
+                disabled={starting || !joinState?.enabled}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: starting || !joinState?.enabled }}
+                className={`rounded-2xl py-4 items-center mt-3 ${joinState?.enabled ? 'bg-accent' : 'bg-gray-200'}`}
                 style={{ opacity: starting ? 0.6 : 1 }}
               >
-                <Text className="text-white font-sans-bold">{t('Démarrer la consultation')}</Text>
+                <Text className={`font-sans-bold text-base ${joinState?.enabled ? 'text-white' : 'text-gray-500'}`}>
+                  {t('Consultation de {time}', { time: clockTime(next.scheduledAt ?? now) })}
+                </Text>
+                {joinState && !joinState.enabled ? (
+                  <Text className="font-sans text-xs text-gray-500 mt-0.5">
+                    {t('Disponible à {time}', { time: clockTime(joinState.opensAt) })}
+                  </Text>
+                ) : null}
               </Pressable>
             </Card>
           </View>

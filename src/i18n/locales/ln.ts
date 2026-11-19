@@ -675,4 +675,7 @@ export const ln: Record<string, string> = {
   "Disponible dans {n} min": "Ekoki nsima ya miniti {n}",
   "Le patient a rejoint la consultation": "Mobeli akoti na konsultasyon",
   "Le patient a rejoint la consultation : tu ne peux pas le déclarer absent.": "Mobeli akoti na konsultasyon : okoki te kolobela ye ete azali te.",
+  "Consultation de {time}": "Konsultasyon ya {time}",
+  "Disponible à {time}": "Ekoki na {time}",
+  "Tu confirmes la fin de la consultation ?": "Ondimi kosukola konsultasyon?",
 };

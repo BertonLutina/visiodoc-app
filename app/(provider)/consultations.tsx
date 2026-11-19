@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -6,6 +6,7 @@ import { Avatar, Badge, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { typeLabel } from '@/utils/format';
 import { canStartConsultation, canWriteReport } from '@/utils/canStart';
+import { clockTime, joinButtonState } from '@/utils/nextConsultation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getProviderConsultations, getTodayConsultations, startConsultationBestEffort } from '@/services/providerApi';
@@ -20,6 +21,12 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
   // `pending_payment` : réservée par le patient mais pas payée → ni confirmée, ni démarrable.
   const unpaid = c.rawStatus === 'pending_payment';
   const showStart = canStart && canStartConsultation(c.rawStatus);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const join = joinButtonState(c, now);
   // Rapport : seulement quand le patient s'est connecté (en cours ou terminée).
   const canWrite = canWriteReport(c.rawStatus);
   return (
@@ -52,13 +59,19 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
           {showStart && (
             <Pressable
               onPress={async () => {
+                if (!join.enabled) return;
                 // Statut cosmétique : un échec ne bloque jamais l'entrée dans l'appel (`get-video-token` fait foi).
                 await startConsultationBestEffort(c.id);
                 router.push(`/call/${c.roomId ?? c.id}`);
               }}
-              className="flex-1 bg-accent rounded-2xl py-3.5 items-center mr-2"
+              disabled={!join.enabled}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !join.enabled }}
+              className={`flex-1 rounded-2xl py-3.5 items-center mr-2 ${join.enabled ? 'bg-accent' : 'bg-gray-200'}`}
             >
-              <Text className="text-white font-sans-bold">{t('Démarrer')}</Text>
+              <Text className={`font-sans-bold ${join.enabled ? 'text-white' : 'text-gray-500'}`}>
+                {join.enabled ? t('Démarrer') : t('Disponible à {time}', { time: clockTime(join.opensAt) })}
+              </Text>
             </Pressable>
           )}
           {canWrite && (

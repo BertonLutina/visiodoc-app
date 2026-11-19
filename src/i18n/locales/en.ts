@@ -675,4 +675,7 @@ export const en: Record<string, string> = {
   "Disponible dans {n} min": "Available in {n} min",
   "Le patient a rejoint la consultation": "The patient has joined the consultation",
   "Le patient a rejoint la consultation : tu ne peux pas le déclarer absent.": "The patient has joined the consultation: you cannot mark them as absent.",
+  "Consultation de {time}": "Consultation at {time}",
+  "Disponible à {time}": "Available at {time}",
+  "Tu confirmes la fin de la consultation ?": "Do you confirm ending the consultation?",
 };
