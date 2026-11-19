@@ -90,7 +90,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/logo-icon-white.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#128D74"
         }
       ],
