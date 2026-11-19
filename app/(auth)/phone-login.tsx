@@ -28,6 +28,7 @@ import {
 import { fetchOtpDeliveryInfo, otpIntroText, otpSentText, sendCodeLabel, type OtpDeliveryInfo } from '@/services/otpDelivery';
 import { LegalNotice, HealthConsentCheckbox } from '@/components/LegalConsent';
 import { healthConsentIssue } from '@/services/legal';
+import { HEALTH_CONSENT_DEFAULT } from '@/config/legalVersions';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -54,7 +55,7 @@ export default function PhoneLogin() {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [city, setCity] = useState('');
   const [commune, setCommune] = useState('');
-  const [healthConsent, setHealthConsent] = useState(false); // jamais cochée par défaut
+  const [healthConsent, setHealthConsent] = useState<boolean>(HEALTH_CONSENT_DEFAULT); // décision produit, voir legalVersions.ts
   // Connexion : aucun choix de Visiodoc. Pays de l'étape d'identité d'une première inscription : RDC (inchangé).
   const countryCode = PHONE_IDENTITY_COUNTRY_CODE;
   const [fullPhone, setFullPhone] = useState('');

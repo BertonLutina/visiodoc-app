@@ -1,3 +1,4 @@
+import { LEGAL_DOCUMENTS } from '@/config/legalDocuments';
 import { en } from './locales/en';
 import { sw } from './locales/sw';
 import { ln } from './locales/ln';
@@ -83,6 +84,7 @@ const DYNAMIC_KEYS = [
   'Gestion des disponibilités', 'Accès sécurisé à la plateforme', 'Mêmes fonctionnalités',
   'Allergie', 'Traitement en cours', 'Ordonnance', 'Pathologie', 'Vaccination', 'Résultat labo',
   'Document', 'Note', 'Compte-rendu',
+  ...LEGAL_DOCUMENTS.map((d) => d.titre),
 ];
 
 const placeholders = (s: string) => (s.match(/\{\w+\}/g) ?? []).sort().join(',');

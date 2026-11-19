@@ -1,20 +1,21 @@
 import React from 'react';
 import { Pressable, Text, View } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
+import { router } from 'expo-router';
 import { Check } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { useT } from '@/i18n';
-import { legalUrl, splitTemplate } from '@/services/legal';
+import { splitTemplate } from '@/services/legal';
+import { legalDocHref, type LegalDocSlug } from '@/config/legalDocuments';
 
 /**
  * Phrase sous « Créer mon compte » : appuyer sur le bouton vaut acceptation, aucune case (décision de Chris).
- * Les deux noms sont des liens vers les pages du site (mécanisme de `LegalAccountSection`).
+ * Les deux noms sont des liens vers les écrans de lecture internes.
  */
 export function LegalNotice({ className = '' }: { className?: string }) {
   const t = useT();
-  const links: Record<string, { label: string; url: string }> = {
-    cgu: { label: t('CGU'), url: legalUrl('conditions') },
-    privacy: { label: t('politique de confidentialité'), url: legalUrl('confidentialite') },
+  const links: Record<string, { label: string; slug: LegalDocSlug }> = {
+    cgu: { label: t('CGU'), slug: 'cgu-patient' },
+    privacy: { label: t('politique de confidentialité'), slug: 'confidentialite' },
   };
   const parts = splitTemplate(t("En créant mon compte, j'accepte les {cgu} et j'ai lu la {privacy}."), ['cgu', 'privacy']);
   return (
@@ -27,7 +28,7 @@ export function LegalNotice({ className = '' }: { className?: string }) {
             key={i}
             accessibilityRole="link"
             className="font-sans-semibold text-primary underline"
-            onPress={() => WebBrowser.openBrowserAsync(links[p.name].url)}
+            onPress={() => router.push(legalDocHref(links[p.name].slug))}
           >
             {links[p.name].label}
           </Text>
@@ -37,7 +38,7 @@ export function LegalNotice({ className = '' }: { className?: string }) {
   );
 }
 
-/** Case unique du consentement au traitement des données de santé (patient), décochée par défaut. */
+/** Case unique du consentement au traitement des données de santé (patient), cochée par défaut (HEALTH_CONSENT_DEFAULT). */
 export function HealthConsentCheckbox({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   const t = useT();
   return (

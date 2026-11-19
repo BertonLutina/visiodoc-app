@@ -1,23 +1,22 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, Text, View } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
+import { router } from 'expo-router';
 import { ChevronRight, Download, FileText, Shield, ShieldOff, Trash2 } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 import {
   exportMyData,
-  legalUrl,
   requestAccountDeletion,
   shareExport,
   withdrawHealthConsent,
-  type LegalPage,
 } from '@/services/legal';
+import { legalDocHref, type LegalDocSlug } from '@/config/legalDocuments';
 
 export const SUPPORT_EMAIL = 'support@visiodoc.app';
 
 /**
- * Infos légales (pages du site web, ouvertes dans le navigateur) + droits sur les données (MOB-1811-6) :
+ * Infos légales (écrans de lecture internes) + droits sur les données (MOB-1811-6) :
  * export, demande de suppression (traitée par l'équipe sous 30 jours, rien n'est effacé tout de suite) et,
  * pour un patient, retrait du consentement santé (sans déconnexion).
  */
@@ -26,10 +25,10 @@ export function LegalAccountSection() {
   const { user } = useAuth();
   const [busy, setBusy] = useState<'export' | 'delete' | 'withdraw' | null>(null);
 
-  const rows: { icon: typeof FileText; label: string; legal: LegalPage }[] = [
-    { icon: FileText, label: "Conditions d'utilisation", legal: 'conditions' },
-    { icon: Shield, label: 'Confidentialité', legal: 'confidentialite' },
-    { icon: FileText, label: 'Mentions légales', legal: 'mentions' },
+  const rows: { icon: typeof FileText; label: string; slug: LegalDocSlug }[] = [
+    { icon: FileText, label: "Conditions d'utilisation", slug: 'cgu-patient' },
+    { icon: Shield, label: 'Confidentialité', slug: 'confidentialite' },
+    { icon: FileText, label: 'Mentions légales', slug: 'mentions' },
   ];
 
   const run = async (kind: 'export' | 'delete' | 'withdraw', task: () => Promise<void>) => {
@@ -106,8 +105,8 @@ export function LegalAccountSection() {
       <View className="bg-surface rounded-3xl border border-line overflow-hidden">
         {rows.map((r) => (
           <Pressable
-            key={r.legal}
-            onPress={() => WebBrowser.openBrowserAsync(legalUrl(r.legal))}
+            key={r.slug}
+            onPress={() => router.push(legalDocHref(r.slug))}
             className="flex-row items-center px-4 py-4 border-b border-line"
           >
             <View className="w-10 h-10 rounded-2xl bg-sand items-center justify-center mr-3">

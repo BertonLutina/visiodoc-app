@@ -707,4 +707,10 @@ export const sw: Record<string, string> = {
   "Votre consentement santé a été retiré.": "Idhini yako ya afya imeondolewa.",
   "Aucun consentement santé actif à retirer.": "Hakuna idhini ya afya inayotumika ya kuondoa.",
   "Exporter mes données": "Hamisha data yangu",
+  "Conditions d'utilisation patient": "Masharti ya matumizi kwa mgonjwa",
+  "Conditions d'utilisation prestataire": "Masharti ya matumizi kwa mtoa huduma",
+  "Cookies": "Vidakuzi",
+  "Déclaration relative aux enfants": "Tamko kuhusu watoto",
+  "Document en cours de finalisation. La version en vigueur reste consultable sur le site.": "Hati inakamilishwa. Toleo linalotumika bado unaweza kulisoma kwenye tovuti.",
+  "Consulter la version du site": "Soma toleo la tovuti",
 };

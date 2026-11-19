@@ -707,4 +707,10 @@ export const en: Record<string, string> = {
   "Votre consentement santé a été retiré.": "Your health consent has been withdrawn.",
   "Aucun consentement santé actif à retirer.": "No active health consent to withdraw.",
   "Exporter mes données": "Export my data",
+  "Conditions d'utilisation patient": "Patient terms of use",
+  "Conditions d'utilisation prestataire": "Provider terms of use",
+  "Cookies": "Cookies",
+  "Déclaration relative aux enfants": "Statement on children",
+  "Document en cours de finalisation. La version en vigueur reste consultable sur le site.": "Document being finalised. The current version remains available on the website.",
+  "Consulter la version du site": "View the website version",
 };

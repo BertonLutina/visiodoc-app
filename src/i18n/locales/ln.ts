@@ -707,4 +707,10 @@ export const ln: Record<string, string> = {
   "Votre consentement santé a été retiré.": "Ndimbola na yo ya lisano ya nzoto elongolami.",
   "Aucun consentement santé actif à retirer.": "Ndimbola ya lisano ya nzoto ezali te mpo na kolongola.",
   "Exporter mes données": "Bimisa makambo na ngai",
+  "Conditions d'utilisation patient": "Mibeko ya kosalela mpo na mobeli",
+  "Conditions d'utilisation prestataire": "Mibeko ya kosalela mpo na mosali",
+  "Cookies": "Cookies",
+  "Déclaration relative aux enfants": "Maloba na ntina ya bana",
+  "Document en cours de finalisation. La version en vigueur reste consultable sur le site.": "Mokanda ezali kosilisama. Version oyo ezali kosalema ekoki kotangama naino na site.",
+  "Consulter la version du site": "Tanga version ya site",
 };
