@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
-import { canStartConsultation } from '@/utils/canStart';
+import { canStartConsultation, canWriteReport } from '@/utils/canStart';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getProviderConsultations, getTodayConsultations } from '@/services/providerApi';
@@ -24,6 +25,9 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
   const win = useStartWindow(c.scheduledAt, c.rawStatus);
   const startable = canStartNow(win);
   const winMessage = startWindowMessage(win);
+  const showStart = canStart && canStartConsultation(c.rawStatus);
+  // Rapport : seulement quand le patient s'est connecté (en cours ou terminée).
+  const canWrite = canWriteReport(c.rawStatus);
   return (
     <Card className="mb-3">
       <View className="flex-row items-center">
@@ -58,9 +62,9 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
           consultationId={c.id}
         />
       ) : null}
-      {canStart && canStartConsultation(c.rawStatus) && (
-        <>
-          <View className="flex-row mt-3">
+      {(showStart || canWrite) && (
+        <View className="flex-row mt-3">
+          {showStart && (
             <Pressable
               onPress={() => launchProviderCall(c)}
               disabled={!startable}
@@ -69,16 +73,22 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
             >
               <Text className={`font-sans-bold ${startable ? 'text-white' : 'text-muted'}`}>{t('Démarrer')}</Text>
             </Pressable>
-            <Pressable className="flex-1 border border-line rounded-2xl py-3.5 items-center bg-surface">
+          )}
+          {canWrite && (
+            <Pressable
+              onPress={() => router.push(`/provider/consultation-report/${c.id}`)}
+              className="flex-1 border border-line rounded-2xl py-3.5 items-center bg-surface"
+              accessibilityRole="button"
+            >
               <Text className="text-ink font-sans-bold">{t('Notes')}</Text>
             </Pressable>
-          </View>
-          {!!winMessage && (
-            <Text className={`font-sans-semibold text-xs mt-2 ${win.phase === 'before' ? 'text-muted' : 'text-danger'}`}>
-              {winMessage}
-            </Text>
           )}
-        </>
+        </View>
+      )}
+      {showStart && !!winMessage && (
+        <Text className={`font-sans-semibold text-xs mt-2 ${win.phase === 'before' ? 'text-muted' : 'text-danger'}`}>
+          {winMessage}
+        </Text>
       )}
     </Card>
   );

@@ -44,6 +44,7 @@ function AppShell() {
       <Stack.Screen name="records" />
       <Stack.Screen name="provider/availability" />
       <Stack.Screen name="provider/fee" />
+      <Stack.Screen name="provider/consultation-report/[id]" />
       <Stack.Screen name="provider/specializations" />
       <Stack.Screen name="provider/subscription" />
       <Stack.Screen name="legal/[doc]" />

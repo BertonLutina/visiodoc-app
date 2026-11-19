@@ -1,12 +1,22 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { ChevronLeft, PhoneOff } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { useAsync } from '@/hooks/useAsync';
+import { useAuth } from '@/contexts/AuthContext';
 import { getCallSession } from '@/services/patientApi';
+import {
+  endConsultation,
+  getPatientJoinedAt,
+  getProviderCallContext,
+  markPatientAbsent,
+  notifyConsultationStarted,
+  logVideoSessionEnd,
+  logVideoSessionStart,
+} from '@/services/consultationReport';
 import { requestCallPermissions } from '@/services/callPermissions';
 import {
   buildRoomWebViewUrl,
@@ -15,6 +25,7 @@ import {
   type VideoFailure,
   type VideoUnavailable,
 } from '@/services/videoToken';
+import { CallOutcomeModal } from '@/components/CallOutcomeModal';
 import { useT } from '@/i18n';
 
 /** Au-delà de ce délai, la relance automatique à l'ouverture de la salle n'est pas programmée (le bouton reste). */
@@ -22,7 +33,7 @@ const MAX_AUTO_RETRY_MS = 6 * 60 * 60 * 1000;
 
 type Phase =
   | { kind: 'loading' }
-  | { kind: 'ready'; url: string; serverUrl: string }
+  | { kind: 'ready'; url: string; serverUrl: string; roomName: string }
   | { kind: 'failed'; failure: VideoFailure | VideoUnavailable }
   | { kind: 'permission'; blocked: boolean }
   | { kind: 'interrupted' };
@@ -38,6 +49,10 @@ export default function VideoCall() {
   const { room } = useLocalSearchParams<{ room: string }>();
   const routeRoomId = typeof room === 'string' ? room : '';
   const { data: session, loading: sessionLoading } = useAsync(() => getCallSession(routeRoomId), [routeRoomId]);
+  const { user } = useAuth();
+  // Côté prestataire seulement : la consultation de cette salle dont l'utilisateur est le prestataire (sinon null).
+  const providerId = user?.id ?? '';
+  const { data: providerCtx } = useAsync(() => getProviderCallContext(routeRoomId, providerId), [routeRoomId, providerId]);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
@@ -75,7 +90,12 @@ export default function VideoCall() {
         setPhase({ kind: 'permission', blocked: permission === 'blocked' });
         return;
       }
-      setPhase({ kind: 'ready', url: buildRoomWebViewUrl(result.session), serverUrl: result.session.serverUrl });
+      setPhase({
+        kind: 'ready',
+        url: buildRoomWebViewUrl(result.session),
+        serverUrl: result.session.serverUrl,
+        roomName: result.session.roomName,
+      });
     })();
     return () => {
       active = false;
@@ -93,9 +113,94 @@ export default function VideoCall() {
     return () => clearTimeout(timer);
   }, [opensAt, retry]);
 
-  const close = () => {
+  // Trace de l'appel (table video_sessions, comme le web) et notification du patient, prestataire seulement,
+  // best effort, une seule fois par ouverture de la salle.
+  const videoSessionId = useRef<Promise<string | null> | null>(null);
+  const callStartedAt = useRef<number | null>(null);
+  const readyRoomName = phase.kind === 'ready' ? phase.roomName : null;
+  useEffect(() => {
+    if (!providerCtx || !readyRoomName || !providerId || videoSessionId.current) return;
+    callStartedAt.current = Date.now();
+    videoSessionId.current = logVideoSessionStart({
+      consultationId: providerCtx.consultationId,
+      roomName: readyRoomName,
+      initiatedBy: providerId,
+    });
+    notifyConsultationStarted(providerCtx.consultationId);
+  }, [providerCtx, readyRoomName, providerId]);
+
+  /** Clôt la trace vidéo (une fois) au moment où le prestataire quitte vraiment l'appel. */
+  const endTrace = () => {
+    const pending = videoSessionId.current;
+    const startedAt = callStartedAt.current;
+    videoSessionId.current = null;
+    if (pending && startedAt) {
+      pending.then((sid) => (sid ? logVideoSessionEnd(sid, (Date.now() - startedAt) / 1000) : undefined)).catch(() => {});
+    }
+  };
+
+  const leave = () => {
     if (router.canGoBack()) router.back();
     else router.replace('/');
+  };
+
+  /** Ferme l'appel PUIS ouvre le rapport (l'écran d'appel est remplacé par le rapport). */
+  const leaveToReport = (consultationId: string) => {
+    endTrace();
+    router.replace(`/provider/consultation-report/${consultationId}`);
+  };
+
+  const [outcomeOpen, setOutcomeOpen] = useState(false);
+  const [patientJoinedAt, setPatientJoinedAt] = useState<string | null>(null);
+  // Relu à chaque ouverture de la boîte de fin d'appel (best effort : null tant que la colonne n'existe pas).
+  const providerConsultationId = providerCtx?.consultationId ?? null;
+  useEffect(() => {
+    if (!outcomeOpen || !providerConsultationId) return;
+    let cancelled = false;
+    getPatientJoinedAt(providerConsultationId).then((v) => {
+      if (!cancelled && v) setPatientJoinedAt(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [outcomeOpen, providerConsultationId]);
+
+  const endAndReport = async (consultationId: string) => {
+    setOutcomeOpen(false);
+    try {
+      await endConsultation(consultationId, providerId);
+    } catch (e) {
+      // Refus (ex. appel jamais démarré) : message clair, le rapport reste accessible.
+      Alert.alert(t('Consultation non terminée'), (e as Error)?.message ?? '');
+    }
+    leaveToReport(consultationId);
+  };
+
+  const absentAndLeave = async (consultationId: string) => {
+    try {
+      await markPatientAbsent(consultationId, providerId);
+    } catch (e) {
+      // Filet de sécurité (le bouton est normalement grisé) : l'appel reste ouvert, le choix est reproposé.
+      const kind = (e as { kind?: string })?.kind;
+      const msg =
+        kind === 'no_show_too_early' || kind === 'patient_joined' ? (e as Error).message : t('Impossible de déclarer le patient absent. Réessaie.');
+      if (kind === 'patient_joined') setPatientJoinedAt(new Date().toISOString()); // état « joined » forcé
+      setOutcomeOpen(false);
+      Alert.alert(t('Patient absent'), msg, [{ text: 'OK', onPress: () => setOutcomeOpen(true) }], { cancelable: false });
+      return;
+    }
+    // Patient absent : on ferme l'appel sans rapport.
+    setOutcomeOpen(false);
+    endTrace();
+    leave();
+  };
+
+  const close = () => {
+    if (!providerCtx || phase.kind !== 'ready') {
+      leave();
+      return;
+    }
+    setOutcomeOpen(true);
   };
 
   const canRetry =
@@ -111,6 +216,20 @@ export default function VideoCall() {
 
   return (
     <View className="flex-1 bg-ink">
+      {providerCtx ? (
+        <CallOutcomeModal
+          visible={outcomeOpen}
+          scheduledAt={providerCtx.scheduledAt}
+          startedAt={providerCtx.startedAt}
+          patientJoinedAt={patientJoinedAt}
+          onEnd={() => endAndReport(providerCtx.consultationId)}
+          onAbsent={() => absentAndLeave(providerCtx.consultationId)}
+          onLater={() => {
+            setOutcomeOpen(false);
+            leaveToReport(providerCtx.consultationId);
+          }}
+        />
+      ) : null}
       <SafeAreaView className="flex-1" edges={['top', 'bottom']}>
         {/* En-tête */}
         <View className="flex-row items-center justify-between px-5 pt-2 pb-2">
