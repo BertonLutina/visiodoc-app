@@ -81,26 +81,25 @@ describe('videoFailure', () => {
   it('maps 403 room_not_open_yet to the guide message with the local HH:MM of opensAt', () => {
     expect(videoFailure(403, { code: 'room_not_open_yet', opensAt: LOCAL_0905 })).toEqual({
       kind: 'too_early',
-      message: "La consultation n'est pas encore ouverte (la salle ouvre à 09:05)",
+      message: "La consultation n'est pas encore ouverte (la salle ouvre dimanche 08/11 à 9h05)",
       opensAt: LOCAL_0905,
     });
   });
 
   it('zero-pads the hours and minutes and uses a 24h clock', () => {
     expect(videoFailure(403, { code: 'room_not_open_yet', opensAt: LOCAL_2307 }).message).toBe(
-      "La consultation n'est pas encore ouverte (la salle ouvre à 23:07)",
+      "La consultation n'est pas encore ouverte (la salle ouvre dimanche 08/11 à 23h07)",
     );
     expect(videoFailure(403, { code: 'room_not_open_yet', opensAt: LOCAL_MIDNIGHT }).message).toBe(
-      "La consultation n'est pas encore ouverte (la salle ouvre à 00:00)",
+      "La consultation n'est pas encore ouverte (la salle ouvre lundi 09/11 à 0h00)",
     );
   });
 
   it('formats the guide example (2026-11-08T13:45:00.000Z) in the device local time', () => {
     const d = new Date('2026-11-08T13:45:00.000Z');
-    const hh = String(d.getHours()).padStart(2, '0');
     const mm = String(d.getMinutes()).padStart(2, '0');
     expect(videoFailure(403, { code: 'room_not_open_yet', opensAt: '2026-11-08T13:45:00.000Z' }).message).toBe(
-      `La consultation n'est pas encore ouverte (la salle ouvre à ${hh}:${mm})`,
+      `La consultation n'est pas encore ouverte (la salle ouvre dimanche 08/11 à ${d.getHours()}h${mm})`,
     );
   });
 
@@ -331,7 +330,7 @@ describe('fetchVideoToken', () => {
       ok: false,
       failure: {
         kind: 'too_early',
-        message: "La consultation n'est pas encore ouverte (la salle ouvre à 09:05)",
+        message: "La consultation n'est pas encore ouverte (la salle ouvre dimanche 08/11 à 9h05)",
         opensAt: LOCAL_0905,
       },
     });

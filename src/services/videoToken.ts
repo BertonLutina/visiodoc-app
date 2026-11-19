@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { translate } from '@/i18n/core';
+import { localDayTimeLabel } from '@/utils/localMoment';
 import { readHttpError } from '@/utils/authError';
 import { reportSessionExpiry } from './sessionExpiry';
 
@@ -41,16 +42,6 @@ export type VideoFailure = {
   opensAt: string | null;
 };
 
-/** Heure locale de l'appareil, `HH:MM` sur 24 h (zéro-complétée) ; `null` si la date est absente ou invalide. */
-function localHhMm(iso: string | null | undefined): string | null {
-  if (typeof iso !== 'string' || !iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  const hh = String(date.getHours()).padStart(2, '0');
-  const mm = String(date.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
-}
-
 /** Refus du serveur (401 / 403) → type, message affichable et instant d'ouverture éventuel. */
 export function videoFailure(
   status: number,
@@ -61,13 +52,13 @@ export function videoFailure(
   }
   switch (body?.code) {
     case 'room_not_open_yet': {
-      const time = localHhMm(body.opensAt);
-      if (!time) {
+      const when = localDayTimeLabel(body.opensAt);
+      if (!when) {
         return { kind: 'too_early', message: translate("La consultation n'est pas encore ouverte"), opensAt: null };
       }
       return {
         kind: 'too_early',
-        message: translate("La consultation n'est pas encore ouverte (la salle ouvre à {time})", { time }),
+        message: translate("La consultation n'est pas encore ouverte (la salle ouvre {when})", { when }),
         opensAt: body.opensAt as string,
       };
     }
