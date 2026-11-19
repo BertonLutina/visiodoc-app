@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stethoscope, FolderHeart, Wallet, Calendar, Video, CalendarPlus } from 'lucide-react-native';
+import { FolderHeart, Wallet, Calendar, Video, CalendarPlus } from 'lucide-react-native';
+import { BrandGlyph } from '@/components/BrandGlyph';
 import { Avatar, Badge, Card, Eyebrow } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,7 +12,7 @@ import { getUpcomingConsultations, getPastConsultations } from '@/services/patie
 import { useLanguage, useT } from '@/i18n';
 
 const quick = [
-  { icon: Stethoscope, label: 'Médecin', href: '/(patient)/doctors' as const, tint: 'bg-sage' },
+  { icon: null, label: 'Prestataire', href: '/(patient)/doctors' as const, tint: 'bg-sage' },
   { icon: FolderHeart, label: 'Dossiers', href: '/records' as const, tint: 'bg-peach' },
   { icon: Wallet, label: 'Wallet', href: '/(patient)/wallet' as const, tint: 'bg-sand' },
   { icon: Calendar, label: 'RDV', href: '/(patient)/appointments' as const, tint: 'bg-lavender' },
@@ -94,7 +95,7 @@ export default function PatientDashboard() {
               </View>
               <Text className="font-serif-bold text-ink text-lg">{t('Aucune consultation à venir')}</Text>
               <Text className="font-sans text-sm text-muted mt-1 mb-4 text-center">
-                {t('Trouvez un médecin et prenez rendez-vous en quelques minutes.')}
+                {t('Trouve un prestataire et prends rendez-vous en quelques minutes.')}
               </Text>
               <Pressable
                 onPress={() => router.push('/(patient)/doctors')}
@@ -127,7 +128,7 @@ export default function PatientDashboard() {
             {quick.map((q) => (
               <Pressable key={q.label} onPress={() => router.push(q.href)} className="items-center w-[23%]">
                 <View className={`w-16 h-16 rounded-3xl items-center justify-center mb-2 ${q.tint}`}>
-                  <q.icon color={colors.ink} size={24} />
+                  {q.icon ? <q.icon color={colors.ink} size={24} /> : <BrandGlyph size={28} color={colors.primary} cameraColor={colors.sage} />}
                 </View>
                 <Text className="font-sans-medium text-xs text-ink">{t(q.label)}</Text>
               </Pressable>

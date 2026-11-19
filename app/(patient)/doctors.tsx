@@ -38,7 +38,7 @@ export default function DoctorsSearch() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="px-5 pt-2 pb-2">
         <Text className="font-serif-bold text-3xl text-ink mb-4" style={{ letterSpacing: -0.3 }}>
-          {t('Trouver un médecin')}
+          {t('Trouver un prestataire')}
         </Text>
         <View className="flex-row items-center border border-line rounded-2xl px-4 py-1 bg-surface mb-4">
           <Search color={colors.muted} size={18} />
@@ -87,7 +87,7 @@ export default function DoctorsSearch() {
         ))}
         {loading && <Text className="text-center text-muted mt-10">{t('Chargement…')}</Text>}
         {!loading && list.length === 0 && (
-          <Text className="text-center text-muted mt-10">{t('Aucun médecin trouvé.')}</Text>
+          <Text className="text-center text-muted mt-10">{t('Aucun prestataire trouvé.')}</Text>
         )}
       </ScrollView>
     </SafeAreaView>

@@ -7,6 +7,7 @@ import { Eyebrow } from '@/components/ui';
 import { DoctorCard } from '@/components/DoctorCard';
 import { colors } from '@/theme/colors';
 import { BrandLogo } from '@/components/BrandLogo';
+import { BrandGlyph } from '@/components/BrandGlyph';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { SignInForPricing } from '@/components/SignInForPricing';
@@ -15,7 +16,7 @@ import { useT } from '@/i18n';
 import { providerHomeHref } from '@/services/accessPolicy';
 
 const services = [
-  { icon: Stethoscope, title: 'Consulter', subtitle: 'Médecins dispo.', tint: 'bg-sage' },
+  { icon: null, title: 'Consulter', subtitle: 'Prestataires dispo.', tint: 'bg-sage' },
   { icon: FolderHeart, title: 'Dossiers', subtitle: 'Historique médical', tint: 'bg-peach' },
   { icon: Wallet, title: 'Wallet', subtitle: 'Recharger, payer', tint: 'bg-sand' },
   { icon: Brain, title: 'IA Médicale', subtitle: 'Analyse symptômes', tint: 'bg-lavender' },
@@ -73,16 +74,16 @@ export default function PublicHome() {
             <Text className="font-sans-bold text-white text-xs">{t('Télémédecine · Afrique')}</Text>
           </Eyebrow>
           <Text className="font-serif-bold text-white" style={{ fontSize: 32, lineHeight: 38, letterSpacing: -0.4 }}>
-            {t('Votre médecin,')}{'\n'}{t('où que vous soyez')}
+            {t('Ton prestataire de soins de santé,')}{'\n'}{t('où que tu sois')}
           </Text>
           <Text className="font-sans text-white/80 text-base mt-3 mb-6">
-            {t('Consultez des médecins qualifiés par vidéo, chat ou téléphone.')}
+            {t('Consulte des prestataires qualifiés par vidéo, chat ou téléphone.')}
           </Text>
           <Pressable
             onPress={() => router.push('/(auth)/register')}
             className="bg-white rounded-2xl py-4 px-5 flex-row items-center justify-center"
           >
-            <Text className="font-sans-bold text-primary text-base mr-2">{t('Trouver un médecin')}</Text>
+            <Text className="font-sans-bold text-primary text-base mr-2">{t('Trouver un prestataire')}</Text>
             <ArrowRight color={colors.primary} size={18} />
           </Pressable>
         </View>
@@ -93,7 +94,7 @@ export default function PublicHome() {
           {services.map((s) => (
             <View key={s.title} className="w-[48%] bg-surface rounded-3xl border border-line p-4 mb-3">
               <View className={`w-11 h-11 rounded-2xl items-center justify-center mb-3 ${s.tint}`}>
-                <s.icon color={colors.ink} size={22} />
+                {s.icon ? <s.icon color={colors.ink} size={22} /> : <BrandGlyph size={26} color={colors.primary} cameraColor={colors.sage} />}
               </View>
               <Text className="font-sans-bold text-base text-ink">{t(s.title)}</Text>
               <Text className="font-sans text-xs text-muted mt-0.5">{t(s.subtitle)}</Text>
@@ -101,13 +102,13 @@ export default function PublicHome() {
           ))}
         </View>
 
-        {/* Médecins en vedette */}
-        <Text className="px-5 font-sans-bold text-ink text-lg mb-3">{t('Médecins en vedette')}</Text>
+        {/* Prestataires en vedette */}
+        <Text className="px-5 font-sans-bold text-ink text-lg mb-3">{t('Prestataires en vedette')}</Text>
         <View className="px-5">
           {doctorsLoading ? (
             <ActivityIndicator color={colors.primary} />
           ) : featured.length === 0 ? (
-            <Text className="font-sans text-muted">{t('Aucun médecin trouvé.')}</Text>
+            <Text className="font-sans text-muted">{t('Aucun prestataire trouvé.')}</Text>
           ) : (
             <>
               <SignInForPricing signedIn={false} className="mb-3" />
@@ -140,7 +141,7 @@ export default function PublicHome() {
                 <X color={colors.muted} size={22} />
               </Pressable>
             </View>
-            <Text className="font-sans text-sm text-muted mb-5">{t('Choisissez votre profil')}</Text>
+            <Text className="font-sans text-sm text-muted mb-5">{t('Choisis ton profil')}</Text>
 
             <Pressable
               onPress={() => chooseRole('/(auth)/login')}
@@ -151,7 +152,7 @@ export default function PublicHome() {
               </View>
               <View className="flex-1">
                 <Text className="font-sans-bold text-ink text-base">{t('Patient')}</Text>
-                <Text className="font-sans text-sm text-muted mt-0.5">{t('Consulter un médecin')}</Text>
+                <Text className="font-sans text-sm text-muted mt-0.5">{t('Consulter un prestataire')}</Text>
               </View>
               <ChevronRight color={colors.muted} size={20} />
             </Pressable>
