@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getCallSession } from '@/services/patientApi';
 import {
   endConsultation,
+  getPatientJoinedAt,
   getProviderCallContext,
   markPatientAbsent,
   notifyConsultationStarted,
@@ -24,6 +25,7 @@ import {
   type VideoFailure,
   type VideoUnavailable,
 } from '@/services/videoToken';
+import { CallOutcomeModal } from '@/components/CallOutcomeModal';
 import { useT } from '@/i18n';
 
 /** Au-delà de ce délai, la relance automatique à l'ouverture de la salle n'est pas programmée (le bouton reste). */
@@ -148,50 +150,48 @@ export default function VideoCall() {
     router.replace(`/provider/consultation-report/${consultationId}`);
   };
 
-  const askOutcome = (consultationId: string) => {
-    Alert.alert(
-      t("Fin de l'appel"),
-      t('Que veux-tu faire de cette consultation ?'),
-      [
-        {
-          text: t('Terminer la consultation'),
-          onPress: async () => {
-            try {
-              await endConsultation(consultationId, providerId);
-            } catch (e) {
-              // Refus (ex. appel jamais démarré) : message clair, le rapport reste accessible.
-              Alert.alert(t('Consultation non terminée'), (e as Error)?.message ?? '');
-            }
-            leaveToReport(consultationId);
-          },
-        },
-        {
-          text: t('Le patient est absent'),
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await markPatientAbsent(consultationId, providerId);
-            } catch (e) {
-              // Refus (trop tôt) ou panne : l'appel reste ouvert, on repropose le choix après le message.
-              const kind = (e as { kind?: string })?.kind;
-              const msg =
-                kind === 'no_show_too_early'
-                  ? (e as Error).message
-                  : t('Impossible de déclarer le patient absent. Réessaie.');
-              Alert.alert(t('Patient absent'), msg, [{ text: 'OK', onPress: () => askOutcome(consultationId) }], {
-                cancelable: false,
-              });
-              return;
-            }
-            // Patient absent : on ferme l'appel sans rapport.
-            endTrace();
-            leave();
-          },
-        },
-        { text: t('Revenir plus tard'), onPress: () => leaveToReport(consultationId) },
-      ],
-      { cancelable: false },
-    );
+  const [outcomeOpen, setOutcomeOpen] = useState(false);
+  const [patientJoinedAt, setPatientJoinedAt] = useState<string | null>(null);
+  // Relu à chaque ouverture de la boîte de fin d'appel (best effort : null tant que la colonne n'existe pas).
+  const providerConsultationId = providerCtx?.consultationId ?? null;
+  useEffect(() => {
+    if (!outcomeOpen || !providerConsultationId) return;
+    let cancelled = false;
+    getPatientJoinedAt(providerConsultationId).then((v) => {
+      if (!cancelled) setPatientJoinedAt(v);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [outcomeOpen, providerConsultationId]);
+
+  const endAndReport = async (consultationId: string) => {
+    setOutcomeOpen(false);
+    try {
+      await endConsultation(consultationId, providerId);
+    } catch (e) {
+      // Refus (ex. appel jamais démarré) : message clair, le rapport reste accessible.
+      Alert.alert(t('Consultation non terminée'), (e as Error)?.message ?? '');
+    }
+    leaveToReport(consultationId);
+  };
+
+  const absentAndLeave = async (consultationId: string) => {
+    try {
+      await markPatientAbsent(consultationId, providerId);
+    } catch (e) {
+      // Filet de sécurité (le bouton est normalement grisé) : l'appel reste ouvert, le choix est reproposé.
+      const kind = (e as { kind?: string })?.kind;
+      const msg =
+        kind === 'no_show_too_early' ? (e as Error).message : t('Impossible de déclarer le patient absent. Réessaie.');
+      setOutcomeOpen(false);
+      Alert.alert(t('Patient absent'), msg, [{ text: 'OK', onPress: () => setOutcomeOpen(true) }], { cancelable: false });
+      return;
+    }
+    // Patient absent : on ferme l'appel sans rapport.
+    setOutcomeOpen(false);
+    endTrace();
+    leave();
   };
 
   const close = () => {
@@ -199,7 +199,7 @@ export default function VideoCall() {
       leave();
       return;
     }
-    askOutcome(providerCtx.consultationId);
+    setOutcomeOpen(true);
   };
 
   const canRetry =
@@ -215,6 +215,20 @@ export default function VideoCall() {
 
   return (
     <View className="flex-1 bg-ink">
+      {providerCtx ? (
+        <CallOutcomeModal
+          visible={outcomeOpen}
+          scheduledAt={providerCtx.scheduledAt}
+          startedAt={providerCtx.startedAt}
+          patientJoinedAt={patientJoinedAt}
+          onEnd={() => endAndReport(providerCtx.consultationId)}
+          onAbsent={() => absentAndLeave(providerCtx.consultationId)}
+          onLater={() => {
+            setOutcomeOpen(false);
+            leaveToReport(providerCtx.consultationId);
+          }}
+        />
+      ) : null}
       <SafeAreaView className="flex-1" edges={['top', 'bottom']}>
         {/* En-tête */}
         <View className="flex-row items-center justify-between px-5 pt-2 pb-2">

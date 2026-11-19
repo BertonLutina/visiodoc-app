@@ -218,18 +218,38 @@ export async function notifyConsultationStarted(consultationId: string): Promise
 export async function getProviderCallContext(
   room: string,
   doctorId: string,
-): Promise<{ consultationId: string } | null> {
+): Promise<{ consultationId: string; scheduledAt: string | null; startedAt: string | null } | null> {
   if (!supabaseConfigured || !supabase || !room || !doctorId || !/^[A-Za-z0-9_-]+$/.test(room)) return null;
   try {
     const { data, error } = await supabase
       .from('consultations')
-      .select('id')
+      .select('id, scheduled_at, started_at')
       .or(`id.eq.${room},video_room_id.eq.${room}`)
       .eq('doctor_id', doctorId)
       .limit(1)
       .maybeSingle();
     if (error || !data) return null;
-    return { consultationId: (data as any).id };
+    const d = data as any;
+    return { consultationId: d.id, scheduledAt: d.scheduled_at ?? null, startedAt: d.started_at ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Instant où le patient a rejoint la consultation (`consultations.patient_joined_at`), lecture séparée et best effort :
+ * null si absent, et sur toute erreur (colonne pas encore migrée comprise), pour ne pas casser la requête principale.
+ */
+export async function getPatientJoinedAt(consultationId: string): Promise<string | null> {
+  if (!supabaseConfigured || !supabase || !consultationId) return null;
+  try {
+    const { data, error } = await supabase
+      .from('consultations')
+      .select('patient_joined_at')
+      .eq('id', consultationId)
+      .maybeSingle();
+    if (error || !data) return null;
+    return (data as any).patient_joined_at ?? null;
   } catch {
     return null;
   }

@@ -672,4 +672,6 @@ export const sw: Record<string, string> = {
   "Impossible de déclarer le patient absent. Réessaie.": "Imeshindikana kumweka mgonjwa kuwa hayupo. Jaribu tena.",
   "Tu pourras déclarer le patient absent 15 minutes après le lancement de l'appel, et pas avant l'heure du rendez-vous.": "Unaweza kumweka mgonjwa kuwa hayupo dakika 15 baada ya simu kuanzishwa, na si kabla ya muda wa miadi.",
   "Le rapport n'est disponible que si le patient s'est connecté (consultation en cours ou terminée).": "Ripoti inapatikana tu ikiwa mgonjwa alijiunga (mashauriano yanaendelea au yamemalizika).",
+  "Disponible dans {n} min": "Inapatikana baada ya dakika {n}",
+  "Le patient a rejoint la consultation": "Mgonjwa amejiunga na mashauriano",
 };

@@ -28,6 +28,7 @@ import {
   ConsultationReportError,
   endConsultation,
   getConsultationReport,
+  getPatientJoinedAt,
   getProviderCallContext,
   logVideoSessionEnd,
   logVideoSessionStart,
@@ -166,8 +167,8 @@ describe('endConsultation', () => {
 
 describe('video_sessions et contexte prestataire', () => {
   it("contexte : filtre sur doctor_id, null si pas le prestataire ou salle au format invalide", async () => {
-    mockResponses = [{ data: { id: 'c1' }, error: null }];
-    expect(await getProviderCallContext('room-1', 'd1')).toEqual({ consultationId: 'c1' });
+    mockResponses = [{ data: { id: 'c1', scheduled_at: 'S', started_at: null }, error: null }];
+    expect(await getProviderCallContext('room-1', 'd1')).toEqual({ consultationId: 'c1', scheduledAt: 'S', startedAt: null });
     expect(opsOf(0, 'eq')).toEqual([['doctor_id', 'd1']]);
     mockResponses = [{ data: null, error: null }];
     expect(await getProviderCallContext('room-1', 'd1')).toBeNull();
@@ -182,6 +183,18 @@ describe('video_sessions et contexte prestataire', () => {
     await logVideoSessionEnd('s1', 61.4);
     expect(opsOf(1, 'update')[0][0]).toMatchObject({ duration_seconds: 61 });
     expect(opsOf(1, 'eq')).toEqual([['id', 's1']]);
+  });
+});
+
+describe('getPatientJoinedAt', () => {
+  it('valeur présente, null, ou null sur erreur (colonne absente)', async () => {
+    mockResponses = [{ data: { patient_joined_at: '2026-11-20T10:01:00Z' }, error: null }];
+    expect(await getPatientJoinedAt('c1')).toBe('2026-11-20T10:01:00Z');
+    expect(opsOf(0, 'eq')).toEqual([['id', 'c1']]);
+    mockResponses = [{ data: { patient_joined_at: null }, error: null }];
+    expect(await getPatientJoinedAt('c1')).toBeNull();
+    mockResponses = [{ data: null, error: { code: '42703', message: 'column does not exist' } }];
+    expect(await getPatientJoinedAt('c1')).toBeNull();
   });
 });
 

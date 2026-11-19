@@ -672,4 +672,6 @@ export const ln: Record<string, string> = {
   "Impossible de déclarer le patient absent. Réessaie.": "Ekoki te kolakisa ete mobeli azali te. Meka lisusu.",
   "Tu pourras déclarer le patient absent 15 minutes après le lancement de l'appel, et pas avant l'heure du rendez-vous.": "Okoki kolakisa ete mobeli azali te nsima ya miniti 15 uta appel ebandaki, kasi te liboso ya ngonga ya rendez-vous.",
   "Le rapport n'est disponible que si le patient s'est connecté (consultation en cours ou terminée).": "Rapport ezali kaka soki mobeli akotaki (konsultasyon ezali kokende to esukoli).",
+  "Disponible dans {n} min": "Ekoki nsima ya miniti {n}",
+  "Le patient a rejoint la consultation": "Mobeli akoti na konsultasyon",
 };
