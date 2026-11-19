@@ -904,4 +904,9 @@ export const ln: Record<string, string> = {
   "Disponible dans {n} min": "Ekoki nsima ya miniti {n}",
   "Le patient a rejoint la consultation": "Mobeli akoti na konsultasyon",
   "Le patient a rejoint la consultation : tu ne peux pas le déclarer absent.": "Mobeli akoti na konsultasyon : okoki te kolobela ye ete azali te.",
+  "Tout marquer comme lu": "Kosala nyonso ete ebelelamaki",
+  "Aucune notification pour le moment": "Ezali na notification te mpo na ntango oyo",
+  "Tes rappels et alertes apparaîtront ici.": "Bikundoli mpe bansango na yo ekobima awa.",
+  "Impossible de charger tes notifications.": "Tokoki te kolongola notifications na yo.",
+  "Tire vers le bas pour réessayer.": "Kitisa na nse mpo na komeka lisusu.",
 };

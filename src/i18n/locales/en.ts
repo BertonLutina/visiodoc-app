@@ -904,4 +904,9 @@ export const en: Record<string, string> = {
   "Disponible dans {n} min": "Available in {n} min",
   "Le patient a rejoint la consultation": "The patient has joined the consultation",
   "Le patient a rejoint la consultation : tu ne peux pas le déclarer absent.": "The patient has joined the consultation: you cannot mark them as absent.",
+  "Tout marquer comme lu": "Mark all as read",
+  "Aucune notification pour le moment": "No notifications yet",
+  "Tes rappels et alertes apparaîtront ici.": "Your reminders and alerts will appear here.",
+  "Impossible de charger tes notifications.": "Unable to load your notifications.",
+  "Tire vers le bas pour réessayer.": "Pull down to try again.",
 };

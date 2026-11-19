@@ -904,4 +904,9 @@ export const sw: Record<string, string> = {
   "Disponible dans {n} min": "Inapatikana baada ya dakika {n}",
   "Le patient a rejoint la consultation": "Mgonjwa amejiunga na mashauriano",
   "Le patient a rejoint la consultation : tu ne peux pas le déclarer absent.": "Mgonjwa amejiunga na mashauriano: huwezi kumtangaza kuwa hayupo.",
+  "Tout marquer comme lu": "Weka zote kuwa zimesomwa",
+  "Aucune notification pour le moment": "Hakuna arifa kwa sasa",
+  "Tes rappels et alertes apparaîtront ici.": "Vikumbusho na tahadhari zako zitaonekana hapa.",
+  "Impossible de charger tes notifications.": "Imeshindikana kupakia arifa zako.",
+  "Tire vers le bas pour réessayer.": "Vuta chini ili ujaribu tena.",
 };
