@@ -78,6 +78,9 @@ function Row({
         </View>
         <Badge label={badgeLabel} tone={sb.tone} />
       </View>
+      {c.childFirstName ? (
+        <Text className="font-sans-semibold text-sm text-ink mt-3">{t('Pour : {name}', { name: c.childFirstName })}</Text>
+      ) : null}
       <Text className="font-sans-semibold text-sm text-clay mt-3">{c.dateLabel}</Text>
       <Text className="font-sans text-sm text-muted mt-0.5">
         {typeLabel(c.type)} · {c.durationMin} {t('min')} · {formatMoney(c.fee, country)}

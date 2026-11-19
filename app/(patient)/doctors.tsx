@@ -20,8 +20,12 @@ export default function DoctorsSearch() {
   const country = getCountry(user?.countryCode ?? 'CD');
   const [active, setActive] = useState('Tous');
   const [query, setQuery] = useState('');
+  const [childrenOnly, setChildrenOnly] = useState(false);
   const signedIn = !!user;
-  const { data: doctors, loading, refreshing, refresh } = useAsync(() => getDoctors({ signedIn }), [signedIn]);
+  const { data: doctors, loading, refreshing, refresh } = useAsync(
+    () => getDoctors({ signedIn, acceptsChildren: childrenOnly }),
+    [signedIn, childrenOnly],
+  );
 
   const list = useMemo(() => {
     return (doctors ?? []).filter((d) => {
@@ -52,6 +56,16 @@ export default function DoctorsSearch() {
           />
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <Pressable
+            onPress={() => setChildrenOnly((v) => !v)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: childrenOnly }}
+            className={`px-4 py-2 rounded-full mr-2 ${childrenOnly ? 'bg-primary' : 'bg-surface border border-line'}`}
+          >
+            <Text className={`text-sm font-sans-semibold ${childrenOnly ? 'text-white' : 'text-muted'}`}>
+              {t('Consultations pour enfants')}
+            </Text>
+          </Pressable>
           {filters.map((f) => {
             const on = f === active;
             return (

@@ -313,18 +313,39 @@ describe('getPatientConsultationHistory', () => {
 
   it('filters consultations by both doctor and patient, most recent first', async () => {
     const orderMock = jest.fn().mockResolvedValue({ data: [], error: null });
-    const eq2Mock = jest.fn(() => ({ order: orderMock }));
+    const isMock = jest.fn(() => ({ order: orderMock }));
+    const eq3Mock = jest.fn(() => ({ order: orderMock }));
+    const eq2Mock = jest.fn(() => ({ is: isMock, eq: eq3Mock }));
     const eq1Mock = jest.fn(() => ({ eq: eq2Mock }));
     const selectMock = jest.fn(() => ({ eq: eq1Mock }));
     const fromMock = jest.fn(() => ({ select: selectMock }));
     jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
 
     const { getPatientConsultationHistory: getFresh } = require('./providerApi');
-    await getFresh('doc-1', 'pat-1');
+    await getFresh('doc-1', 'pat-1', { childId: null });
 
     expect(eq1Mock).toHaveBeenCalledWith('doctor_id', 'doc-1');
     expect(eq2Mock).toHaveBeenCalledWith('patient_id', 'pat-1');
+    // Le parent seul : jamais les consultations de ses enfants.
+    expect(isMock).toHaveBeenCalledWith('child_id', null);
     expect(orderMock).toHaveBeenCalledWith('scheduled_at', { ascending: false });
+  });
+
+  it('limits the history to one child when a child is given', async () => {
+    const orderMock = jest.fn().mockResolvedValue({ data: [], error: null });
+    const isMock = jest.fn(() => ({ order: orderMock }));
+    const eq3Mock = jest.fn(() => ({ order: orderMock }));
+    const eq2Mock = jest.fn(() => ({ is: isMock, eq: eq3Mock }));
+    const eq1Mock = jest.fn(() => ({ eq: eq2Mock }));
+    const selectMock = jest.fn(() => ({ eq: eq1Mock }));
+    const fromMock = jest.fn(() => ({ select: selectMock }));
+    jest.doMock('@/lib/supabase', () => ({ supabase: { from: fromMock }, supabasePublic: null, supabaseConfigured: true }));
+
+    const { getPatientConsultationHistory: getFresh } = require('./providerApi');
+    await getFresh('doc-1', 'pat-1', { childId: 'child-1' });
+
+    expect(eq3Mock).toHaveBeenCalledWith('child_id', 'child-1');
+    expect(isMock).not.toHaveBeenCalled();
   });
 });
 

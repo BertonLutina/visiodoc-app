@@ -87,6 +87,44 @@ describe('bookConsultation / bookAndPayConsultation (enforced payment lock)', ()
     });
   });
 
+  it('does NOT send child_id for a booking for oneself (request identical to before)', async () => {
+    await load().bookConsultation(booking);
+    expect(Object.keys(insertedPayload())).not.toContain('child_id');
+    await load().bookConsultation({ ...booking, childId: null });
+    expect(Object.keys(insertMock.mock.calls[1][0])).not.toContain('child_id');
+  });
+
+  it('sends child_id only for a child booking', async () => {
+    await load().bookConsultation({ ...booking, childId: 'child-1' });
+    expect(insertedPayload()).toMatchObject({ patient_id: 'p1', child_id: 'child-1' });
+  });
+
+  it('turns a server refusal for a child (provider not accepting children) into a translated message, never raw text', async () => {
+    singleMock.mockResolvedValueOnce({
+      data: null,
+      error: { code: 'P0001', message: 'provider_does_not_accept_children: row 42 for Lea Mukendi' },
+    });
+    await expect(load().bookConsultation({ ...booking, childId: 'child-1' })).rejects.toThrow(
+      "Ce professionnel n'accepte pas les consultations pour des enfants.",
+    );
+  });
+
+  it('reads the child first name from the consultation relation (Pour : Léa)', () => {
+    const base = { id: 'c1', doctor_id: 'd1', scheduled_at: '2099-01-01T09:00:00Z', status: 'scheduled' };
+    const mapped = load().mapConsultation({ ...base, child_id: 'child-1', child: { first_name: 'Léa' } });
+    expect(mapped.childId).toBe('child-1');
+    expect(mapped.childFirstName).toBe('Léa');
+    expect(load().mapConsultation(base).childFirstName).toBeUndefined();
+  });
+
+  it('maps accepts_children from the listing: only true accepts children (null/false do not)', () => {
+    const row = { id: 'd1', first_name: 'A', last_name: 'B' };
+    expect(load().mapDoctor({ ...row, accepts_children: true }).acceptsChildren).toBe(true);
+    expect(load().mapDoctor({ ...row, accepts_children: false }).acceptsChildren).toBe(false);
+    expect(load().mapDoctor({ ...row, accepts_children: null }).acceptsChildren).toBe(false);
+    expect(load().mapDoctor(row).acceptsChildren).toBe(false);
+  });
+
   it('sends the DB value "audio" (not "phone") for a phone booking', async () => {
     await load().bookConsultation({ ...booking, type: 'phone' as const });
     expect(insertedPayload().consultation_type).toBe('audio');
@@ -675,9 +713,9 @@ describe('shouldHideCommercialInfo', () => {
 });
 
 describe('public doctor catalog (public_provider_listing)', () => {
-  const LIST_SELECT = 'id, first_name, last_name, avatar_url, specialty_labels, consultation_fee, currency_code, city, rating';
+  const LIST_SELECT = 'id, first_name, last_name, avatar_url, specialty_labels, consultation_fee, currency_code, city, rating, accepts_children';
   const DETAIL_SELECT =
-    'id, first_name, last_name, avatar_url, bio, years_of_experience, qualifications, languages, country_id, city, rating, total_consultations, availability_status, specialty_id, specialty_labels, consultation_fee, currency_code';
+    'id, first_name, last_name, avatar_url, bio, years_of_experience, qualifications, languages, country_id, city, rating, total_consultations, availability_status, specialty_id, specialty_labels, consultation_fee, currency_code, accepts_children';
 
   const sessionOrder = jest.fn();
   const sessionSelect = jest.fn();
@@ -737,6 +775,20 @@ describe('public doctor catalog (public_provider_listing)', () => {
 
   afterEach(() => {
     jest.dontMock('@/lib/supabase');
+  });
+
+  it('filter "Consultations pour enfants": only accepts_children = true is requested from the view', async () => {
+    const { getDoctors } = require('./patientApi');
+    publicEq.mockReturnValue({ order: publicOrder });
+    await getDoctors({ acceptsChildren: true });
+    expect(publicEq).toHaveBeenCalledWith('accepts_children', true);
+    expect(publicOrder).toHaveBeenCalledWith('rating', { ascending: false });
+  });
+
+  it('without the children filter, accepts_children is not filtered on', async () => {
+    const { getDoctors } = require('./patientApi');
+    await getDoctors();
+    expect(publicEq).not.toHaveBeenCalled();
   });
 
   it('reads public_provider_listing (never users) with the exact columns, best rated first', async () => {

@@ -7,6 +7,7 @@ import { Avatar, Badge, Card, SectionTitle } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { useAsync } from '@/hooks/useAsync';
 import { getPatient, getPatientConsultationHistory } from '@/services/providerApi';
+import { calculateChildAge, checkChildRecordAccess, getChild } from '@/services/childrenApi';
 import { genderLabel } from '@/services/registration';
 import { getMedicalRecords } from '@/services/patientApi';
 import { currentProvider } from '@/data/mockProvider';
@@ -18,7 +19,9 @@ import { useLanguage, useT } from '@/i18n';
 export default function PatientProfile() {
   const t = useT();
   const { code: lang } = useLanguage();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, childId: childIdParam } = useLocalSearchParams<{ id: string; childId?: string }>();
+  // Fiche d'un ENFANT (childId) ou du parent seul : jamais les deux dans le même écran.
+  const childId = childIdParam || null;
   const { user } = useAuth();
   const doctorId = user?.id ?? currentProvider.id;
   const [activeFilter, setActiveFilter] = useState('Tout');
@@ -27,14 +30,46 @@ export default function PatientProfile() {
   // `error` est lu explicitement : un refus RLS ne doit jamais s'afficher comme un dossier
   // vide (en clinique, « aucune allergie connue » et « lecture impossible » ne sont pas la
   // même information).
-  const { data: patient, error: patientError, reload: reloadPatient } = useAsync(() => getPatient(id), [id]);
+  const { data: adult, error: adultError, reload: reloadAdult } = useAsync(
+    () => (childId ? Promise.resolve(null) : getPatient(id)),
+    [id, childId],
+  );
+  const { data: child, error: childError, reload: reloadChild } = useAsync(
+    () => (childId ? getChild(childId) : Promise.resolve(null)),
+    [childId],
+  );
+  // Accès au dossier de l'enfant : un accès retiré par le parent prévaut sur la consultation.
+  const { data: childAccess } = useAsync(
+    () => (childId ? checkChildRecordAccess(doctorId, childId) : Promise.resolve({ hasAccess: true, isRevoked: false })),
+    [doctorId, childId],
+  );
+  const accessRevoked = !!childId && childAccess?.isRevoked === true;
+  const patient = useMemo(() => {
+    if (!childId) return adult;
+    if (!child) return null;
+    return {
+      id: child.id,
+      firstName: child.firstName,
+      lastName: child.lastName,
+      initials: `${child.firstName.charAt(0)}${child.lastName.charAt(0)}`.toUpperCase(),
+      age: calculateChildAge(child.dateOfBirth),
+      gender: child.gender,
+      bloodType: child.bloodType,
+      allergiesSummary: child.allergies,
+      address: null,
+      emergencyContactName: null,
+      emergencyContactPhone: null,
+    };
+  }, [adult, child, childId]);
+  const patientError = childId ? childError : adultError;
+  const reloadPatient = childId ? reloadChild : reloadAdult;
   const { data: records, error: recordsError, reload: reloadRecords } = useAsync(
-    () => getMedicalRecords(id),
-    [id, lang],
+    () => (accessRevoked ? Promise.resolve([]) : getMedicalRecords(id, { childId })),
+    [id, childId, lang, accessRevoked],
   );
   const { data: consultations, error: consultationsError } = useAsync(
-    () => getPatientConsultationHistory(doctorId, id),
-    [doctorId, id, lang],
+    () => getPatientConsultationHistory(doctorId, id, { childId }),
+    [doctorId, id, childId, lang],
   );
 
   useFocusEffect(
@@ -70,7 +105,7 @@ export default function PatientProfile() {
           <Text className="font-sans-bold text-lg text-ink">{t('Fiche patient')}</Text>
         </View>
         <Pressable
-          onPress={() => router.push(`/patient/record-form?patientId=${id}`)}
+          onPress={() => router.push(`/patient/record-form?patientId=${id}${childId ? `&childId=${childId}` : ''}`)}
           className="flex-row items-center bg-primary px-3.5 py-2 rounded-2xl"
         >
           <Plus color={colors.white} size={16} />
@@ -90,8 +125,11 @@ export default function PatientProfile() {
         <View className="items-center mb-6">
           <Avatar initials={patient?.initials ?? '?'} size={80} tone="light" />
           <Text className="font-serif-bold text-2xl text-ink mt-3">
-            {patient ? `${patient.firstName} ${patient.lastName}` : t('Patient')}
+            {patient ? `${patient.firstName} ${patient.lastName}` : childId ? t('Enfant') : t('Patient')}
           </Text>
+          {childId && patient ? (
+            <Text className="font-sans text-xs text-clay mt-1">{t('Profil santé déclaré par le parent')}</Text>
+          ) : null}
           {patient && (
             <Text className="font-sans text-sm text-muted mt-0.5">
               {patient.age !== null ? `${patient.age} ${t('ans')}` : t('Âge inconnu')}
@@ -136,7 +174,13 @@ export default function PatientProfile() {
           </Text>
         </Pressable>
 
-        {recordsError ? (
+        {accessRevoked ? (
+          <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-6">
+            <Text className="font-sans-semibold text-ink text-center">
+              {t("Le parent a retiré l'accès au dossier de l'enfant.")}
+            </Text>
+          </View>
+        ) : recordsError ? (
           <View className="bg-surface border border-line rounded-3xl p-6 items-center mb-6">
             <Text className="font-sans-semibold text-ink text-center">{t('Erreur de chargement. Réessayez.')}</Text>
           </View>
@@ -150,7 +194,7 @@ export default function PatientProfile() {
             return (
               <Pressable
                 key={r.id}
-                onPress={() => router.push(`/patient/record-form?patientId=${id}&recordId=${r.id}`)}
+                onPress={() => router.push(`/patient/record-form?patientId=${id}&recordId=${r.id}${childId ? `&childId=${childId}` : ''}`)}
                 style={{ opacity: r.status === 'inactive' ? 0.5 : 1 }}
               >
                 <Card className="mb-3 flex-row items-center">
