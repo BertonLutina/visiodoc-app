@@ -419,15 +419,21 @@ export function mapPaymentRow(row: {
 /** Type de `patient_wallet_transactions` posé par le serveur pour l'avoir « médecin absent » ([MOB-1611-1]). */
 export const NOSHOW_CREDIT_TYPE = 'noshow_credit';
 
+/** Type posé par la base quand le patient annule avec crédit ([MOB-1811-7]) : « Crédit d'annulation ». */
+export const CANCELLATION_CREDIT_TYPE = 'cancellation_credit';
+
+const WALLET_CREDIT_TYPES = [NOSHOW_CREDIT_TYPE, CANCELLATION_CREDIT_TYPE];
+
 /** Ligne d'avoir `noshow_credit` (montant en unité principale : `NUMERIC(18,2)`, pas ×100) → ligne d'historique, crédit. */
 export function mapWalletCreditRow(row: {
   id: string;
+  transaction_type?: string | null;
   amount?: number | string | null;
   created_at?: string | null;
 }): WalletTransaction {
   return {
     id: `wallet-${row.id}`,
-    label: 'Remboursement : médecin absent',
+    label: row.transaction_type === CANCELLATION_CREDIT_TYPE ? "Crédit d'annulation" : 'Remboursement : médecin absent',
     date: row.created_at
       ? new Date(row.created_at).toLocaleDateString(appLocale(), { day: 'numeric', month: 'short', year: 'numeric' })
       : '',
@@ -435,19 +441,19 @@ export function mapWalletCreditRow(row: {
   };
 }
 
-/** Avoirs `noshow_credit` du patient. Source complémentaire : une erreur (RLS, réseau) n'empêche jamais d'afficher les paiements. */
+/** Avoirs `noshow_credit` et `cancellation_credit` du patient. Source complémentaire : une erreur (RLS, réseau) n'empêche jamais d'afficher les paiements. */
 async function readNoshowCredits(patientId: string): Promise<{ ts: number; tx: WalletTransaction }[]> {
   try {
     const res = await supabase!
       .from('patient_wallet_transactions')
       .select('id, transaction_type, amount, created_at')
       .eq('patient_id', patientId)
-      .eq('transaction_type', NOSHOW_CREDIT_TYPE)
+      .in('transaction_type', WALLET_CREDIT_TYPES)
       .order('created_at', { ascending: false })
       .limit(30);
     if (!res || res.error) return [];
     return ((res.data ?? []) as any[])
-      .filter((row) => row.transaction_type === NOSHOW_CREDIT_TYPE)
+      .filter((row) => WALLET_CREDIT_TYPES.includes(row.transaction_type))
       .map((row) => ({ ts: Date.parse(row.created_at ?? '') || 0, tx: mapWalletCreditRow(row) }));
   } catch {
     return [];

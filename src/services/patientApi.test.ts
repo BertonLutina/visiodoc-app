@@ -524,6 +524,18 @@ describe('mapWalletCreditRow (avoir noshow_credit)', () => {
   });
 });
 
+describe('mapWalletCreditRow (avoir cancellation_credit)', () => {
+  it("affiche « Crédit d'annulation » comme un crédit, en unité principale", () => {
+    const tx = require('./patientApi').mapWalletCreditRow({
+      id: 'w2',
+      transaction_type: 'cancellation_credit',
+      amount: '30000.00',
+      created_at: '2026-11-19T10:12:00.000Z',
+    });
+    expect(tx).toMatchObject({ id: 'wallet-w2', label: "Crédit d'annulation", amount: 30000 });
+  });
+});
+
 describe('getWallet avec avoirs noshow_credit', () => {
   const fromMock = jest.fn();
   let walletResult: { data: unknown; error: unknown } | undefined;
@@ -534,6 +546,7 @@ describe('getWallet avec avoirs noshow_credit', () => {
       select: () => {
         const q: any = {};
         q.eq = () => q;
+        q.in = () => q;
         q.order = () => q;
         q.limit = () =>
           Promise.resolve(
@@ -556,12 +569,14 @@ describe('getWallet avec avoirs noshow_credit', () => {
       data: [
         { id: 'c1', transaction_type: 'noshow_credit', amount: 10000, created_at: '2026-11-16T10:00:00.000Z' },
         { id: 'b1', transaction_type: 'booking_debit', amount: -5000, created_at: '2026-11-16T11:00:00.000Z' },
+        { id: 'a1', transaction_type: 'cancellation_credit', amount: 7000, created_at: '2026-11-15T10:00:00.000Z' },
       ],
       error: null,
     };
     const wallet = await require('./patientApi').getWallet('pat-1');
     expect(fromMock).toHaveBeenCalledWith('patient_wallet_transactions');
-    expect(wallet.transactions.map((t: { id: string }) => t.id)).toEqual(['wallet-c1', 'pay']);
+    expect(wallet.transactions.map((t: { id: string }) => t.id)).toEqual(['wallet-c1', 'wallet-a1', 'pay']);
+    expect(wallet.transactions[1]).toMatchObject({ label: "Crédit d'annulation", amount: 7000 });
     expect(wallet.transactions[0]).toMatchObject({ label: 'Remboursement : médecin absent', amount: 10000 });
     expect(wallet.balance).toBe(10000); // total payé inchangé : 1 000 000 / 100
   });
@@ -586,7 +601,7 @@ describe('getWallet embed fallback (PGRST200: relationship not found)', () => {
     fromMock.mockImplementation((table: string) => ({
       select: (sel: string) => {
         if (table === 'patient_wallet_transactions') {
-          const w: any = { eq: () => w, order: () => w, limit: () => Promise.resolve({ data: [], error: null }) };
+          const w: any = { eq: () => w, in: () => w, order: () => w, limit: () => Promise.resolve({ data: [], error: null }) };
           return w;
         }
         selects.push(sel);

@@ -13,11 +13,17 @@ import {
   getUpcomingConsultations,
   payExistingConsultation,
 } from '@/services/patientApi';
+import {
+  cancelScheduledConsultation,
+  buildCancellationMessage,
+  getCancellationCreditPreview,
+} from '@/services/consultationCancel';
 import { PaymentConfirmationError, reconcilePendingPayments } from '@/services/paymentAttempt';
 import { listPendingAttempts } from '@/services/pendingPaymentAttempt';
 import { createOpenPaymentWidget, paymentWidgetPreflight } from '@/services/paymentWidget';
 import { createBusyLock } from '@/utils/busyLock';
 import { canPayNow } from '@/utils/canPayNow';
+import { canPatientCancel } from '@/utils/canPatientCancel';
 import { showDismissedPaymentPrompt } from '@/utils/paymentPrompts';
 import { supportCaseNotifier } from '@/utils/supportCaseNotice';
 import type { Consultation, ConsultationStatus } from '@/types';
@@ -38,6 +44,9 @@ function Row({
   onPay,
   paying,
   canPay,
+  canCancel,
+  onCancel,
+  cancelling,
   supportRef,
 }: {
   c: Consultation;
@@ -46,6 +55,9 @@ function Row({
   onPay: (c: Consultation) => void;
   paying: boolean;
   canPay: boolean;
+  canCancel: boolean;
+  onCancel: (c: Consultation) => void;
+  cancelling: boolean;
   /** `txnRef` d'un paiement reçu dont la consultation n'a pas pu être confirmée (cas support). */
   supportRef?: string;
 }) {
@@ -89,6 +101,16 @@ function Row({
           label={t('Rejoindre la consultation')}
           className="mt-3"
           onPress={() => router.push(`/call/${c.roomId ?? c.id}`)}
+        />
+      )}
+      {canCancel && (
+        <Button
+          label={t('Annuler la consultation')}
+          variant="outline"
+          className="mt-3"
+          loading={cancelling}
+          disabled={cancelling}
+          onPress={() => onCancel(c)}
         />
       )}
     </Card>
@@ -206,6 +228,44 @@ export default function Appointments() {
     });
   };
 
+  const cancelLock = useRef(createBusyLock()).current; // verrou synchrone : un double appui ne lance qu'une annulation
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  const refreshAll = () => Promise.all([up.refresh(), pastReq.refresh()]);
+
+  const confirmCancel = (c: Consultation, message: string) =>
+    new Promise<boolean>((resolve) => {
+      Alert.alert(
+        t('Annuler la consultation'),
+        message,
+        [
+          { text: t('Garder'), style: 'cancel', onPress: () => resolve(false) },
+          { text: t('Annuler la consultation'), style: 'destructive', onPress: () => resolve(true) },
+        ],
+        { cancelable: true, onDismiss: () => resolve(false) },
+      );
+    });
+
+  const onCancel = (c: Consultation) => {
+    void cancelLock.run(async () => {
+      setCancellingId(c.id);
+      try {
+        const preview = await getCancellationCreditPreview(c.id);
+        if (!(await confirmCancel(c, buildCancellationMessage(preview)))) return;
+        try {
+          await cancelScheduledConsultation(c.id);
+          Alert.alert(t('Consultation annulée'));
+        } catch (e: any) {
+          Alert.alert(t('Annulation impossible'), e?.message ?? t('Réessayez plus tard.'));
+        } finally {
+          await refreshAll();
+        }
+      } finally {
+        setCancellingId(null);
+      }
+    });
+  };
+
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
     setRefreshing(true);
@@ -249,6 +309,9 @@ export default function Appointments() {
             onPay={onPay}
             paying={payingId === c.id}
             canPay={canPayNow(c, Date.now(), attemptIds.has(c.id))}
+            canCancel={tab === 'upcoming' && canPatientCancel(c, Date.now())}
+            onCancel={onCancel}
+            cancelling={cancellingId === c.id}
             supportRef={supportRefs[c.id]}
           />
         ))}
