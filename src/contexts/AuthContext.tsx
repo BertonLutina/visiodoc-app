@@ -29,6 +29,7 @@ import {
 } from '@/services/loginCredentialsFlag';
 import { getServiceTypeCatalog } from '@/services/specializationCatalog';
 import { mapCountryNotOpenError } from '@/services/registration';
+import { legalServerErrorMessage } from '@/services/legal';
 import { completePhoneIdentity, type PhoneIdentityInput } from '@/services/patientIdentity';
 import { isSessionExpiry, onSessionExpired, reportSessionExpiry } from '@/services/sessionExpiry';
 import { createSessionExpiryTracker } from '@/services/sessionExpiryTracker';
@@ -72,6 +73,8 @@ interface RegisterPatientInput {
   dateOfBirth: string;
   city?: string;
   commune?: string;
+  /** Case « données de santé » (MOB-1811-6), obligatoire. */
+  healthConsent?: boolean;
 }
 
 interface RegisterProviderInput {
@@ -726,7 +729,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch {
             /* ignore */
           }
-          throw edgeFunctionError(resBody, error.message);
+          const legalMessage = legalServerErrorMessage(resBody?.error);
+          throw edgeFunctionError(legalMessage ? { error: legalMessage } : resBody, error.message);
         }
         if (data?.error) throw edgeFunctionError(data);
         // Pas de connexion auto : le compte doit d'abord être validé par l'admin.

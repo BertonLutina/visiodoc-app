@@ -26,6 +26,8 @@ import {
   markCodeSent,
 } from '@/services/registration';
 import { fetchOtpDeliveryInfo, otpIntroText, otpSentText, sendCodeLabel, type OtpDeliveryInfo } from '@/services/otpDelivery';
+import { LegalNotice, HealthConsentCheckbox } from '@/components/LegalConsent';
+import { healthConsentIssue } from '@/services/legal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -52,6 +54,7 @@ export default function PhoneLogin() {
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [city, setCity] = useState('');
   const [commune, setCommune] = useState('');
+  const [healthConsent, setHealthConsent] = useState(false); // jamais cochée par défaut
   // Connexion : aucun choix de Visiodoc. Pays de l'étape d'identité d'une première inscription : RDC (inchangé).
   const countryCode = PHONE_IDENTITY_COUNTRY_CODE;
   const [fullPhone, setFullPhone] = useState('');
@@ -148,6 +151,12 @@ export default function PhoneLogin() {
   const onSaveIdentity = async () => {
     setErrorMsg(null);
     if (!identityUserId) return;
+    // Consentement santé : contrôlé avant tout appel réseau.
+    const consentIssue = healthConsentIssue(healthConsent);
+    if (consentIssue) {
+      setErrorMsg(consentIssue);
+      return;
+    }
     const dobIssue = birthDateIssue(dateOfBirth);
     if (dobIssue) {
       setErrorMsg(birthDateMessage(dobIssue));
@@ -163,6 +172,7 @@ export default function PhoneLogin() {
         dateOfBirth,
         city,
         commune,
+        healthConsent,
       });
       void recordPlaceIfNew(city, commune, countryCode); // saisie libre inconnue, au mieux
       if (afterIdentity === 'credentials') setStep('credentials');
@@ -325,6 +335,7 @@ export default function PhoneLogin() {
               onCityChange={setCity}
               onCommuneChange={setCommune}
             />
+            <HealthConsentCheckbox checked={healthConsent} onChange={setHealthConsent} />
             {errorMsg ? (
               <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
                 <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
@@ -345,6 +356,7 @@ export default function PhoneLogin() {
               }
               onPress={onSaveIdentity}
             />
+            <LegalNotice className="mt-3" />
           </>
         ) : (
           <>

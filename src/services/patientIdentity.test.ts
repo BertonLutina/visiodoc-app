@@ -28,6 +28,7 @@ const input: PhoneIdentityInput = {
   dateOfBirth: '1990-06-15',
   city: ' Matadi ',
   commune: '',
+  healthConsent: true,
 };
 
 beforeEach(() => {
@@ -118,8 +119,41 @@ describe('completePhoneIdentity', () => {
   });
 
   it('does not fail when recording a new city fails', async () => {
-    mockRpc.mockRejectedValue(new Error('rpc down'));
+    mockRpc.mockImplementation((name: string) =>
+      name === 'record_legal_acceptance'
+        ? Promise.resolve({ data: 'id', error: null })
+        : Promise.reject(new Error('rpc down')),
+    );
     await expect(completePhoneIdentity('user-1', input)).resolves.toBeUndefined();
+  });
+});
+
+describe('completePhoneIdentity : preuve légale (MOB-1811-6)', () => {
+  it('refuses without the health consent before any network call', async () => {
+    await expect(completePhoneIdentity('user-1', { ...input, healthConsent: false })).rejects.toThrow(
+      'Le consentement au traitement des données de santé est obligatoire pour créer un compte patient.',
+    );
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('records cgu_patient, privacy and health_consent with the signup context on mobile', async () => {
+    await completePhoneIdentity('user-1', input);
+    const calls = mockRpc.mock.calls.filter((c) => c[0] === 'record_legal_acceptance').map((c) => c[1]);
+    expect(calls).toEqual([
+      { p_document: 'cgu_patient', p_version: 'CGU-PATIENT-v2', p_context: 'signup', p_platform: 'mobile' },
+      { p_document: 'privacy', p_version: 'CONFID-v2', p_context: 'signup', p_platform: 'mobile' },
+      { p_document: 'health_consent', p_version: 'CONSENT-SANTE-v1', p_context: 'signup', p_platform: 'mobile' },
+    ]);
+  });
+
+  it('blocks with a translated message when the proof cannot be recorded', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockRpc.mockResolvedValue({ data: null, error: { code: 'XX000', message: 'secret internal text' } });
+    await expect(completePhoneIdentity('user-1', input)).rejects.toThrow(
+      "Ton acceptation n'a pas pu être enregistrée. Réessaie dans un instant.",
+    );
+    expect(warn).toHaveBeenCalledWith('[legal:record] XX000');
+    warn.mockRestore();
   });
 });
 

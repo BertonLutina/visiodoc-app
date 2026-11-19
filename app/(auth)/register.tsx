@@ -15,6 +15,8 @@ import { ResendConfirmation } from '@/components/ResendConfirmation';
 import { passwordIssue } from '@/services/passwordPolicy';
 import { registerPatientErrorMessage, type Gender } from '@/services/registration';
 import { birthDateIssue, birthDateMessage } from '@/utils/birthDate';
+import { LegalNotice, HealthConsentCheckbox } from '@/components/LegalConsent';
+import { healthConsentIssue } from '@/services/legal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useT } from '@/i18n';
 
@@ -32,6 +34,7 @@ export default function RegisterPatient() {
     commune: '',
   });
   const [dateOfBirth, setDateOfBirth] = useState('');
+  const [healthConsent, setHealthConsent] = useState(false); // jamais cochée par défaut
   const [gender, setGender] = useState<Gender | null>(null); // aucun choix par défaut
   const [countryCode, setCountryCode] = useState('CD'); // RD Congo par défaut
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -44,6 +47,12 @@ export default function RegisterPatient() {
   const onSubmit = async () => {
     setErrorMsg(null);
     if (!gender) return;
+    // Consentement santé : contrôlé avant tout appel réseau.
+    const consentIssue = healthConsentIssue(healthConsent);
+    if (consentIssue) {
+      setErrorMsg(consentIssue);
+      return;
+    }
     // Contrôle des 18 ans révolus avant l'appel (le serveur le refait).
     const dobIssue = birthDateIssue(dateOfBirth);
     if (dobIssue) {
@@ -63,6 +72,7 @@ export default function RegisterPatient() {
         dateOfBirth,
         city: form.city,
         commune: form.commune,
+        healthConsent,
       });
       // Pas de connexion ni de redirection automatique tant que l'adresse n'est pas confirmée.
       if (result.requiresEmailConfirmation) setSent({ email: form.email.trim(), at: Date.now() });
@@ -142,6 +152,8 @@ export default function RegisterPatient() {
           onCommuneChange={set('commune')}
         />
 
+        <HealthConsentCheckbox checked={healthConsent} onChange={setHealthConsent} />
+
         {errorMsg ? (
           <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">
             <Text className="font-sans-medium text-sm text-danger text-center">{errorMsg}</Text>
@@ -161,6 +173,7 @@ export default function RegisterPatient() {
           onPress={onSubmit}
           className="mt-2"
         />
+        <LegalNotice className="mt-3" />
 
         <View className="flex-row justify-center mt-5">
           <Text className="font-sans text-muted">{t('Déjà inscrit ?')} </Text>

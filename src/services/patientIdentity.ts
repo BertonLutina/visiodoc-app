@@ -4,6 +4,7 @@ import { isGender, mapCountryNotOpenError, type Gender } from '@/services/regist
 import { countryUsesPostnom } from '@/config/countries';
 import { identityNamesIssue } from '@/utils/identityNames';
 import { birthDateIssue, birthDateMessage, normalizePlace } from '@/utils/birthDate';
+import { healthConsentIssue, recordPhoneSignupAcceptances } from '@/services/legal';
 import type { User } from '@/types';
 
 /** Pays du parcours téléphone (la ligne `patients` est écrite avec `RDC`). */
@@ -24,6 +25,8 @@ export interface PhoneIdentityInput {
   dateOfBirth: string;
   city?: string;
   commune?: string;
+  /** Case « données de santé » cochée (MOB-1811-6), obligatoire. */
+  healthConsent?: boolean;
 }
 
 /** Un patient connecté par code sans nom de famille n'a pas encore complété son identité. */
@@ -33,6 +36,8 @@ export function needsPhoneIdentity(user: Pick<User, 'role' | 'lastName'> | null 
 
 /** Message d'erreur du premier champ invalide, ou `null` ; vérifié AVANT tout appel réseau. */
 export function phoneIdentityIssue(input: PhoneIdentityInput, today?: Date): string | null {
+  const consent = healthConsentIssue(input.healthConsent);
+  if (consent) return consent;
   const names = identityNamesIssue(input, countryUsesPostnom(PHONE_IDENTITY_COUNTRY_CODE));
   if (names) return names;
   if (!isGender(input.gender)) return translate('Choisis ton genre : Masculin ou Féminin.');
@@ -90,6 +95,9 @@ export async function completePhoneIdentity(userId: string, input: PhoneIdentity
     }
     throw mapCountryNotOpenError(patientError);
   }
+
+  // Preuve légale (CGU patient, confidentialité, consentement santé) : bloquante, voir `recordPhoneSignupAcceptances`.
+  await recordPhoneSignupAcceptances();
 
   await recordPlacesBestEffort(input);
 }
