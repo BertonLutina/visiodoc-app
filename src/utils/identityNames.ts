@@ -28,7 +28,7 @@ export function identityNamesIssue(names: IdentityNames, usesPostnom: boolean): 
 }
 
 /**
- * Nom de l'accueil « Bonjour, … » : le prénom ; à défaut le post-nom (la règle des noms garantit l'un des deux
+ * Nom de l'accueil « Bonjour … » : le prénom ; à défaut le post-nom (la règle des noms garantit l'un des deux
  * pour un pays à post-nom) ; à défaut le nom de famille. Chaîne vide si rien n'est renseigné.
  */
 export function greetingName(names: IdentityNames): string {

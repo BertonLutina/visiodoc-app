@@ -60,7 +60,7 @@ export default function PatientDashboard() {
         <View className="flex-row items-center justify-between px-5 pt-3 pb-5">
           <View className="flex-1 pr-3">
             <Text className="font-serif-bold text-2xl text-ink">
-              {greeting ? t('Bonjour, {name}', { name: greeting }) : t('Bienvenue')}
+              {greeting ? t('Bonjour {name}', { name: greeting }) : t('Bienvenue')}
             </Text>
           </View>
           <View className="flex-row items-center">
