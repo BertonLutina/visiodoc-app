@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FolderHeart, Wallet, Calendar, Video, CalendarPlus } from 'lucide-react-native';
 import { BrandGlyph } from '@/components/BrandGlyph';
@@ -31,6 +31,20 @@ export default function PatientDashboard() {
   const pastReq = useAsync(() => getPastConsultations(uid), [uid, lang]);
   const { data: upcoming, loading: upLoading } = up;
   const { data: past } = pastReq;
+
+  // Retour sur l'accueil (ex. après une annulation) : relit les consultations. Le premier focus est déjà couvert
+  // par le chargement initial de useAsync.
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      void Promise.all([up.refresh(), pastReq.refresh()]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
@@ -117,16 +131,20 @@ export default function PatientDashboard() {
 
         {/* Stats */}
         <View className="px-5 flex-row justify-between mb-5">
-          <Card className="w-[48%]">
-            <Text className="font-serif-bold text-4xl text-ink">{pastList.length}</Text>
-            <Text className="font-sans-semibold text-sm text-ink mt-1">{t('Consultations')}</Text>
-            <Text className="font-sans text-xs text-muted">{t('au total')}</Text>
-          </Card>
-          <Card className="w-[48%]">
-            <Text className="font-serif-bold text-4xl text-ink">{upList.filter((c) => !c.awaitingPayment).length}</Text>
-            <Text className="font-sans-semibold text-sm text-ink mt-1">{t('À venir')}</Text>
-            <Text className="font-sans text-xs text-muted">{t('consultations')}</Text>
-          </Card>
+          <Pressable className="w-[48%]" onPress={() => router.push('/(patient)/appointments?tab=upcoming' as never)}>
+            <Card>
+              <Text className="font-serif-bold text-4xl text-ink">{upList.filter((c) => !c.awaitingPayment).length}</Text>
+              <Text className="font-sans-semibold text-sm text-ink mt-1">{t('À venir')}</Text>
+              <Text className="font-sans text-xs text-muted">{t('consultations')}</Text>
+            </Card>
+          </Pressable>
+          <Pressable className="w-[48%]" onPress={() => router.push('/(patient)/appointments?tab=past' as never)}>
+            <Card>
+              <Text className="font-serif-bold text-4xl text-ink">{pastList.length}</Text>
+              <Text className="font-sans-semibold text-sm text-ink mt-1">{t('Consultations')}</Text>
+              <Text className="font-sans text-xs text-muted">{t('au total')}</Text>
+            </Card>
+          </Pressable>
         </View>
 
         {/* Accès rapides */}

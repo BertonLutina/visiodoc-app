@@ -1,6 +1,6 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Badge, Button, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
@@ -78,6 +78,9 @@ function Row({
           </Text>
           <Text className="font-sans text-xs text-muted mt-0.5">{c.doctor.specialty}</Text>
         </View>
+      </View>
+      {/* Statut (et mention « remboursé en avoir ») sous l'identité, jamais tassés dans la colonne du nom. */}
+      <View className="flex-row flex-wrap items-center mt-2.5">
         <Badge label={badgeLabel} tone={sb.tone} />
       </View>
       {c.childFirstName ? (
@@ -128,7 +131,12 @@ export default function Appointments() {
   const { user } = useAuth();
   const uid = user?.id ?? 'patient-1';
   const country = getCountry(user?.countryCode ?? 'CD');
-  const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
+  // `?tab=past|upcoming` : l'accueil ouvre directement l'onglet voulu (les ouvertures suivantes réappliquent le paramètre).
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<'upcoming' | 'past'>(params.tab === 'past' ? 'past' : 'upcoming');
+  useEffect(() => {
+    if (params.tab === 'past' || params.tab === 'upcoming') setTab(params.tab);
+  }, [params.tab]);
   const up = useAsync(() => getUpcomingConsultations(uid), [uid, lang]);
   const pastReq = useAsync(() => getPastConsultations(uid), [uid, lang]);
   const data = (tab === 'upcoming' ? up.data : pastReq.data) ?? [];
