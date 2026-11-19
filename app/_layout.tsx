@@ -81,6 +81,7 @@ export default function RootLayout() {
     Mulish_600SemiBold,
     Mulish_700Bold,
     Mulish_800ExtraBold,
+    'Poppins-Bold': require('../assets/fonts/Poppins-Bold.ttf'),
   });
 
   if (!fontsLoaded) {

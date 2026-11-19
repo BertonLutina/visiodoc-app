@@ -19,6 +19,7 @@ import { LegalNotice, HealthConsentCheckbox } from '@/components/LegalConsent';
 import { healthConsentIssue } from '@/services/legal';
 import { HEALTH_CONSENT_DEFAULT } from '@/config/legalVersions';
 import { useAuth } from '@/contexts/AuthContext';
+import { BrandLogo } from '@/components/BrandLogo';
 import { useT } from '@/i18n';
 
 export default function RegisterPatient() {
@@ -88,7 +89,7 @@ export default function RegisterPatient() {
       <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
           <View className="items-center mb-7 mt-2">
-            <Text className="font-serif-bold text-3xl text-primary mb-4">visiodoc</Text>
+            <View className="mb-4"><BrandLogo size={48} withWordmark /></View>
             <ScreenTitle center>{t('Vérifie ta boîte e-mail')}</ScreenTitle>
             <Text className="font-sans text-base text-muted mt-3 text-center">
               {t('Nous avons envoyé un lien de confirmation à')}
@@ -115,7 +116,7 @@ export default function RegisterPatient() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
         <View className="items-center mb-7 mt-2">
-          <Text className="font-serif-bold text-3xl text-primary mb-4">visiodoc</Text>
+          <View className="mb-4"><BrandLogo size={48} withWordmark /></View>
           <ScreenTitle center>{t('Créons votre compte')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2">{t('Quelques détails pour commencer')}</Text>
         </View>

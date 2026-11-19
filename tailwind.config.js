@@ -52,6 +52,8 @@ module.exports = {
         serif: ['Fraunces_500Medium'],
         'serif-semibold': ['Fraunces_600SemiBold'],
         'serif-bold': ['Fraunces_700Bold'],
+        // Mot-symbole VisioDoc
+        brand: ['Poppins-Bold'],
       },
     },
   },

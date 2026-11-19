@@ -27,7 +27,7 @@
       "package": "com.visiodoc.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0F6E56"
+        "backgroundColor": "#128D74"
       },
       "permissions": [
         "CAMERA",
@@ -83,7 +83,7 @@
         {
           "image": "./assets/splash.png",
           "resizeMode": "cover",
-          "backgroundColor": "#0F6E56"
+          "backgroundColor": "#128D74"
         }
       ],
       "expo-web-browser",
