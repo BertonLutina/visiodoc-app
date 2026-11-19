@@ -121,6 +121,9 @@ export function buildRoomWebViewUrl(session: VideoSession, displayName?: string 
     'config.disableDeepLinking=true',
     'config.prejoinConfig.enabled=false',
     'config.prejoinPageEnabled=false',
+    // Caméra et micro actifs dès l'entrée, sans réglage par l'utilisateur (retour de Chris, 19/11).
+    'config.startWithAudioMuted=false',
+    'config.startWithVideoMuted=false',
   ];
   const name = displayName?.trim();
   if (name) parts.push(`userInfo.displayName=${encodeURIComponent(JSON.stringify(name))}`);

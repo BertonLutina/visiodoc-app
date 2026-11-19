@@ -200,7 +200,7 @@ describe('buildRoomWebViewUrl', () => {
   it('is the contract URL plus a client-side fragment that skips the "open in the app" page', () => {
     const url = buildRoomWebViewUrl(OK_PAYLOAD.data);
     expect(url).toBe(
-      `${buildRoomUrl(OK_PAYLOAD.data)}#config.disableDeepLinking=true&config.prejoinConfig.enabled=false&config.prejoinPageEnabled=false`,
+      `${buildRoomUrl(OK_PAYLOAD.data)}#config.disableDeepLinking=true&config.prejoinConfig.enabled=false&config.prejoinPageEnabled=false&config.startWithAudioMuted=false&config.startWithVideoMuted=false`,
     );
     // le fragment n'est jamais envoyé au serveur : la requête reste `${serverUrl}/${roomName}?jwt=${jwt}`
     expect(url.split('#')[0]).toBe(buildRoomUrl(OK_PAYLOAD.data));
