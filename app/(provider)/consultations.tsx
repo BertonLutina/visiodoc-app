@@ -6,6 +6,7 @@ import { Avatar, Badge, Card } from '@/components/ui';
 import { colors } from '@/theme/colors';
 import { isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
 import { canStartConsultation, canWriteReport } from '@/utils/canStart';
+import { clockTime } from '@/utils/nextConsultation';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import { getProviderConsultations, getTodayConsultations } from '@/services/providerApi';
@@ -71,7 +72,7 @@ function Row({ c, canStart }: { c: ProviderConsultation; canStart: boolean }) {
               accessibilityState={{ disabled: !startable }}
               className={`flex-1 rounded-2xl py-3.5 items-center mr-2 ${startable ? 'bg-accent' : 'bg-line'}`}
             >
-              <Text className={`font-sans-bold ${startable ? 'text-white' : 'text-muted'}`}>{t('Démarrer')}</Text>
+              <Text className={`font-sans-bold ${startable ? 'text-white' : 'text-muted'}`}>{startable || win.phase !== 'before' || !c.scheduledAt ? t('Démarrer') : t('Disponible à {time}', { time: clockTime(c.scheduledAt) })}</Text>
             </Pressable>
           )}
           {canWrite && (

@@ -908,4 +908,7 @@ export const ln: Record<string, string> = {
   "Tes rappels et alertes apparaîtront ici.": "Bikundoli mpe bansango na yo ekobima awa.",
   "Impossible de charger tes notifications.": "Tokoki te kolongola notifications na yo.",
   "Tire vers le bas pour réessayer.": "Kitisa na nse mpo na komeka lisusu.",
+  "Consultation de {time}": "Konsultasyon ya {time}",
+  "Disponible à {time}": "Ekoki na {time}",
+  "Tu confirmes la fin de la consultation ?": "Ondimi kosukola konsultasyon?",
 };

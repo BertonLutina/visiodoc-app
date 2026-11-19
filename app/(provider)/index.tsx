@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
 import {
   getDashboardOverview,
+  getProviderConsultations,
   getReviewSummary,
   getTodayConsultations,
   getValidationStatus,
@@ -31,6 +32,7 @@ import { currentProvider } from '@/data/mockProvider';
 import { formatAmountInCurrency, isProviderAbsent, providerAbsentLabel, typeLabel } from '@/utils/format';
 import { translate } from '@/i18n';
 import { AcceptsChildrenPrompt } from '@/components/AcceptsChildren';
+import { clockTime, pickNextConsultation } from '@/utils/nextConsultation';
 import type { ProviderConsultation } from '@/types/provider';
 import { useLanguage, useT } from '@/i18n';
 
@@ -102,6 +104,7 @@ export default function ProviderDashboard() {
   const uid = user?.id ?? currentProvider.id;
   const overviewReq = useAsync(() => getDashboardOverview(uid), [uid, lang]);
   const todayReq = useAsync(() => getTodayConsultations(uid), [uid, lang]);
+  const upcomingReq = useAsync(() => getProviderConsultations(uid, ['scheduled', 'in_progress']), [uid, lang]);
   const reviewsReq = useAsync(() => getReviewSummary(uid), [uid]);
   const statusReq = useAsync(() => getValidationStatus(uid), [uid]);
 
@@ -114,7 +117,7 @@ export default function ProviderDashboard() {
   const [starting, setStarting] = useState(false);
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([overviewReq.refresh(), todayReq.refresh(), reviewsReq.refresh(), statusReq.refresh()]);
+    await Promise.all([overviewReq.refresh(), todayReq.refresh(), upcomingReq.refresh(), reviewsReq.refresh(), statusReq.refresh()]);
     setRefreshing(false);
   };
 
@@ -126,7 +129,13 @@ export default function ProviderDashboard() {
     : currentProvider.initials;
 
   const alerts = ov ? buildAlerts({ validationStatus, overview: ov }) : [];
-  const next = ov?.next ?? null;
+  // Bloc « Prochaine consultation » : la consultation en cours, sinon la plus proche à venir. Bouton grisé jusqu'à l'ouverture.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const next = pickNextConsultation(upcomingReq.data ?? [], now);
   const nextWin = useStartWindow(next?.scheduledAt, next?.rawStatus);
   const nextStartable = canStartNow(nextWin);
   const nextWinMessage = startWindowMessage(nextWin);
@@ -257,11 +266,19 @@ export default function ProviderDashboard() {
               <Pressable
                 onPress={() => onStart(next)}
                 disabled={starting || !nextStartable}
+                accessibilityRole="button"
                 accessibilityState={{ disabled: starting || !nextStartable }}
-                className={`rounded-2xl py-3.5 items-center mt-3 ${nextStartable ? 'bg-accent' : 'bg-line'}`}
+                className={`rounded-2xl py-4 items-center mt-3 ${nextStartable ? 'bg-accent' : 'bg-line'}`}
                 style={{ opacity: starting ? 0.6 : 1 }}
               >
-                <Text className={`font-sans-bold ${nextStartable ? 'text-white' : 'text-muted'}`}>{t('Démarrer la consultation')}</Text>
+                <Text className={`font-sans-bold text-base ${nextStartable ? 'text-white' : 'text-muted'}`}>
+                  {t('Consultation de {time}', { time: clockTime(next.scheduledAt ?? now) })}
+                </Text>
+                {nextWin.phase === 'before' && next.scheduledAt ? (
+                  <Text className="font-sans text-xs text-muted mt-0.5">
+                    {t('Disponible à {time}', { time: clockTime(next.scheduledAt) })}
+                  </Text>
+                ) : null}
               </Pressable>
               {!!nextWinMessage && (
                 <Text className={`font-sans-semibold text-xs mt-2 ${nextWin.phase === 'before' ? 'text-muted' : 'text-danger'}`}>

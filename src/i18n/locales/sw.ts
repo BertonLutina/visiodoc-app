@@ -908,4 +908,7 @@ export const sw: Record<string, string> = {
   "Tes rappels et alertes apparaîtront ici.": "Vikumbusho na tahadhari zako zitaonekana hapa.",
   "Impossible de charger tes notifications.": "Imeshindikana kupakia arifa zako.",
   "Tire vers le bas pour réessayer.": "Vuta chini ili ujaribu tena.",
+  "Consultation de {time}": "Mashauriano ya {time}",
+  "Disponible à {time}": "Inapatikana saa {time}",
+  "Tu confirmes la fin de la consultation ?": "Unathibitisha kumaliza mashauriano?",
 };

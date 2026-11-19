@@ -908,4 +908,7 @@ export const en: Record<string, string> = {
   "Tes rappels et alertes apparaîtront ici.": "Your reminders and alerts will appear here.",
   "Impossible de charger tes notifications.": "Unable to load your notifications.",
   "Tire vers le bas pour réessayer.": "Pull down to try again.",
+  "Consultation de {time}": "Consultation at {time}",
+  "Disponible à {time}": "Available at {time}",
+  "Tu confirmes la fin de la consultation ?": "Do you confirm ending the consultation?",
 };

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Pressable, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, Text, View } from 'react-native';
 import { noShowAvailableAt, noShowButtonState } from '@/utils/noShowAvailableAt';
+import { showAbsentChoice } from '@/utils/nextConsultation';
 import { useT } from '@/i18n';
 
 type Props = {
@@ -28,6 +29,7 @@ export function CallOutcomeModal({ visible, scheduledAt, startedAt, patientJoine
   }, [visible]);
 
   const state = noShowButtonState({ availableAt: noShowAvailableAt(scheduledAt, startedAt), now, patientJoinedAt });
+  const showAbsent = showAbsentChoice(patientJoinedAt);
   const hint = state.enabled
     ? null
     : state.reason === 'joined'
@@ -42,13 +44,19 @@ export function CallOutcomeModal({ visible, scheduledAt, startedAt, patientJoine
           <Text className="mt-1 mb-4 text-ink/70">{t('Que veux-tu faire de cette consultation ?')}</Text>
 
           <Pressable
-            onPress={onEnd}
+            onPress={() =>
+              Alert.alert(t('Terminer la consultation ?'), t('Tu confirmes la fin de la consultation ?'), [
+                { text: t('Non'), style: 'cancel' },
+                { text: t('Oui'), onPress: onEnd },
+              ])
+            }
             accessibilityRole="button"
             className="mb-2 items-center rounded-xl bg-accent py-3 active:opacity-80"
           >
             <Text className="font-semibold text-white">{t('Terminer la consultation')}</Text>
           </Pressable>
 
+          {showAbsent ? (
           <Pressable
             onPress={state.enabled ? onAbsent : undefined}
             disabled={!state.enabled}
@@ -63,6 +71,7 @@ export function CallOutcomeModal({ visible, scheduledAt, startedAt, patientJoine
             </Text>
             {hint ? <Text className="mt-0.5 text-xs text-gray-500">{hint}</Text> : null}
           </Pressable>
+          ) : null}
 
           <Pressable onPress={onLater} accessibilityRole="button" className="items-center rounded-xl py-3 active:opacity-70">
             <Text className="font-semibold text-ink">{t('Revenir plus tard')}</Text>
