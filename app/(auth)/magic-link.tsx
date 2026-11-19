@@ -92,7 +92,7 @@ export default function MagicLinkLogin() {
               valid={emailValid}
             />
             <Text className="font-sans text-sm text-muted mb-3">
-              {t('Réservé aux patients. Les médecins se connectent avec leur mot de passe ou leur numéro de téléphone.')}
+              {t('Réservé aux patients. Les prestataires se connectent avec leur mot de passe ou leur numéro de téléphone.')}
             </Text>
             {errorMsg ? (
               <View className="bg-red-50 rounded-2xl px-4 py-3 mb-3">

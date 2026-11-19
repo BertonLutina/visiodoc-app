@@ -272,7 +272,7 @@ export default function DoctorProfile() {
           <Pressable onPress={() => router.back()} className="p-1 mr-2">
             <ChevronLeft color={colors.ink} size={26} />
           </Pressable>
-          <Text className="font-sans-bold text-lg text-ink">{t('Profil médecin')}</Text>
+          <Text className="font-sans-bold text-lg text-ink">{t('Profil du prestataire')}</Text>
         </View>
         <View className="flex-1 items-center justify-center px-8">
           {doctorLoading ? (
@@ -280,7 +280,7 @@ export default function DoctorProfile() {
           ) : (
             <>
               <Text className="font-sans text-muted text-center mb-4">
-                {doctorError ?? t('Médecin introuvable.')}
+                {doctorError ?? t('Prestataire introuvable.')}
               </Text>
               <Button label={t('Réessayer')} variant="outline" onPress={reloadDoctor} />
             </>
@@ -296,7 +296,7 @@ export default function DoctorProfile() {
         <Pressable onPress={() => router.back()} className="p-1 mr-2">
           <ChevronLeft color={colors.ink} size={26} />
         </Pressable>
-        <Text className="font-sans-bold text-lg text-ink">{t('Profil médecin')}</Text>
+        <Text className="font-sans-bold text-lg text-ink">{t('Profil du prestataire')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 32 }}>
