@@ -4,7 +4,7 @@ Quatre mécanismes GitHub, dans `.github/`.
 
 ## Ce que fait chaque workflow
 
-- **`workflows/ci.yml`** : sur push et pull request vers `dev` et `main`, installe les dépendances (yarn), lance `npx tsc --noEmit` puis `npx jest --ci`. Le workflow est à `contents: read`. TODO : passer `yarn install` en `--frozen-lockfile` quand `yarn.lock` aura été régénéré et committé.
+- **`workflows/ci.yml`** : sur push et pull request vers `dev` et `main`, installe les dépendances (yarn, Node 22), lance `npx tsc --noEmit` puis `npx jest --ci`. Le workflow est à `contents: read`. TODO : passer `yarn install` en `--frozen-lockfile` quand `yarn.lock` aura été régénéré et committé.
 - **`workflows/secrets-scan.yml`** : gitleaks sur tout l'historique (push et PR vers `dev` et `main`). Échoue si un secret est détecté.
 - **`dependabot.yml`** : PR hebdomadaires de mise à jour (npm et GitHub Actions) vers `dev`. Les montées majeures d'Expo, React et React Native sont ignorées (à faire à la main avec `npx expo install --fix`).
 - **`workflows/security-digest.yml`** : digest hebdomadaire (lundi 07h00 UTC, ou lancement manuel) sur `dev` et `main`. Fait un `npm audit` sur un lockfile généré à la volée (le dépôt est en yarn) et un scan semgrep de `app/` et `src/`, puis un seul appel à l'API Claude (`claude-sonnet-5-5`) qui compare au run précédent. Une ligne Notion est écrite à chaque run (même « RAS »), une issue GitHub (label `security-digest`) seulement s'il y a du nouveau. Pas de Trivy : aucun Dockerfile ni IaC dans le dépôt. L'état précédent est stocké sur la branche orpheline `security-digest-state`, créée automatiquement au premier run.
