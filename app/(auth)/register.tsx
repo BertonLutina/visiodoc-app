@@ -169,7 +169,8 @@ export default function RegisterPatient() {
             !identityNamesComplete({ ...form, postNom: usesPostnom ? form.postNom : '' }, usesPostnom) ||
             !form.city.trim() ||
             !gender ||
-            !dateOfBirth
+            !dateOfBirth ||
+            !healthConsent
           }
           onPress={onSubmit}
           className="mt-2"

@@ -353,7 +353,8 @@ export default function PhoneLogin() {
                 ) ||
                 !city.trim() ||
                 !gender ||
-                !dateOfBirth
+                !dateOfBirth ||
+                !healthConsent
               }
               onPress={onSaveIdentity}
             />
