@@ -17,6 +17,13 @@ type Method = {
 
 const methods: Method[] = [
   {
+    icon: Smartphone,
+    label: 'Numéro de téléphone',
+    sub: 'Code de vérification par SMS',
+    href: '/(auth)/phone-login',
+    tint: 'bg-sand',
+  },
+  {
     icon: Lock,
     label: 'Email et mot de passe',
     sub: 'Connexion classique',
@@ -29,13 +36,6 @@ const methods: Method[] = [
     sub: 'Sans mot de passe',
     href: '/(auth)/magic-link',
     tint: 'bg-sage',
-  },
-  {
-    icon: Smartphone,
-    label: 'Numéro de téléphone',
-    sub: 'Code de vérification par SMS',
-    href: '/(auth)/phone-login',
-    tint: 'bg-sand',
   },
 ];
 

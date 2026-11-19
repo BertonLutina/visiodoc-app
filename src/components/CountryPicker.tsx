@@ -2,9 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronDown, Search, X, Check } from 'lucide-react-native';
-import { AFRICAN_COUNTRIES, getAfricanCountry, type AfricanCountry } from '@/config/africanCountries';
+import { type AfricanCountry } from '@/config/africanCountries';
+import { useActiveCountries } from '@/hooks/useActiveCountries';
 import { colors } from '@/theme/colors';
 import { useT } from '@/i18n';
+import { filterByPrefix } from '@/services/geo';
 
 type Props = {
   label?: string;
@@ -17,24 +19,34 @@ export function CountryPicker({ label, value, onSelect }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const t = useT();
-  const selected = getAfricanCountry(value) ?? AFRICAN_COUNTRIES[0];
+  const countries = useActiveCountries();
+  const selected = countries.find((c) => c.code === value) ?? countries[0];
 
-  const list = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return AFRICAN_COUNTRIES;
-    return AFRICAN_COUNTRIES.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.dialCode.includes(q) ||
-        c.code.toLowerCase().includes(q),
-    );
-  }, [query]);
+  const list = useMemo(() => filterByPrefix(countries, query, countries.length), [query, countries]);
+  // Un seul pays actif : une recherche n'aurait aucun intérêt.
+  const searchable = countries.length > 1;
 
   const choose = (c: AfricanCountry) => {
     onSelect(c);
     setOpen(false);
     setQuery('');
   };
+
+  // Un seul Visiodoc ouvert : pas de sélecteur inutile, simple affichage en lecture seule.
+  if (countries.length <= 1) {
+    return (
+      <View className="mb-4" testID="country-readonly">
+        {label ? <Text className="text-sm font-sans-semibold text-ink mb-2">{label}</Text> : null}
+        <View
+          className="flex-row items-center rounded-2xl px-4 py-3.5 bg-surface"
+          style={{ borderWidth: 1, borderColor: colors.line }}
+        >
+          <Text className="text-xl mr-3">{selected.flag}</Text>
+          <Text className="flex-1 text-base text-ink font-sans-medium">{selected.name}</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View className="mb-4">
@@ -67,6 +79,7 @@ export function CountryPicker({ label, value, onSelect }: Props) {
           </View>
 
           {/* Recherche */}
+          {searchable ? (
           <View className="px-5 pb-2">
             <View
               className="flex-row items-center rounded-2xl px-4 bg-surface"
@@ -84,6 +97,7 @@ export function CountryPicker({ label, value, onSelect }: Props) {
               />
             </View>
           </View>
+          ) : null}
 
           <FlatList
             data={list}

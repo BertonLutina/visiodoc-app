@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Platform, Pressable, Text, View } from 'react-native';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Calendar, Clock, X } from 'lucide-react-native';
 import { colors } from '@/theme/colors';
 import { appLocale } from '@/i18n/core';
@@ -15,6 +15,8 @@ type Props = {
   placeholder?: string;
   minimumDate?: Date;
   maximumDate?: Date;
+  /** Android : ouvre le calendrier sur le choix de l'année (utile pour une date de naissance). */
+  startOnYearSelection?: boolean;
   className?: string;
 };
 
@@ -35,7 +37,17 @@ const serialize = (d: Date, mode: 'date' | 'time') =>
   mode === 'time' ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 /** Sélecteur de date / d'heure natif (remplace la saisie texte). Valeur stockée au format ISO. */
-export function DateField({ label, value, onChange, mode = 'date', placeholder, minimumDate, maximumDate, className = '' }: Props) {
+export function DateField({
+  label,
+  value,
+  onChange,
+  mode = 'date',
+  placeholder,
+  minimumDate,
+  maximumDate,
+  startOnYearSelection,
+  className = '',
+}: Props) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Date>(() => parse(value, mode));
@@ -52,9 +64,17 @@ export function DateField({ label, value, onChange, mode = 'date', placeholder, 
     setOpen(true);
   };
 
-  const onAndroid = (e: DateTimePickerEvent, d?: Date) => {
+  // API v9 : onValueChange (date choisie) et onDismiss (annulation) remplacent onChange, dépréciée.
+  const onValueChange = (_e: unknown, d: Date) => {
+    if (Platform.OS === 'ios') {
+      setDraft(d);
+      return;
+    }
     setOpen(false);
-    if (e.type === 'set' && d) onChange(serialize(d, mode));
+    onChange(serialize(d, mode));
+  };
+  const onDismiss = () => {
+    if (Platform.OS !== 'ios') setOpen(false);
   };
 
   const picker = (
@@ -70,7 +90,9 @@ export function DateField({ label, value, onChange, mode = 'date', placeholder, 
       locale={appLocale()}
       minimumDate={minimumDate}
       maximumDate={maximumDate}
-      onChange={Platform.OS === 'ios' ? (_e, d) => d && setDraft(d) : onAndroid}
+      startOnYearSelection={Platform.OS === 'android' && mode === 'date' ? startOnYearSelection : undefined}
+      onValueChange={onValueChange}
+      onDismiss={onDismiss}
     />
   );
 

@@ -242,6 +242,10 @@ const patientInput = {
   gender: 'female' as string | null | undefined,
   phone: '+243899999999',
   countryCode: 'CD' as string | undefined,
+  dateOfBirth: '1990-06-15',
+  city: 'Kinshasa' as string | undefined,
+  commune: undefined as string | undefined,
+  postNom: undefined as string | undefined,
 };
 
 const okResponse = {
@@ -275,11 +279,104 @@ describe('registerPatientAccount', () => {
         firstName: 'Fatou',
         lastName: 'Kalala',
         gender: 'female',
+        dateOfBirth: '1990-06-15',
+        city: 'Kinshasa',
         phone: '+243899999999',
         language: 'fr',
         countryId: CD_UUID,
       },
     });
+  });
+
+  it('sends city and commune (trimmed), the commune only when filled in', async () => {
+    await registerPatientAccount({ ...patientInput, city: '  Matadi ', commune: ' Nzanza' });
+    const body = mockInvoke.mock.calls[0][1].body;
+    expect(body.city).toBe('Matadi');
+    expect(body.commune).toBe('Nzanza');
+    mockInvoke.mockClear();
+    await registerPatientAccount({ ...patientInput, commune: '' });
+    expect(Object.keys(mockInvoke.mock.calls[0][1].body)).not.toContain('commune');
+  });
+
+  it('refuses an empty city before any network call', async () => {
+    for (const city of ['', '   ', undefined]) {
+      await expect(registerPatientAccount({ ...patientInput, city })).rejects.toThrow('La ville est obligatoire.');
+    }
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('applies the names rule and sends a trimmed postNom (empty firstName accepted for DRC)', async () => {
+    await expect(registerPatientAccount({ ...patientInput, lastName: ' ' })).rejects.toThrow(
+      'Le nom est obligatoire, ainsi que le prénom ou le post-nom.',
+    );
+    await expect(registerPatientAccount({ ...patientInput, firstName: '', postNom: '  ' })).rejects.toThrow(
+      'Le nom est obligatoire, ainsi que le prénom ou le post-nom.',
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+    await registerPatientAccount({ ...patientInput, postNom: ' Mbala ' });
+    expect(mockInvoke.mock.calls[0][1].body.postNom).toBe('Mbala');
+    mockInvoke.mockClear();
+    await registerPatientAccount({ ...patientInput, firstName: '', postNom: 'Mbala' });
+    expect(mockInvoke.mock.calls[0][1].body).toMatchObject({ firstName: '', postNom: 'Mbala' });
+    mockInvoke.mockClear();
+    await registerPatientAccount({ ...patientInput, postNom: '   ' });
+    expect(Object.keys(mockInvoke.mock.calls[0][1].body)).not.toContain('postNom');
+  });
+
+  it.each([
+    ['Champ obligatoire.', 'Un champ obligatoire est manquant. Vérifie le formulaire.'],
+    ['Le prénom ou le post-nom est obligatoire.', 'Le prénom ou le post-nom est obligatoire.'],
+    ["Visiodoc n'est pas encore disponible dans ce pays.", "Visiodoc n'est pas encore disponible dans ce pays."],
+  ])('maps the server 400 "%s" to a translated message', async (serverText, expected) => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(400, { error: serverText }) });
+    const err: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
+    expect(err.kind).toBe('validation');
+    expect(registerPatientErrorMessage(err)).toBe(expected);
+  });
+
+  it('refuses a city or commune over 100 characters before any network call', async () => {
+    await expect(registerPatientAccount({ ...patientInput, city: 'a'.repeat(101) })).rejects.toThrow();
+    await expect(registerPatientAccount({ ...patientInput, commune: 'a'.repeat(101) })).rejects.toThrow();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('refuses a minor with the server wording, before any network call', async () => {
+    const minor = `${new Date().getFullYear() - 10}-01-01`;
+    await expect(registerPatientAccount({ ...patientInput, dateOfBirth: minor })).rejects.toThrow(
+      'Vous devez avoir au moins 18 ans révolus pour vous inscrire.',
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('refuses a missing or malformed date of birth before any network call', async () => {
+    await expect(registerPatientAccount({ ...patientInput, dateOfBirth: '' })).rejects.toThrow(
+      'La date de naissance est obligatoire.',
+    );
+    await expect(registerPatientAccount({ ...patientInput, dateOfBirth: '15/06/1990' })).rejects.toThrow();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('maps a server 400 "Required" to a generic missing-field message', async () => {
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(400, { error: 'Required' }) });
+    const err: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
+    expect(err.kind).toBe('validation');
+    expect(registerPatientErrorMessage(err)).toBe('Un champ obligatoire est manquant. Vérifie le formulaire.');
+  });
+
+  it('refuses a missing phone number before any network call (the server requires it)', async () => {
+    await expect(registerPatientAccount({ ...patientInput, phone: '' })).rejects.toThrow(
+      'Le numéro de téléphone est obligatoire.',
+    );
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it('keeps the server age refusal text', async () => {
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: httpError(400, { error: 'Vous devez avoir au moins 18 ans révolus pour vous inscrire.' }),
+    });
+    const err: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
+    expect(registerPatientErrorMessage(err)).toBe('Vous devez avoir au moins 18 ans révolus pour vous inscrire.');
   });
 
   it('never calls auth.signUp / signInWithPassword and never touches the users table', async () => {
@@ -297,6 +394,13 @@ describe('registerPatientAccount', () => {
   it('sends the UUID of the chosen country: Niger when NE is chosen', async () => {
     await registerPatientAccount({ ...patientInput, countryCode: 'NE' });
     expect(mockInvoke.mock.calls[0][1].body.countryId).toBe(NE_UUID);
+  });
+
+  it('the phone dialling code does not change the countryId sent (Belgian number, DRC Visiodoc)', async () => {
+    await registerPatientAccount({ ...patientInput, countryCode: 'CD', phone: '+32475123456' });
+    const body = mockInvoke.mock.calls[0][1].body;
+    expect(body.phone).toBe('+32475123456');
+    expect(body.countryId).toBe(CD_UUID);
   });
 
   it('omits countryId when the chosen code has no country UUID in the app config', async () => {
@@ -326,11 +430,12 @@ describe('registerPatientAccount', () => {
     expect(mockInvoke.mock.calls[0][1].body.phone).toBe('+22790123456');
   });
 
-  it('omits phone when it is empty, and sends male as is', async () => {
-    await registerPatientAccount({ ...patientInput, phone: '  ', gender: 'male' });
-    const body = mockInvoke.mock.calls[0][1].body;
-    expect(Object.keys(body)).not.toContain('phone');
-    expect(body.gender).toBe('male');
+  it('refuses a blank phone (required by register-patient), and sends male as is', async () => {
+    await expect(registerPatientAccount({ ...patientInput, phone: '  ', gender: 'male' })).rejects.toThrow(
+      'Le numéro de téléphone est obligatoire.',
+    );
+    await registerPatientAccount({ ...patientInput, gender: 'male' });
+    expect(mockInvoke.mock.calls[0][1].body.gender).toBe('male');
   });
 
   it("omits language when the app is not in French (the guide only documents 'fr')", async () => {
@@ -377,6 +482,18 @@ describe('registerPatientAccount', () => {
     const err: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
     expect(err.kind).toBe('conflict');
     expect(registerPatientErrorMessage(err)).toBe(GUIDE_CONFLICT);
+  });
+
+  it('409 phone already used → conflict with the translated phone message', async () => {
+    const PHONE = 'Ce numéro de téléphone est déjà utilisé par un autre compte.';
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(409, { error: PHONE }) });
+    const err: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
+    expect(err.kind).toBe('conflict');
+    expect(registerPatientErrorMessage(err)).toBe(PHONE);
+    setCurrentLangCode('en');
+    mockInvoke.mockResolvedValue({ data: null, error: httpError(409, { error: PHONE }) });
+    const errEn: RegisterPatientError = await registerPatientAccount(patientInput).catch((e) => e);
+    expect(registerPatientErrorMessage(errEn)).toBe('This phone number is already used by another account.');
   });
 
   it('429 with Retry-After: 42 → rate_limited error and a message with 42 seconds', async () => {

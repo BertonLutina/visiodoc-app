@@ -6,8 +6,9 @@ import { Stethoscope } from 'lucide-react-native';
 import { Button, Field, ScreenTitle } from '@/components/ui';
 import { Autocomplete } from '@/components/Autocomplete';
 import { CountryPicker } from '@/components/CountryPicker';
+import { PhoneField } from '@/components/PhoneField';
+import { CityCommuneFields } from '@/components/CityCommuneFields';
 import { SPECIALIZATIONS } from '@/config/specializations';
-import { getAfricanCountry } from '@/config/africanCountries';
 import { colors } from '@/theme/colors';
 import { PasswordField } from '@/components/PasswordField';
 import { GenderField } from '@/components/GenderField';
@@ -98,15 +99,16 @@ export default function RegisterProvider() {
               value={form.email}
               onChangeText={set('email')}
             />
-            <Field
-              label={t('Téléphone')}
-              placeholder={`${getAfricanCountry(countryCode)?.dialCode ?? ''} 81 234 5678`}
-              keyboardType="phone-pad"
-              value={form.phone}
-              onChangeText={set('phone')}
+            <PhoneField label={t('Téléphone')} onChange={set('phone')} />
+            <CountryPicker label={t('Visiodoc du compte')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
+            <CityCommuneFields
+              cityOnly
+              city={form.city}
+              commune=""
+              countryCode={countryCode}
+              onCityChange={set('city')}
+              onCommuneChange={() => {}}
             />
-            <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
-            <Field label={t('Ville')} placeholder="Kinshasa" value={form.city} onChangeText={set('city')} />
             <Autocomplete
               label={t('Spécialisation')}
               value={form.specialization}

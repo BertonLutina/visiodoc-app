@@ -7,7 +7,7 @@
  * Renvoie `undefined` si la saisie ne contient aucun chiffre utile, zéros seuls compris (le champ est alors omis du corps).
  */
 /** Longueur du numéro national (sans zéro de tête) des pays pris en charge, par indicatif. */
-const NATIONAL_LENGTH: Record<string, number> = { '243': 9, '227': 8 };
+const NATIONAL_LENGTH: Record<string, number> = { '243': 9, '227': 8, '32': 9, '33': 9, '351': 9 };
 
 export function toE164(input: string | null | undefined, dialCode: string | null | undefined): string | undefined {
   const raw = (input ?? '').trim();

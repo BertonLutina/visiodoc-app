@@ -6,6 +6,7 @@ import type { User } from '@/types';
 import { supabase, supabaseConfigured } from '@/lib/supabase';
 import {
   edgeFunctionError,
+  mapDuplicateContactError,
   providerRefusalError,
   providerRefusalMessage,
   roleNotAllowedError,
@@ -28,6 +29,8 @@ import {
   shouldDropOnRestore,
 } from '@/services/loginCredentialsFlag';
 import { getServiceTypeCatalog } from '@/services/specializationCatalog';
+import { mapCountryNotOpenError } from '@/services/registration';
+import { completePhoneIdentity, type PhoneIdentityInput } from '@/services/patientIdentity';
 import { isSessionExpiry, onSessionExpired, reportSessionExpiry } from '@/services/sessionExpiry';
 import { createSessionExpiryTracker } from '@/services/sessionExpiryTracker';
 import { COUNTRIES } from '@/config/countries';
@@ -57,6 +60,8 @@ const countryIdForCode = (code?: string): string | undefined =>
 interface RegisterPatientInput {
   firstName: string;
   lastName: string;
+  /** Post-nom (pays congolais) ; transmis à `register-patient` (rogné, omis si vide). */
+  postNom?: string;
   email: string;
   phone?: string;
   password: string;
@@ -64,6 +69,10 @@ interface RegisterPatientInput {
   gender: Gender;
   /** Code ISO du pays choisi, ex: 'CD' */
   countryCode?: string;
+  /** `AAAA-MM-JJ`, 18 ans révolus (MOB-1211-1). */
+  dateOfBirth: string;
+  city?: string;
+  commune?: string;
 }
 
 interface RegisterProviderInput {
@@ -116,6 +125,11 @@ interface AuthContextType {
   ) => Promise<{ user: User; outcome: LoginCredentialsOutcome }>;
   /** Abandon de l'étape e-mail + mot de passe : la session créée par l'OTP est fermée. */
   cancelLoginCredentials: () => void;
+  /**
+   * Identité d'un patient inscrit par téléphone (nom, genre, date de naissance 18 ans, ville, commune).
+   * `userId` = compte issu du code (la session existe déjà, même si l'app n'est pas encore ouverte).
+   */
+  completePatientIdentity: (userId: string, input: PhoneIdentityInput) => Promise<void>;
   /** Connexion sociale (Google, Microsoft/Outlook…). Renvoie l'utilisateur connecté. */
   signInWithProvider: (provider: OAuthProvider) => Promise<User | null>;
   /** Envoie un email de réinitialisation de mot de passe. */
@@ -123,9 +137,12 @@ interface AuthContextType {
   /** Inscription patient : `requiresEmailConfirmation` vrai = e-mail à confirmer, pas de session ouverte. */
   registerPatient: (input: RegisterPatientInput) => Promise<{ requiresEmailConfirmation: boolean }>;
   registerProvider: (input: RegisterProviderInput) => Promise<void>;
+  /** Ne modifie jamais les colonnes `avatar_*` : la photo passe par `finalize-avatar` (voir `src/services/avatar.ts`). */
   updateProfile: (
-    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage' | 'avatarUrl'>>,
+    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage'>>,
   ) => Promise<void>;
+  /** Relit sa propre ligne `users` (par exemple après `finalize-avatar`). */
+  reloadProfile: () => Promise<void>;
   /** Vrai au lancement si la session restaurée attend la biométrie. */
   locked: boolean;
   /** Prénom du compte verrouillé (écran de verrou). */
@@ -161,15 +178,23 @@ const providerMockUser: User = {
   doctorStatus: 'VALIDE_ABO_ACTIF',
 };
 
+const isReviewStatus = (v: unknown): v is 'pending' | 'approved' | 'rejected' =>
+  v === 'pending' || v === 'approved' || v === 'rejected';
+
 function mapUserRow(row: any, role: MobileRole): User {
   return {
     id: row.id,
     email: row.email,
     firstName: row.first_name ?? '',
     lastName: row.last_name ?? '',
+    postNom: row.post_nom ?? undefined,
     role,
     phone: row.phone ?? undefined,
     avatarUrl: row.avatar_url ?? undefined,
+    avatarPath: row.avatar_path ?? undefined,
+    avatarPendingPath: row.avatar_pending_path ?? undefined,
+    avatarReviewStatus: isReviewStatus(row.avatar_review_status) ? row.avatar_review_status : undefined,
+    avatarReviewNote: row.avatar_review_note ?? undefined,
     // `users.country_id` est une FK → table `countries` ; le code pays vit dans countries.code
     countryCode: row.countries?.code ?? undefined,
     preferredLanguage: row.preferred_language ?? undefined,
@@ -633,6 +658,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const completePatientIdentity = async (userId: string, input: PhoneIdentityInput) => {
+    await completePhoneIdentity(userId, input);
+    setUser((u) =>
+      u && u.id === userId ? { ...u, firstName: input.firstName.trim(), lastName: input.lastName.trim(), postNom: input.postNom?.trim() || undefined } : u,
+    );
+  };
+
   const sendPasswordReset = async (email: string) => {
     if (!supabaseConfigured || !supabase) {
       await new Promise((r) => setTimeout(r, 400));
@@ -708,8 +740,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const reloadProfile = async () => {
+    if (!supabaseConfigured || !supabase || !user) return;
+    const result = await loadProfile(user.id);
+    if (result.status === 'ok') setUser(result.user);
+  };
+
   const updateProfile = async (
-    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage' | 'avatarUrl'>>,
+    partial: Partial<Pick<User, 'firstName' | 'lastName' | 'phone' | 'countryCode' | 'preferredLanguage'>>,
   ) => {
     setLoading(true);
     try {
@@ -720,10 +758,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (partial.phone !== undefined) patch.phone = partial.phone || null;
         if (partial.countryCode !== undefined) patch.country_id = countryIdForCode(partial.countryCode);
         if (partial.preferredLanguage !== undefined) patch.preferred_language = partial.preferredLanguage || null;
-        if (partial.avatarUrl !== undefined) patch.avatar_url = partial.avatarUrl || null;
         if (Object.keys(patch).length) {
           const { error } = await supabase.from('users').update(patch).eq('id', user.id);
-          if (error) throw error;
+          if (error) throw mapDuplicateContactError(mapCountryNotOpenError(error));
         }
       }
       setUser((u) => (u ? { ...u, ...partial } : u));
@@ -814,11 +851,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       verifyPhoneOtp,
       saveLoginCredentials,
       cancelLoginCredentials,
+      completePatientIdentity,
       signInWithProvider,
       sendPasswordReset,
       registerPatient,
       registerProvider,
       updateProfile,
+      reloadProfile,
       locked,
       lockedFirstName: pendingUser?.firstName ?? '',
       unlock,

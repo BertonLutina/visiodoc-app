@@ -41,7 +41,12 @@ export type CountryConfig = {
   /** Moyens de paiement mobile courants dans le pays */
   paymentMethods: string[];
   currency: CurrencyConfig;
+  /** Reflet de `countries.uses_postnom` (Supabase) : le pays utilise le post-nom (RD Congo). Absent = faux. */
+  usesPostnom?: boolean;
 };
+
+/** Le pays (code ISO) utilise-t-il le post-nom ? Voir `countries.uses_postnom`. */
+export const countryUsesPostnom = (code?: string): boolean => (code ? COUNTRIES[code]?.usesPostnom === true : false);
 
 export const COUNTRIES: Record<string, CountryConfig> = {
   // 🇨🇩 Marché de lancement
@@ -58,6 +63,7 @@ export const COUNTRIES: Record<string, CountryConfig> = {
     languages: ['Français', 'Lingala', 'Swahili', 'Kikongo', 'Tshiluba'],
     paymentMethods: ['M-Pesa', 'Orange Money', 'Airtel Money'],
     currency: { code: 'CDF', symbol: 'FC', position: 'suffix', usdRate: 2800 },
+    usesPostnom: true, // countries.uses_postnom (true pour CD)
   },
 
   // 🇳🇪 2e pays actif (présent dans la table `countries` Supabase)

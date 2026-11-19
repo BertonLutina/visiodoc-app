@@ -6,6 +6,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { Button, Field } from '@/components/ui';
 import { AvatarPicker } from '@/components/AvatarPicker';
 import { CountryPicker } from '@/components/CountryPicker';
+import { PhoneField } from '@/components/PhoneField';
 import { colors } from '@/theme/colors';
 import { authErrorMessage } from '@/utils/authError';
 import { useAuth } from '@/contexts/AuthContext';
@@ -50,14 +51,8 @@ export default function ProfileEdit() {
         </View>
         <Field label={t('Prénom')} placeholder="Marie" value={firstName} onChangeText={setFirstName} />
         <Field label={t('Nom')} placeholder="Konaté" value={lastName} onChangeText={setLastName} />
-        <Field
-          label={t('Téléphone')}
-          placeholder="+243 81 234 5678"
-          keyboardType="phone-pad"
-          value={phone}
-          onChangeText={setPhone}
-        />
-        <CountryPicker label={t('Pays')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
+        <PhoneField label={t('Téléphone')} initialValue={user?.phone ?? ''} onChange={setPhone} />
+        <CountryPicker label={t('Visiodoc du compte')} value={countryCode} onSelect={(c) => setCountryCode(c.code)} />
 
         {user?.email ? (
           <Field label={t('Email')} value={user.email} editable={false} hint={t("L'email ne peut pas être modifié ici.")} />
