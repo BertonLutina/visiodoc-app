@@ -1,8 +1,8 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FolderHeart, Wallet, Calendar, Video, CalendarPlus } from 'lucide-react-native';
+import { FolderHeart, Wallet, Calendar, Video, CalendarPlus, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { BrandGlyph } from '@/components/BrandGlyph';
 import { Avatar, Badge, Card, Eyebrow } from '@/components/ui';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -13,6 +13,8 @@ import { useAsync } from '@/hooks/useAsync';
 import { useAvatarUri } from '@/hooks/useAvatarUri';
 import { getUpcomingConsultations, getPastConsultations } from '@/services/patientApi';
 import { useLanguage, useT } from '@/i18n';
+import { clockTime, joinButtonState } from '@/utils/nextConsultation';
+import { formatMoney } from '@/utils/format';
 
 const quick = [
   { icon: null, label: 'Prestataire', href: '/(patient)/doctors' as const, tint: 'bg-sage' },
@@ -20,6 +22,15 @@ const quick = [
   { icon: Wallet, label: 'Wallet', href: '/(patient)/wallet' as const, tint: 'bg-sand' },
   { icon: Calendar, label: 'RDV', href: '/(patient)/appointments' as const, tint: 'bg-lavender' },
 ];
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="flex-row justify-between py-1">
+      <Text className="font-sans text-white/70 text-sm">{label}</Text>
+      <Text className="font-sans-semibold text-white text-sm flex-1 text-right ml-3">{value}</Text>
+    </View>
+  );
+}
 
 export default function PatientDashboard() {
   const t = useT();
@@ -46,6 +57,14 @@ export default function PatientDashboard() {
     }, []),
   );
 
+  // Bouton « Rejoindre » grisé avant l'heure prévue (même règle que le prestataire et le serveur).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = async () => {
     setRefreshing(true);
@@ -57,6 +76,12 @@ export default function PatientDashboard() {
   const pastList = past ?? [];
   // Une consultation `pending_payment` n'est pas confirmée : elle ne peut pas être « la prochaine » à rejoindre.
   const next = upList.find((c) => !c.awaitingPayment);
+
+  const join = next
+    ? joinButtonState({ rawStatus: next.status === 'in_progress' ? 'in_progress' : 'scheduled', scheduledAt: next.date }, now)
+    : null;
+  const joinEnabled = join?.enabled ?? false;
+  const statusLabel = next?.status === 'in_progress' ? t('En cours') : t('Confirmée');
 
   const greeting = user ? greetingName(user) : '';
   const initials =
@@ -90,6 +115,7 @@ export default function PatientDashboard() {
               <ActivityIndicator color={colors.white} />
             </View>
           ) : next ? (
+            <>
             <View className="rounded-[28px] bg-primary p-6 overflow-hidden">
               <View
                 className="absolute -right-8 -top-8 w-36 h-36 rounded-full"
@@ -104,12 +130,49 @@ export default function PatientDashboard() {
               <Text className="font-sans text-white/80 text-sm mt-1 mb-5">{next.dateLabel} · {t('Vidéo')}</Text>
               <Pressable
                 onPress={() => router.push(`/call/${next.roomId ?? next.id}`)}
-                className="bg-white rounded-2xl py-3.5 flex-row items-center justify-center"
+                disabled={!joinEnabled}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !joinEnabled }}
+                className={`rounded-2xl py-3.5 flex-row items-center justify-center ${joinEnabled ? 'bg-accent' : 'bg-white/30'}`}
               >
-                <Video color={colors.primary} size={18} />
-                <Text className="font-sans-bold text-primary text-base ml-2">{t('Rejoindre')}</Text>
+                <Video color={colors.white} size={18} />
+                <Text className="font-sans-bold text-white text-base ml-2">{t('Rejoindre la consultation')}</Text>
               </Pressable>
+              {join && !join.enabled ? (
+                <Text className="font-sans text-white/80 text-xs text-center mt-2">
+                  {t('Disponible à {time}', { time: clockTime(join.opensAt) })}
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={() => setDetailsOpen((v) => !v)}
+                className="flex-row items-center justify-center mt-4"
+                accessibilityRole="button"
+                accessibilityState={{ expanded: detailsOpen }}
+              >
+                <Text className="font-sans-semibold text-white text-sm mr-1">
+                  {detailsOpen ? t('Masquer les détails') : t('Voir les détails')}
+                </Text>
+                {detailsOpen ? <ChevronUp color={colors.white} size={16} /> : <ChevronDown color={colors.white} size={16} />}
+              </Pressable>
+              {detailsOpen ? (
+                <View className="mt-3 rounded-2xl bg-white/10 p-4">
+                  <DetailRow label={t('Prestataire')} value={`Dr. ${next.doctor.firstName} ${next.doctor.lastName}`} />
+                  {next.doctor.specialty ? <DetailRow label={t('Spécialité')} value={next.doctor.specialty} /> : null}
+                  <DetailRow label={t('Date et heure')} value={next.dateLabel} />
+                  <DetailRow label={t('Durée')} value={`${next.durationMin} ${t('min')}`} />
+                  <DetailRow label={t('Statut')} value={statusLabel} />
+                  {next.fee > 0 ? <DetailRow label={t('Tarif')} value={formatMoney(next.fee)} /> : null}
+                </View>
+              ) : null}
             </View>
+            <Pressable
+              onPress={() => router.push('/(patient)/doctors')}
+              className="mt-3 rounded-2xl border border-line bg-surface py-3.5 items-center"
+              accessibilityRole="button"
+            >
+              <Text className="font-sans-bold text-primary text-base">{t('Réserver une consultation')}</Text>
+            </Pressable>
+            </>
           ) : (
             <View className="rounded-[28px] bg-surface border border-line p-6 items-center">
               <View className="w-12 h-12 rounded-2xl bg-primary-50 items-center justify-center mb-3">

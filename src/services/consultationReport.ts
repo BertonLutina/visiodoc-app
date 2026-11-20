@@ -299,3 +299,35 @@ export async function logVideoSessionEnd(sessionId: string, durationSeconds: num
     /* trace best effort */
   }
 }
+
+/* ------------------------------------------------------------------------------------------------
+ * Fin de consultation vue du patient : pendant l'appel, l'écran relit le statut de la consultation.
+ * ---------------------------------------------------------------------------------------------- */
+
+/** Statuts qui signifient que la consultation est finie pour le patient (le prestataire a terminé, ou elle est annulée). */
+const CALL_ENDED_STATUSES = ['completed', 'cancelled', 'no_show'];
+
+export function isConsultationEnded(status: string | null | undefined): boolean {
+  return !!status && CALL_ENDED_STATUSES.includes(status);
+}
+
+/**
+ * Statut brut (`consultations.status`) de la consultation d'une salle (`id` ou `video_room_id`).
+ * Retourne null si indisponible : une erreur réseau ne doit jamais fermer l'appel, l'appelant réessaie.
+ */
+export async function getConsultationStatusByRoom(room: string): Promise<string | null> {
+  if (!supabaseConfigured || !supabase || !room || !/^[A-Za-z0-9_-]+$/.test(room)) return null;
+  try {
+    const { data, error } = await supabase
+      .from('consultations')
+      .select('status')
+      .or(`id.eq.${room},video_room_id.eq.${room}`)
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    const status = (data as { status?: unknown }).status;
+    return typeof status === 'string' ? status : null;
+  } catch {
+    return null;
+  }
+}

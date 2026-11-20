@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
-import { router, type Href } from 'expo-router';
+import { router, useFocusEffect, type Href } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   AlertTriangle,
@@ -107,6 +107,20 @@ export default function ProviderDashboard() {
   const upcomingReq = useAsync(() => getProviderConsultations(uid, ['scheduled', 'in_progress']), [uid, lang]);
   const reviewsReq = useAsync(() => getReviewSummary(uid), [uid]);
   const statusReq = useAsync(() => getValidationStatus(uid), [uid]);
+
+  // Retour sur l'accueil (ex. après « Terminer » et le rapport) : relit les listes, sinon la consultation terminée
+  // resterait affichée comme « prochaine ». Le premier focus est couvert par le chargement initial.
+  const firstFocus = useRef(true);
+  useFocusEffect(
+    useCallback(() => {
+      if (firstFocus.current) {
+        firstFocus.current = false;
+        return;
+      }
+      void Promise.all([overviewReq.refresh(), todayReq.refresh(), upcomingReq.refresh()]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
   const ov = overviewReq.data;
   const reviews = reviewsReq.data;
