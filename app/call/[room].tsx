@@ -10,7 +10,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getCallSession } from '@/services/patientApi';
 import {
   endConsultation,
+  getConsultationStatusByRoom,
   getPatientJoinedAt,
+  isConsultationEnded,
   getProviderCallContext,
   markPatientAbsent,
   notifyConsultationStarted,
@@ -30,6 +32,9 @@ import { useT } from '@/i18n';
 
 /** Au-delà de ce délai, la relance automatique à l'ouverture de la salle n'est pas programmée (le bouton reste). */
 const MAX_AUTO_RETRY_MS = 6 * 60 * 60 * 1000;
+
+/** Côté patient : intervalle de relecture du statut de la consultation pendant l'appel. */
+const PATIENT_STATUS_POLL_MS = 10_000;
 
 type Phase =
   | { kind: 'loading' }
@@ -196,6 +201,32 @@ export default function VideoCall() {
     endTrace();
     leave();
   };
+
+  // Côté patient seulement : le prestataire peut terminer la consultation pendant l'appel. On relit le statut toutes
+  // les 10 s ; dès qu'elle est terminée (ou annulée), on ferme la salle et on renvoie vers l'accueil patient.
+  // Quitter (raccrocher) ne termine pas la consultation. Erreur réseau : ignorée, on réessaie au prochain tour.
+  const isPatient = !!user && user.role !== 'provider';
+  const callReady = phase.kind === 'ready';
+  useEffect(() => {
+    if (!isPatient || !callReady || !routeRoomId) return;
+    let stopped = false;
+    const tick = async () => {
+      const status = await getConsultationStatusByRoom(routeRoomId);
+      if (stopped || !isConsultationEnded(status)) return;
+      stopped = true;
+      clearInterval(timer);
+      setPhase({ kind: 'loading' }); // démonte la WebView
+      Alert.alert(t('La consultation est terminée'), t('Le prestataire a mis fin à la consultation. Merci !'), [
+        { text: 'OK', onPress: () => router.replace('/(patient)') },
+      ], { cancelable: false });
+    };
+    const timer = setInterval(() => void tick(), PATIENT_STATUS_POLL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPatient, callReady, routeRoomId]);
 
   const close = () => {
     if (!providerCtx || phase.kind !== 'ready') {

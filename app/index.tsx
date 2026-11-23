@@ -7,6 +7,7 @@ import { Eyebrow } from '@/components/ui';
 import { DoctorCard } from '@/components/DoctorCard';
 import { colors } from '@/theme/colors';
 import { BrandLogo } from '@/components/BrandLogo';
+import { BootSplash } from '@/components/BootSplash';
 import { BrandGlyph } from '@/components/BrandGlyph';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAsync } from '@/hooks/useAsync';
@@ -36,12 +37,7 @@ export default function PublicHome() {
 
   // Restauration de la session persistée : on attend avant de décider où aller.
   if (initializing) {
-    return (
-      <SafeAreaView className="flex-1 bg-bg items-center justify-center">
-        <View className="mb-4"><BrandLogo size={48} withWordmark /></View>
-        <ActivityIndicator color={colors.primary} />
-      </SafeAreaView>
-    );
+    return <BootSplash />;
   }
 
   // Déjà connecté (session restaurée) → direct vers l'espace, sans re-login.

@@ -26,6 +26,10 @@ describe('pickNextConsultation', () => {
     ];
     expect(pickNextConsultation(list, at(10, 0))).toBeNull();
   });
+  it('ignore une consultation terminée (après « Terminer », elle n est plus la prochaine)', () => {
+    const list = [{ id: 'done', rawStatus: 'completed', scheduledAt: iso(10, 0) }];
+    expect(pickNextConsultation(list, at(10, 20))).toBeNull();
+  });
   it('garde une planifiée encore dans la fenêtre de 15 min', () => {
     expect(pickNextConsultation([{ id: 'w', rawStatus: 'scheduled', scheduledAt: iso(10, 0) }], at(10, 14))?.id).toBe('w');
   });

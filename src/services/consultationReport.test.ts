@@ -28,7 +28,9 @@ import {
   ConsultationReportError,
   endConsultation,
   getConsultationReport,
+  getConsultationStatusByRoom,
   getPatientJoinedAt,
+  isConsultationEnded,
   getProviderCallContext,
   logVideoSessionEnd,
   logVideoSessionStart,
@@ -220,5 +222,30 @@ describe('patient absent et notification', () => {
     expect(mockInvoke).toHaveBeenCalledWith('notify-consultation-started', { body: { consultationId: 'c1' } });
     mockInvoke.mockRejectedValueOnce(new Error('x'));
     await expect(notifyConsultationStarted('c1')).resolves.toBeUndefined();
+  });
+});
+
+describe('fin de consultation vue du patient', () => {
+  it('isConsultationEnded : completed, cancelled, no_show seulement', () => {
+    expect(isConsultationEnded('completed')).toBe(true);
+    expect(isConsultationEnded('cancelled')).toBe(true);
+    expect(isConsultationEnded('no_show')).toBe(true);
+    expect(isConsultationEnded('in_progress')).toBe(false);
+    expect(isConsultationEnded('scheduled')).toBe(false);
+    expect(isConsultationEnded(null)).toBe(false);
+  });
+
+  it('getConsultationStatusByRoom lit le statut par id ou salle, null sur erreur ou id douteux', async () => {
+    mockResponses = [{ data: { status: 'completed' }, error: null }];
+    expect(await getConsultationStatusByRoom('room-1')).toBe('completed');
+    expect(opsOf(0, 'select')).toEqual([['status']]);
+    expect(opsOf(0, 'or')).toEqual([['id.eq.room-1,video_room_id.eq.room-1']]);
+    mockResponses = [{ data: null, error: { message: 'network' } }];
+    expect(await getConsultationStatusByRoom('room-1')).toBeNull();
+    mockResponses = [{ data: { status: 12 }, error: null }];
+    expect(await getConsultationStatusByRoom('room-1')).toBeNull();
+    mockCalls.length = 0;
+    expect(await getConsultationStatusByRoom('a,b)')).toBeNull();
+    expect(mockCalls).toHaveLength(0);
   });
 });
