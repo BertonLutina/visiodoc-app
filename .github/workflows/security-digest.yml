@@ -1,0 +1,146 @@
+name: Security Digest mobile (synthèse Claude)
+
+# Digest de sécurité hebdomadaire de VisioDoc mobile, calqué sur celui du dépôt
+# web. Tourne sur dev ET main : npm audit + semgrep (SAST), puis UN seul appel
+# API Claude (pas une session agent) qui compare au run précédent.
+# Publication : une ligne Notion à CHAQUE run (même "RAS", trace d'audit) +
+# une issue GitHub (label security-digest) seulement s'il y a du nouveau.
+#
+# Particularités mobile :
+#  - le dépôt est en yarn : le package-lock.json est généré à la volée, juste
+#    pour `npm audit` (jamais committé) ;
+#  - semgrep scanne app/ et src/ ;
+#  - pas de Trivy : le dépôt n'a ni Dockerfile ni IaC à analyser. À ajouter
+#    si ça change.
+#
+# Secrets requis (Settings > Secrets and variables > Actions, par un ADMIN) :
+#   ANTHROPIC_API_KEY, NOTION_API_TOKEN, NOTION_DATA_SOURCE_ID
+# Optionnels (notification Telegram, seulement si nouveauté) :
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+# S'il en manque, le workflow le dit clairement et se termine proprement (vert).
+#
+# État précédent conservé sur la branche orpheline `security-digest-state`,
+# créée automatiquement au premier run si elle n'existe pas. Jamais de commit
+# automatique sur dev/main.
+#
+# ATTENTION : le déclencheur `schedule` ne s'exécute que depuis la branche par
+# défaut (main). Inactif tant que ce fichier n'est pas sur main. En attendant,
+# test manuel possible via "Run workflow" (workflow_dispatch).
+
+on:
+  schedule:
+    # Lundi 07h00 UTC
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  digest:
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [dev, main]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - name: Vérifier les secrets
+        run: |
+          if [ "$HAS_ANTHROPIC" != "true" ]; then
+            echo "::warning::ANTHROPIC_API_KEY absent : digest sauté. Un admin du dépôt doit ajouter les secrets (voir docs/ci-security.md)."
+            echo "Digest ${{ matrix.branch }} sauté, secret ANTHROPIC_API_KEY manquant." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Checkout ${{ matrix.branch }}
+        if: env.HAS_ANTHROPIC == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ matrix.branch }}
+          fetch-depth: 1
+
+      - name: Setup Node
+        if: env.HAS_ANTHROPIC == 'true'
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
+      - name: npm audit (lockfile généré à la volée, rapport non bloquant)
+        if: env.HAS_ANTHROPIC == 'true'
+        run: |
+          npm install --package-lock-only --ignore-scripts --legacy-peer-deps || echo "génération du lockfile en échec, audit vide"
+          npm audit --json > audit.json || true
+
+      - name: Setup Python (pour semgrep)
+        if: env.HAS_ANTHROPIC == 'true'
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Semgrep (SAST sur app/ et src/)
+        if: env.HAS_ANTHROPIC == 'true'
+        run: |
+          pip install semgrep
+          semgrep --config p/typescript --config p/react --config p/secrets --json --output semgrep.json app/ src/ || true
+
+      - name: Récupérer l'état précédent (création de la branche orpheline si absente)
+        if: env.HAS_ANTHROPIC == 'true'
+        run: |
+          if git ls-remote --exit-code --heads origin security-digest-state >/dev/null 2>&1; then
+            git fetch --depth=1 origin security-digest-state
+            git worktree add --detach digest-state FETCH_HEAD
+          else
+            echo "Branche security-digest-state absente : création (orpheline)."
+            git worktree add --detach digest-state
+            git -C digest-state checkout --orphan security-digest-state
+            git -C digest-state rm -rf --quiet . || true
+          fi
+
+      - name: Synthèse (appel API Claude)
+        if: env.HAS_ANTHROPIC == 'true'
+        env:
+          BRANCH: ${{ matrix.branch }}
+          COMMIT_SHA: ${{ github.sha }}
+          AUDIT_JSON_PATH: audit.json
+          SEMGREP_JSON_PATH: semgrep.json
+          PREVIOUS_STATE_PATH: digest-state/state-${{ matrix.branch }}.json
+          NEW_STATE_PATH: new-state.json
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/security-digest/synthesize.mjs > synthesis.json
+
+      - name: Publication (Notion à chaque run, issue GitHub seulement si nouveauté)
+        if: env.HAS_ANTHROPIC == 'true'
+        env:
+          BRANCH: ${{ matrix.branch }}
+          COMMIT_SHA: ${{ github.sha }}
+          NOTION_API_TOKEN: ${{ secrets.NOTION_API_TOKEN }}
+          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node scripts/security-digest/publish.mjs < synthesis.json
+
+      - name: Sauvegarder le nouvel état (branche security-digest-state)
+        if: env.HAS_ANTHROPIC == 'true'
+        run: |
+          if [ ! -s new-state.json ]; then
+            echo "::warning::Pas de nouvel état (synthèse absente ou en échec), état non mis à jour."
+            exit 0
+          fi
+          git config --global user.name "security-digest-bot"
+          git config --global user.email "noreply@visiodoc.online"
+          cp new-state.json "digest-state/state-${{ matrix.branch }}.json"
+          cd digest-state
+          git add "state-${{ matrix.branch }}.json"
+          git commit -m "chore(security-digest): état mobile ${{ matrix.branch }} @ ${{ github.sha }}" || { echo "rien à committer"; exit 0; }
+          # Les deux jobs de la matrice poussent sur la même branche : réessais.
+          for i in 1 2 3; do
+            git push origin HEAD:refs/heads/security-digest-state && exit 0
+            git fetch origin security-digest-state && git rebase FETCH_HEAD || true
+            sleep $((i * 3))
+          done
+          echo "::warning::Push de l'état en échec après 3 essais."
