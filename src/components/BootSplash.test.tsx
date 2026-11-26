@@ -11,14 +11,14 @@ const texts = (node: renderer.ReactTestInstance): string[] =>
   node.findAllByType(require('react-native').Text).map((n: renderer.ReactTestInstance) => [n.props.children].flat().join(''));
 
 describe('BootSplash', () => {
-  it('affiche VisioDoc en grand et Powered by Neotech, sans slogan', () => {
+  it('affiche VisioDoc en grand et Powered by NEOTECH, sans slogan', () => {
     let r!: renderer.ReactTestRenderer;
     act(() => {
       r = renderer.create(<BootSplash />);
     });
     const t = texts(r.root);
-    expect(t).toEqual(['VisioDoc', 'Powered by Neotech']);
-    expect(POWERED_BY_TEXT).toBe('Powered by Neotech');
+    expect(t).toEqual(['VisioDoc', 'Powered by NEOTECH']);
+    expect(POWERED_BY_TEXT).toBe('Powered by NEOTECH');
     expect(BOOT_WORDMARK_SIZE).toBeGreaterThanOrEqual(52);
   });
 });

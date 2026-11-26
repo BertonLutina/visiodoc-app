@@ -6,7 +6,7 @@ import { colors } from '@/theme/colors';
 import { BRAND_WORDMARK_FONT } from '@/theme/brand';
 
 /** Mention du bas de l'écran de chargement. Volontairement NON traduite (langue inconnue à ce stade). */
-export const POWERED_BY_TEXT = 'Powered by Neotech';
+export const POWERED_BY_TEXT = 'Powered by NEOTECH';
 
 /** Taille du mot « VisioDoc » sous le logo (environ 2x l'ancienne taille de 28). */
 export const BOOT_WORDMARK_SIZE = 56;
