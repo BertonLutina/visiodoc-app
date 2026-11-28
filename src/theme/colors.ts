@@ -6,7 +6,7 @@ export const colors = {
   mint: '#9FE1CB',
   soft: '#2E9B79', // vert moyen — actions secondaires
   clay: '#9A3412', // accent terre/orange — méta / dates
-  accent: '#EA580C', // orange — rôle médecin prestataire
+  accent: '#EA580C', // orange — rôle médecin praticien
   accentLight: '#FFF7ED',
   ink: '#111111',
   muted: '#6B7280',

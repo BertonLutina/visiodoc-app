@@ -17,7 +17,7 @@ import { clockTime, joinButtonState } from '@/utils/nextConsultation';
 import { formatMoney } from '@/utils/format';
 
 const quick = [
-  { icon: null, label: 'Prestataire', href: '/(patient)/doctors' as const, tint: 'bg-sage' },
+  { icon: null, label: 'Praticien', href: '/(patient)/doctors' as const, tint: 'bg-sage' },
   { icon: FolderHeart, label: 'Dossiers', href: '/records' as const, tint: 'bg-peach' },
   { icon: Wallet, label: 'Wallet', href: '/(patient)/wallet' as const, tint: 'bg-sand' },
   { icon: Calendar, label: 'RDV', href: '/(patient)/appointments' as const, tint: 'bg-lavender' },
@@ -156,7 +156,7 @@ export default function PatientDashboard() {
               </Pressable>
               {detailsOpen ? (
                 <View className="mt-3 rounded-2xl bg-white/10 p-4">
-                  <DetailRow label={t('Prestataire')} value={`Dr. ${next.doctor.firstName} ${next.doctor.lastName}`} />
+                  <DetailRow label={t('Praticien')} value={`Dr. ${next.doctor.firstName} ${next.doctor.lastName}`} />
                   {next.doctor.specialty ? <DetailRow label={t('Spécialité')} value={next.doctor.specialty} /> : null}
                   <DetailRow label={t('Date et heure')} value={next.dateLabel} />
                   <DetailRow label={t('Durée')} value={`${next.durationMin} ${t('min')}`} />
@@ -180,7 +180,7 @@ export default function PatientDashboard() {
               </View>
               <Text className="font-serif-bold text-ink text-lg">{t('Aucune consultation à venir')}</Text>
               <Text className="font-sans text-sm text-muted mt-1 mb-4 text-center">
-                {t('Trouve un prestataire et prends rendez-vous en quelques minutes.')}
+                {t('Trouve un praticien et prends rendez-vous en quelques minutes.')}
               </Text>
               <Pressable
                 onPress={() => router.push('/(patient)/doctors')}

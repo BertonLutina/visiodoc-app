@@ -51,7 +51,7 @@ export default function Subscription() {
   const resetSuccessGuard = () => {
     successGuardRef.current = createSingleSuccessNotifier(async () => {
       await reload();
-      Alert.alert(t('Abonnement activé'), t('Ton abonnement prestataire est maintenant actif.'));
+      Alert.alert(t('Abonnement activé'), t('Ton abonnement praticien est maintenant actif.'));
     });
   };
 

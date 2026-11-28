@@ -21,7 +21,7 @@ export default function PatientTabsLayout() {
           <NativeTabs.Trigger.Icon sf="house.fill" />
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="doctors">
-          <NativeTabs.Trigger.Label>{t('Prestataires')}</NativeTabs.Trigger.Label>
+          <NativeTabs.Trigger.Label>{t('Praticiens')}</NativeTabs.Trigger.Label>
           <NativeTabs.Trigger.Icon sf="stethoscope" />
         </NativeTabs.Trigger>
         <NativeTabs.Trigger name="appointments">
@@ -46,7 +46,7 @@ export default function PatientTabsLayout() {
       tabBar={(props) => <GlassTabBar {...props} tint={colors.primary} />}
     >
       <Tabs.Screen name="index" options={{ title: 'Accueil', tabBarIcon: ({ color, size }) => <Home color={color} size={size} /> }} />
-      <Tabs.Screen name="doctors" options={{ title: 'Prestataires', tabBarIcon: ({ color, size }) => <Stethoscope color={color} size={size} /> }} />
+      <Tabs.Screen name="doctors" options={{ title: 'Praticiens', tabBarIcon: ({ color, size }) => <Stethoscope color={color} size={size} /> }} />
       <Tabs.Screen name="appointments" options={{ title: 'RDV', tabBarIcon: ({ color, size }) => <Calendar color={color} size={size} /> }} />
       <Tabs.Screen name="wallet" options={{ title: 'Wallet', tabBarIcon: ({ color, size }) => <Wallet color={color} size={size} /> }} />
       <Tabs.Screen name="profile" options={{ title: 'Profil', tabBarIcon: ({ color, size }) => <User color={color} size={size} /> }} />

@@ -17,7 +17,7 @@ import { useT } from '@/i18n';
 import { providerHomeHref } from '@/services/accessPolicy';
 
 const services = [
-  { icon: null, title: 'Consulter', subtitle: 'Prestataires dispo.', tint: 'bg-sage' },
+  { icon: null, title: 'Consulter', subtitle: 'Praticiens dispo.', tint: 'bg-sage' },
   { icon: FolderHeart, title: 'Dossiers', subtitle: 'Historique médical', tint: 'bg-peach' },
   { icon: Wallet, title: 'Wallet', subtitle: 'Recharger, payer', tint: 'bg-sand' },
   { icon: Brain, title: 'IA Médicale', subtitle: 'Analyse symptômes', tint: 'bg-lavender' },
@@ -70,16 +70,16 @@ export default function PublicHome() {
             <Text className="font-sans-bold text-white text-xs">{t('Télémédecine · Afrique')}</Text>
           </Eyebrow>
           <Text className="font-serif-bold text-white" style={{ fontSize: 32, lineHeight: 38, letterSpacing: -0.4 }}>
-            {t('Ton prestataire de soins de santé,')}{'\n'}{t('où que tu sois')}
+            {t('Ton professionnel de santé,')}{'\n'}{t('où que tu sois')}
           </Text>
           <Text className="font-sans text-white/80 text-base mt-3 mb-6">
-            {t('Consulte des prestataires qualifiés par vidéo, chat ou téléphone.')}
+            {t('Consulte des praticiens qualifiés par vidéo, chat ou téléphone.')}
           </Text>
           <Pressable
             onPress={() => router.push('/(auth)/register')}
             className="bg-white rounded-2xl py-4 px-5 flex-row items-center justify-center"
           >
-            <Text className="font-sans-bold text-primary text-base mr-2">{t('Trouver un prestataire')}</Text>
+            <Text className="font-sans-bold text-primary text-base mr-2">{t('Trouver un praticien')}</Text>
             <ArrowRight color={colors.primary} size={18} />
           </Pressable>
         </View>
@@ -98,13 +98,13 @@ export default function PublicHome() {
           ))}
         </View>
 
-        {/* Prestataires en vedette */}
-        <Text className="px-5 font-sans-bold text-ink text-lg mb-3">{t('Prestataires en vedette')}</Text>
+        {/* Praticiens en vedette */}
+        <Text className="px-5 font-sans-bold text-ink text-lg mb-3">{t('Praticiens en vedette')}</Text>
         <View className="px-5">
           {doctorsLoading ? (
             <ActivityIndicator color={colors.primary} />
           ) : featured.length === 0 ? (
-            <Text className="font-sans text-muted">{t('Aucun prestataire trouvé.')}</Text>
+            <Text className="font-sans text-muted">{t('Aucun praticien trouvé.')}</Text>
           ) : (
             <>
               <SignInForPricing signedIn={false} className="mb-3" />
@@ -148,7 +148,7 @@ export default function PublicHome() {
               </View>
               <View className="flex-1">
                 <Text className="font-sans-bold text-ink text-base">{t('Patient')}</Text>
-                <Text className="font-sans text-sm text-muted mt-0.5">{t('Consulter un prestataire')}</Text>
+                <Text className="font-sans text-sm text-muted mt-0.5">{t('Consulter un praticien')}</Text>
               </View>
               <ChevronRight color={colors.muted} size={20} />
             </Pressable>
@@ -161,7 +161,7 @@ export default function PublicHome() {
                 <Stethoscope color={colors.accent} size={22} />
               </View>
               <View className="flex-1">
-                <Text className="font-sans-bold text-ink text-base">{t('Prestataire')}</Text>
+                <Text className="font-sans-bold text-ink text-base">{t('Praticien')}</Text>
                 <Text className="font-sans text-sm text-muted mt-0.5">{t('Espace professionnel')}</Text>
               </View>
               <ChevronRight color={colors.muted} size={20} />

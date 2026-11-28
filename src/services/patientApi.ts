@@ -85,7 +85,7 @@ const toFee = (v: unknown): number | null => {
 };
 
 export function mapDoctor(row: any): Doctor {
-  const specialty = specLabel(row.specialty_labels) || 'Prestataire';
+  const specialty = specLabel(row.specialty_labels) || 'Praticien';
   return {
     id: row.id,
     firstName: row.first_name ?? '',
@@ -242,7 +242,7 @@ export class BookingRejectedError extends Error {
   constructor(reason: 'payment_locked' | 'amount_out_of_range') {
     super(
       reason === 'amount_out_of_range'
-        ? translate('Le tarif de cette consultation a changé. Actualise la fiche du prestataire puis réessaie.')
+        ? translate('Le tarif de cette consultation a changé. Actualise la fiche du praticien puis réessaie.')
         : translate("Cette opération de paiement n'est pas autorisée depuis l'application. Réessaie depuis tes rendez-vous."),
     );
     this.name = 'BookingRejectedError';

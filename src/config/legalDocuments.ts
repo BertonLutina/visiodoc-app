@@ -31,7 +31,7 @@ export interface LegalDocument {
 
 export const LEGAL_DOCUMENTS: LegalDocument[] = [
   { slug: 'cgu-patient', titre: "Conditions d'utilisation patient", version: LEGAL_VERSIONS.cguPatient, date: null, statut: 'pending', webPage: 'conditions' },
-  { slug: 'cgu-pro', titre: "Conditions d'utilisation prestataire", version: LEGAL_VERSIONS.cguPro, date: null, statut: 'pending', webPage: 'conditions' },
+  { slug: 'cgu-pro', titre: "Conditions d'utilisation des professionnels de santé", version: LEGAL_VERSIONS.cguPro, date: null, statut: 'pending', webPage: 'conditions' },
   { slug: 'confidentialite', titre: 'Confidentialité', version: LEGAL_VERSIONS.privacy, date: null, statut: 'pending', webPage: 'confidentialite' },
   { slug: 'cookies', titre: 'Cookies', version: 'COOKIES-v2', date: null, statut: 'pending', webPage: 'mentions' },
   { slug: 'mentions', titre: 'Mentions légales', version: 'MENTIONS-v2', date: null, statut: 'pending', webPage: 'mentions' },

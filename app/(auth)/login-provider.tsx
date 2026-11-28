@@ -29,9 +29,9 @@ export default function LoginProvider() {
           <View className="w-14 h-14 rounded-3xl bg-accent items-center justify-center mb-4">
             <BrandGlyph size={36} color={colors.white} cameraColor={colors.accent} />
           </View>
-          <ScreenTitle center>{t('Connexion prestataire')}</ScreenTitle>
+          <ScreenTitle center>{t('Connexion praticien')}</ScreenTitle>
           <Text className="font-sans text-base text-muted mt-2 text-center">
-            {t('Portail prestataire — choisissez votre méthode')}
+            {t('Portail praticien — choisissez votre méthode')}
           </Text>
         </View>
 
@@ -55,7 +55,7 @@ export default function LoginProvider() {
         <View className="flex-row justify-center mt-6">
           <Text className="font-sans text-muted">{t('Pas encore inscrit ?')} </Text>
           <Link href="/(auth)/register-provider" className="font-sans-bold text-accent">
-            {t('Créer un compte prestataire')}
+            {t('Créer un compte praticien')}
           </Link>
         </View>
 

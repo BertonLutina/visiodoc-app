@@ -838,7 +838,7 @@ describe('public doctor catalog (public_provider_listing)', () => {
     });
     expect(doctors[1]).toMatchObject({
       id: 'd2',
-      specialty: 'Prestataire',
+      specialty: 'Praticien',
       city: '',
       fee: null,
       currencyCode: null,
@@ -855,8 +855,8 @@ describe('public doctor catalog (public_provider_listing)', () => {
     [{ en: 'General medicine' }, 'General medicine'],
     [{ fr: '', en: 'Pediatrics' }, 'Pediatrics'],
     [[{ fr: 'Pédiatrie' }, { fr: 'Nutrition' }], 'Pédiatrie · Nutrition'],
-    [{}, 'Prestataire'],
-    [{ fr: 42 }, 'Prestataire'],
+    [{}, 'Praticien'],
+    [{ fr: 42 }, 'Praticien'],
   ])('renders a locale-keyed specialty label %j as a plain string', async (labels, expected) => {
     sessionOrder.mockResolvedValue({ data: [{ ...rows[0], specialty_labels: labels }], error: null });
     const { getDoctors } = require('./patientApi');

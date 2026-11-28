@@ -71,8 +71,8 @@ export default function RegisterProvider() {
           <View className="w-14 h-14 rounded-3xl bg-accent items-center justify-center mb-4">
             <BrandGlyph size={36} color={colors.white} cameraColor={colors.accent} />
           </View>
-          <ScreenTitle center>{t('Inscription prestataire')}</ScreenTitle>
-          <Text className="font-sans text-base text-muted mt-2">{t('Prestataire de santé')}</Text>
+          <ScreenTitle center>{t('Inscription praticien')}</ScreenTitle>
+          <Text className="font-sans text-base text-muted mt-2">{t('Professionnel de santé')}</Text>
         </View>
 
         {done ? (

@@ -216,7 +216,7 @@ export default function VideoCall() {
       stopped = true;
       clearInterval(timer);
       setPhase({ kind: 'loading' }); // démonte la WebView
-      Alert.alert(t('La consultation est terminée'), t('Le prestataire a mis fin à la consultation. Merci !'), [
+      Alert.alert(t('La consultation est terminée'), t('Le praticien a mis fin à la consultation. Merci !'), [
         { text: 'OK', onPress: () => router.replace('/(patient)') },
       ], { cancelable: false });
     };

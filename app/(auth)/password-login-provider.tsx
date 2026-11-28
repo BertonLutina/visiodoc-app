@@ -104,8 +104,8 @@ export default function PasswordLoginProvider() {
             <BrandGlyph size={64} color={colors.accent} cameraColor={colors.bg} />
           </View>
           <Text style={{ fontFamily: BRAND_WORDMARK_FONT, fontSize: 22, color: BRAND_COLORS.wordmarkOnLight }}>VisioDoc</Text>
-          <ScreenTitle center className="mt-4">{t('Connexion prestataire')}</ScreenTitle>
-          <Text className="font-sans text-base text-muted mt-2 text-center">{t('Portail prestataire')}</Text>
+          <ScreenTitle center className="mt-4">{t('Connexion praticien')}</ScreenTitle>
+          <Text className="font-sans text-base text-muted mt-2 text-center">{t('Portail praticien')}</Text>
         </View>
 
         <Field
@@ -149,7 +149,7 @@ export default function PasswordLoginProvider() {
           onPress={onSubmit}
         />
         <Button
-          label={t('Créer un compte prestataire')}
+          label={t('Créer un compte praticien')}
           variant="outline"
           className="mt-3"
           onPress={() => router.push('/(auth)/register-provider')}
