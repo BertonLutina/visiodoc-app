@@ -29,7 +29,15 @@
     "eas:build:configure": "eas build:configure",
     "eas:update:configure": "eas update:configure",
     "eas:credentials": "eas credentials",
-    "eas:channel:list": "eas channel:list"
+    "eas:channel:list": "eas channel:list",
+    "doctor": "npx expo-doctor",
+    "build:dev:ios": "eas build --profile development --platform ios",
+    "build:dev:device": "eas build --profile development-device --platform all",
+    "build:dev:android": "eas build --profile development --platform android",
+    "build:prod:apk": "eas build --profile production-apk --platform android",
+    "build:dev": "eas build --profile development --platform all",
+    "build:prod": "eas build --profile production --platform all",
+    "update:prod": "eas update --branch production --environment production"
   },
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.4.1",

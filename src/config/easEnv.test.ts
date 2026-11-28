@@ -2,7 +2,7 @@
 // `require` (comme les autres tests du dépôt) : les types Node ne sont pas chargés par tsconfig.
 const raw: string = require('fs').readFileSync(require('path').resolve(process.cwd(), 'eas.json'), 'utf8');
 const eas = JSON.parse(raw) as {
-  build: Record<string, { env?: Record<string, string> }>;
+  build: Record<string, { env?: Record<string, string>; extends?: string }>;
 };
 
 const UAT_URL = 'https://pslypdfjmjetjhtpzwip.supabase.co';
@@ -30,8 +30,23 @@ describe('eas.json : aucun secret commité', () => {
 });
 
 describe('eas.json : séparation UAT / Production', () => {
-  it('liste exactement les trois profils de build attendus', () => {
-    expect(Object.keys(eas.build).sort()).toEqual(['development', 'preview', 'production']);
+  it('liste exactement les profils de build attendus', () => {
+    expect(Object.keys(eas.build).sort()).toEqual([
+      'base',
+      'development',
+      'development-device',
+      'preview',
+      'production',
+      'production-apk',
+    ]);
+  });
+
+  it("les profils dérivés n'ont pas d'env propre : ils héritent de development ou production", () => {
+    for (const profile of ['base', 'development-device', 'production-apk']) {
+      expect(env(profile)).toEqual({});
+    }
+    expect(eas.build['development-device'].extends).toBe('development');
+    expect(eas.build['production-apk'].extends).toBe('production');
   });
 
   it.each(['development', 'preview', 'production'])(
