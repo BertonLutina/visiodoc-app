@@ -62,3 +62,8 @@ export function reportSessionExpiry(error: unknown): boolean {
   listeners.forEach((listener) => listener());
   return true;
 }
+
+/** Signale une expiration décidée par l'app elle-même (limites d'inactivité ou de durée : voir `sessionLimits.ts`). */
+export function triggerSessionExpired(): void {
+  listeners.forEach((listener) => listener());
+}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import type { User } from '@/types';
@@ -32,7 +32,8 @@ import { getServiceTypeCatalog } from '@/services/specializationCatalog';
 import { mapCountryNotOpenError } from '@/services/registration';
 import { legalServerErrorMessage } from '@/services/legal';
 import { completePhoneIdentity, type PhoneIdentityInput } from '@/services/patientIdentity';
-import { isSessionExpiry, onSessionExpired, reportSessionExpiry } from '@/services/sessionExpiry';
+import { isSessionExpiry, onSessionExpired, reportSessionExpiry, triggerSessionExpired } from '@/services/sessionExpiry';
+import { sessionClock } from '@/services/sessionLimits';
 import { createSessionExpiryTracker } from '@/services/sessionExpiryTracker';
 import { COUNTRIES } from '@/config/countries';
 import { currentPatient } from '@/data/mock';
@@ -314,6 +315,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Message seulement si une session existait (utilisateur, verrou biométrique en attente ou
       // restauration d'une session persistée) : jamais pour un visiteur (ex. lien profond vers /call/x).
       const hadSession = restoringRef.current || !!userRef.current || !!pendingUserRef.current;
+      void sessionClock.clear();
       setUser(null);
       setPendingUser(null);
       setLocked(false);
@@ -359,7 +361,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             Alert.alert(translate('Connexion impossible'), providerRefusalMessage(refusal));
           } else if (active && result.status === 'ok') {
             const profile = result.user;
-            if (await biometrics.shouldLockAtLaunch(profile.id)) {
+            // Limites d'1 h d'inactivité et de 12 h de session : une session trop ancienne n'est jamais restaurée.
+            await sessionClock.restore();
+            if (sessionClock.check()) {
+              handleSessionExpired();
+            } else if (await biometrics.shouldLockAtLaunch(profile.id)) {
               // Le profil reste en attente : aucun écran ne se charge avant la biométrie.
               setPendingUser(profile);
               setLocked(true);
@@ -396,10 +402,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Limites de session (1 h d'inactivité, 12 h au total) : vérifiées toutes les 30 s et à chaque retour au premier plan.
+  useEffect(() => {
+    if (!user) return;
+    const check = () => {
+      if (sessionClock.check()) triggerSessionExpired();
+    };
+    const timer = setInterval(check, 30_000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') check();
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+  }, [user?.id]);
+
   // Connexion active (mot de passe, OTP, OAuth, inscription) → jamais verrouillée,
   // et déclenche la proposition d'activer la biométrie.
   const signedIn = (profile: User, method?: AuthEventMethod) => {
     expiryTracker.resetNotice();
+    void sessionClock.start();
     setUser(profile);
     setJustSignedIn(true);
     logAuthEvent('auth:login', { id: profile.id, role: profile.role, countryId: countryIdForCode(profile.countryCode) }, method);
@@ -827,6 +850,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     // On vide l'état local D'ABORD → la déconnexion est instantanée et fiable,
     // même si l'appel réseau à Supabase échoue (session expirée, hors-ligne…).
+    void sessionClock.clear();
     setUser(null);
     setPendingUser(null);
     setLocked(false);

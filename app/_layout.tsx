@@ -26,6 +26,7 @@ import { useBiometricOffer } from '@/hooks/useBiometricOffer';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { colors } from '@/theme/colors';
 import { supabaseConfigurationProblem } from '@/lib/supabase';
+import { noteUserActivity } from '@/services/sessionLimits';
 
 /** Contenu de l'app, sous AuthProvider : écran de verrou tant que la biométrie n'est pas validée. */
 function AppShell() {
@@ -108,7 +109,13 @@ export default function RootLayout() {
         <AuthProvider>
           <LanguageProvider>
             <StatusBar style="dark" />
-            <AppShell />
+            {/* Chaque toucher repousse la limite d'inactivité d'1 h (voir sessionLimits.ts). */}
+            <View style={{ flex: 1 }} onStartShouldSetResponderCapture={() => {
+                noteUserActivity();
+                return false; // observe seulement : ne prend jamais le toucher
+              }}>
+              <AppShell />
+            </View>
           </LanguageProvider>
         </AuthProvider>
       </SafeAreaProvider>
